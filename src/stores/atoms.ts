@@ -26,3 +26,13 @@ export interface BBox {
   label: string;
 }
 export const bookDefectBoxesAtom = atom<BBox[]>([]);
+
+// 3. 낙관적 UI를 위한 백그라운드 업로드 큐 (Queue)
+export interface UploadTask {
+  id: string; // 로컬 고유 ID (uuid 등)
+  blob: Blob;
+  previewUrl: string;
+  status: 'PENDING' | 'UPLOADING' | 'COMPLETED' | 'FAILED';
+  isbn?: string;
+}
+export const uploadQueueAtom = atom<UploadTask[]>([]);

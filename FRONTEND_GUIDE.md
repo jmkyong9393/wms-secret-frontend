@@ -96,3 +96,22 @@ npm run dev
 ```bash
 docker-compose -f docker-compose.local.yml up -d
 ```
+
+---
+
+## 📸 4. WebRTC 카메라 및 전처리 아키텍처 (v1.4 핵심)
+
+우리 프론트엔드는 단순한 뷰 단을 넘어, 백엔드 서버 부하를 막기 위한 **극단적인 클라이언트 사이드 연산(Edge Pre-processing)**을 수행합니다. 
+
+### 4-1. 주요 구조 및 파일
+*   **`src/hooks/useCamera.ts`**: 디바이스의 후면 카메라를 호출하고 최고 해상도(Max Resolution)로 스트림을 엽니다.
+*   **`src/lib/image-processor.ts`**: 
+    *   **압축:** `canvas.toBlob`을 사용하여 촬영된 10MB 고화질 이미지를 500KB 이하로 브라우저에서 즉시 압축합니다.
+    *   **흔들림 감지 (Blur Detection):** 픽셀 단위로 라플라시안 분산(Laplacian Variance)을 계산하여, 사진이 심하게 흔들린 경우 서버(AI)로 전송하지 않고 브라우저단에서 차단(경고)합니다. (추후 WASM OpenCV.js 로직으로 완전히 대체될 예정입니다.)
+*   **`src/components/camera/CameraScanner.tsx`**: 책을 정렬할 수 있는 중앙 오버레이(BBox 가이드라인)를 띄워주는 핵심 뷰 컴포넌트입니다.
+
+### 4-2. 낙관적 UI (Optimistic UI) 와 큐(Queue) 연동
+작업자가 사진을 찍자마자 "로딩 스피너"를 보고 기다리게 하면 물류 창고의 작업 속도가 크게 떨어집니다.
+1.  촬영 직후, 즉시 Jotai 전역 큐(`uploadQueueAtom`)에 임시 객체(PENDING 상태)를 집어넣습니다.
+2.  화면은 즉시 '다음 촬영' 대기 상태로 전환되며 작업자는 다음 책을 스캔할 수 있습니다.
+3.  백그라운드에서 비동기로 백엔드에 이미지를 POST 전송(`api.ts`)하고, 3초 주기 폴링(Polling)을 통해 COMPLETED 상태가 떨어지면 화면 하단의 뱃지 UI만 살짝 업데이트합니다.
