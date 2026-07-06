@@ -19,14 +19,17 @@
 - 백엔드가 `Celery 큐` 기반의 비동기 큐로 동작하므로, 검수 요청 시 `202 Accepted` 응답과 함께 `job_id`를 반환받습니다.
 - 프론트엔드는 해당 `job_id`를 기반으로 백엔드 폴링(Polling) 또는 SSE/WebSocket을 통해 최종 검수 리포트를 화면에 렌더링해야 합니다.
 
+### 3. 워크플로우 및 하드웨어 제어
+- **[FE PC/Admin 박준희]** 전담으로 블루투스 감열지 프린터를 연동하여 정전기 필름(포스트잇 재질) 기반 LPN 라벨을 발급하고, 전반적인 UI/UX 워크플로우를 제어 및 모니터링합니다.
+
 ---
 
 ## 📂 Repository Structure & Documentations
 
 프론트엔드 개발팀은 작업 시작 전 반드시 `docs` 폴더 내의 기획 문서들을 숙지하시기 바랍니다.
 
-- 📄 [B2B_WMS_AI_Platform_기획서_ver1.3.md](docs/B2B_WMS_AI_Platform_기획서_ver1.3.md): 전체 시스템 구조 및 기능 명세서
-- 📊 [B2B_WMS_AI_Platform_워크플로우_ver1.3.md](docs/B2B_WMS_AI_Platform_워크플로우_ver1.3.md): UI 렌더링 시퀀스 및 데이터 흐름도
+- 📄 [B2B_WMS_AI_Platform_기획서_ver1.4.2.0.md](docs/B2B_WMS_AI_Platform_기획서_ver1.4.2.0.md): 전체 시스템 구조 및 기능 명세서
+- 📊 [B2B_WMS_AI_Platform_워크플로우_ver1.4.2.0.md](docs/B2B_WMS_AI_Platform_워크플로우_ver1.4.2.0.md): UI 렌더링 시퀀스 및 데이터 흐름도
 
 ---
 
