@@ -23,11 +23,26 @@
 - **주요 업무:**
   - 백엔드(FastAPI) 명세서를 바탕으로 `axios` 또는 `fetch` API 함수 세팅
   - S3 Pre-signed URL 업로드 로직 및 폴링(Polling) 처리 로직 구현
-  - Zustand를 활용한 로그인 상태, 토큰 관리 및 전역 모달/토스트 관리
+  - Jotai 및 TanStack Query를 활용한 전역 상태 및 비동기 서버 데이터 관리
 
 ---
 
-## 📁 1. 디렉토리 구조 (Feature-driven Architecture)
+## 🛠️ 1. 프론트엔드 핵심 기술 스택 (Core Tech Stack)
+
+본 프로젝트는 물류 현장의 열악한 네트워크와 디바이스 환경을 극복하기 위해 아래의 기술 스택을 엄격하게 사용합니다.
+
+- **Framework:** Next.js (SSR/CSR 하이브리드 라우팅 적용)
+- **UI Components:** shadcn/ui & Base UI (Tailwind CSS 기반 컴포넌트 시스템 및 Lucide-react)
+- **State Management:** Jotai (Atomic 패턴을 활용한 가벼운 전역 상태 및 큐 관리)
+- **Data Fetching:** TanStack Query (비동기 서버 상태, 캐싱 및 폴링 관리)
+- **Edge AI & 최적화:** 
+  - WebRTC 기반 커스텀 카메라 UI (기본 카메라 앱 의존성 탈피)
+  - WASM OpenCV.js (브라우저 단독 흔들림/Blur 전처리 필터링)
+  - Client-side 이미지 압축 및 낙관적 UI(Optimistic UI) 큐 적재
+
+---
+
+## 📁 2. 디렉토리 구조 (Feature-driven Architecture)
 
 우리 프로젝트는 역할과 책임(SRP)을 분리하여, 코드가 커져도 유지보수가 쉽도록 설계되었습니다. 기능 추가 시 아래의 폴더 용도에 맞게 파일을 생성해 주세요.
 
@@ -54,8 +69,8 @@ src/
 ├── services/             # 🌐 API 호출 함수 (네트워크 계층)
 │   └── api.ts            # - axios 인스턴스 설정 및 Fetch 로직
 │
-├── stores/               # 📦 전역 상태 관리 (Zustand 스토어)
-│   └── useAuthStore.ts   # - 로그인 유저 정보 및 토큰 상태 관리
+├── stores/               # 📦 전역 상태 관리 (Jotai Atoms)
+│   └── atoms.ts          # - 큐(Queue) 및 토큰 등 상태 관리
 │
 └── types/                # 🏷️ TypeScript 공통 인터페이스 및 타입 선언
     └── index.ts          # - DTO, 모델 인터페이스
@@ -63,7 +78,7 @@ src/
 
 ---
 
-## 💡 2. 팀원 필수 행동 가이드 (Do's & Don'ts)
+## 💡 3. 팀원 필수 행동 가이드 (Do's & Don'ts)
 
 코드가 꼬이거나 아키텍처가 붕괴되는 것을 막기 위한 핵심 원칙 3가지입니다.
 
@@ -73,7 +88,7 @@ src/
 
 ### 🟡 2. API Fetching은 `services/`에서 담당합니다!
 - 컴포넌트 내부에 `fetch()`나 `axios.get()`을 직접 하드코딩하지 마세요.
-- API 호출 코드는 `src/services/` 폴더에 모아두고, 컴포넌트에서는 만들어진 함수를 불러와서 쓰거나 SWR/React-Query와 연동하세요.
+- API 호출 코드는 `src/services/` 폴더에 모아두고, 컴포넌트에서는 만들어진 함수를 불러와서 TanStack Query와 연동하세요.
 
 ### 🟢 3. 상대경로(`../../`) 대신 절대경로(`@/`)를 사용하세요!
 - 본 프로젝트의 `tsconfig.json`에는 `@/` 경로가 `src/`로 매핑되어 있습니다.
@@ -82,7 +97,7 @@ src/
 
 ---
 
-## 🚀 3. 로컬 실행 방법
+## 🚀 4. 로컬 실행 방법
 
 이 레포지토리는 인프라 충돌을 방지하기 위해 Docker 환경을 지원합니다.
 
@@ -99,19 +114,19 @@ docker-compose -f docker-compose.local.yml up -d
 
 ---
 
-## 📸 4. WebRTC 카메라 및 전처리 아키텍처 (v1.4 핵심)
+## 📸 5. WebRTC 카메라 및 전처리 아키텍처 (v1.4 핵심)
 
 우리 프론트엔드는 단순한 뷰 단을 넘어, 백엔드 서버 부하를 막기 위한 **극단적인 클라이언트 사이드 연산(Edge Pre-processing)**을 수행합니다. 
 
-### 4-1. 주요 구조 및 파일
+### 5-1. 주요 구조 및 파일
 *   **`src/hooks/useCamera.ts`**: 디바이스의 후면 카메라를 호출하고 최고 해상도(Max Resolution)로 스트림을 엽니다.
 *   **`src/lib/image-processor.ts`**: 
     *   **압축:** `canvas.toBlob`을 사용하여 촬영된 10MB 고화질 이미지를 500KB 이하로 브라우저에서 즉시 압축합니다.
     *   **흔들림 감지 (Blur Detection):** 픽셀 단위로 라플라시안 분산(Laplacian Variance)을 계산하여, 사진이 심하게 흔들린 경우 서버(AI)로 전송하지 않고 브라우저단에서 차단(경고)합니다. (추후 WASM OpenCV.js 로직으로 완전히 대체될 예정입니다.)
 *   **`src/components/camera/CameraScanner.tsx`**: 책을 정렬할 수 있는 중앙 오버레이(BBox 가이드라인)를 띄워주는 핵심 뷰 컴포넌트입니다.
 
-### 4-2. 낙관적 UI (Optimistic UI) 와 큐(Queue) 연동
+### 5-2. 낙관적 UI (Optimistic UI) 와 큐(Queue) 연동
 작업자가 사진을 찍자마자 "로딩 스피너"를 보고 기다리게 하면 물류 창고의 작업 속도가 크게 떨어집니다.
 1.  촬영 직후, 즉시 Jotai 전역 큐(`uploadQueueAtom`)에 임시 객체(PENDING 상태)를 집어넣습니다.
 2.  화면은 즉시 '다음 촬영' 대기 상태로 전환되며 작업자는 다음 책을 스캔할 수 있습니다.
-3.  백그라운드에서 비동기로 백엔드에 이미지를 POST 전송(`api.ts`)하고, 3초 주기 폴링(Polling)을 통해 COMPLETED 상태가 떨어지면 화면 하단의 뱃지 UI만 살짝 업데이트합니다.
+3.  백그라운드에서 비동기로 백엔드에 이미지를 POST 전송(`api.ts`)하고, 3초 주기 폴링(TanStack Query 활용)을 통해 COMPLETED 상태가 떨어지면 화면 하단의 뱃지 UI만 살짝 업데이트합니다.

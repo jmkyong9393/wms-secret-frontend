@@ -18,6 +18,25 @@ export default function CameraScanner() {
     return () => stopCamera();
   }, [startCamera, stopCamera]);
 
+  // [임시 기능] 풋페달 대용: 스마트폰 물리 볼륨 버튼 및 하드웨어 키보드(Space/Enter) 지원
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 볼륨키 또는 스페이스바/엔터키 감지
+      if (
+        ['AudioVolumeUp', 'AudioVolumeDown', 'VolumeUp', 'VolumeDown', ' ', 'Enter'].includes(e.key) ||
+        e.keyCode === 24 || e.keyCode === 25 // 일부 안드로이드 볼륨 키코드
+      ) {
+        const btn = document.getElementById('capture-btn');
+        if (btn && !btn.hasAttribute('disabled')) {
+          e.preventDefault();
+          btn.click();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleCapture = async () => {
     if (!videoRef.current || isProcessing) return;
     
@@ -59,7 +78,13 @@ export default function CameraScanner() {
   };
 
   return (
-    <div className="relative w-full max-w-md mx-auto aspect-[3/4] bg-black rounded-xl overflow-hidden shadow-2xl">
+    <div 
+      className="relative w-full max-w-md mx-auto aspect-[3/4] bg-black rounded-xl overflow-hidden shadow-2xl cursor-pointer"
+      onClick={() => {
+        const btn = document.getElementById('capture-btn');
+        if (btn && !btn.hasAttribute('disabled')) btn.click();
+      }}
+    >
       {/* 카메라 에러 처리 */}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-white p-4 text-center">
@@ -104,7 +129,11 @@ export default function CameraScanner() {
       {/* 하단 촬영 컨트롤 영역 */}
       <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent flex justify-center items-end h-32">
         <button
-          onClick={handleCapture}
+          id="capture-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCapture();
+          }}
           disabled={isProcessing}
           className={`w-16 h-16 rounded-full border-4 border-white flex items-center justify-center transition-transform active:scale-95 ${
             isProcessing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/20'

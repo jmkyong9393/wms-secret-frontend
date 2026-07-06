@@ -5,22 +5,23 @@
 ## 🚀 Tech Stack
 - **Framework:** Next.js (App Router)
 - **Language:** TypeScript
-- **Styling:** Tailwind CSS
-- **State Management:** React Context API / Zustand (협의 후 결정)
-- **Data Fetching:** SWR / React Query
+- **Styling & UI:** Tailwind CSS, shadcn/ui, Base UI, Lucide-react
+- **State Management:** Jotai (Atomic 패턴 전역 상태 및 Queue 관리)
+- **Data Fetching:** TanStack Query (비동기 폴링 및 캐싱)
+- **Edge Pre-processing:** WebRTC (커스텀 카메라 UI), WASM OpenCV.js
 
 ## 📡 Key Architecture (Frontend)
 
-### 1. S3 Direct Upload (Pre-signed URL) 연동
-- 본 시스템의 가장 중요한 병목 방지 기술입니다. 모바일 기기(웹/앱)에서 중고 서적을 촬영한 5~10MB의 원본 이미지는 백엔드 서버를 거치지 않습니다.
-- 프론트엔드에서 백엔드(`POST /api/upload/url`)를 호출하여 AWS S3 Pre-signed URL을 발급받은 뒤, **브라우저에서 직접 S3로 바이너리를 PUT 업로드**합니다.
+### 1. Edge AI 전처리 및 낙관적 UI (Optimistic UI)
+- **WebRTC & OpenCV.js:** 기기 기본 카메라 앱 의존성을 탈피하고 웹 내장 커스텀 뷰파인더를 제공하며, WASM OpenCV.js를 활용해 브라우저 단에서 이미지 흔들림(Blur)을 즉시 판독하여 서버 전송 전 불량 데이터를 차단(Drop)합니다.
+- **Optimistic Queueing:** 촬영 직후 즉시 Jotai `uploadQueueAtom`에 임시 적재하여 작업자가 로딩 스피너 대기 없이 곧바로 다음 도서를 연속 촬영할 수 있게 합니다.
 
-### 2. 비동기 Polling 처리 (DB Queue)
-- 백엔드가 `Celery 큐` 기반의 비동기 큐로 동작하므로, 검수 요청 시 `202 Accepted` 응답과 함께 `job_id`를 반환받습니다.
-- 프론트엔드는 해당 `job_id`를 기반으로 백엔드 폴링(Polling) 또는 SSE/WebSocket을 통해 최종 검수 리포트를 화면에 렌더링해야 합니다.
+### 2. 클라이언트 사이드 압축 및 S3 Direct Upload
+- 백엔드 병목을 막기 위해 브라우저 단에서 10MB 고화질 원본을 500KB 이하로 압축(`canvas.toBlob`)합니다.
+- 백엔드로부터 AWS S3 Pre-signed URL을 발급받아, **브라우저에서 직접 S3 버킷으로 바이너리를 PUT 업로드**하여 메인 서버의 트래픽을 완벽히 우회합니다.
 
-### 3. 워크플로우 및 하드웨어 제어
-- **[FE PC/Admin 박준희]** 전담으로 블루투스 감열지 프린터를 연동하여 정전기 필름(포스트잇 재질) 기반 LPN 라벨을 발급하고, 전반적인 UI/UX 워크플로우를 제어 및 모니터링합니다.
+### 3. TanStack Query 기반 비동기 Polling 처리
+- 백엔드(Celery)가 반환한 `job_id`를 기반으로 TanStack Query를 활용한 3초 주기 폴링(Polling) 또는 SSE 통신을 수행해, 검수 완료 시 하단 UI 뱃지만 부드럽게 업데이트합니다.
 
 ---
 
