@@ -39,7 +39,7 @@
   * `[BE-3]`: **WMS 코어 API (고객 주문 출고, 재고 차감, 정상 입고/편입)** 개발 전담.
   * `[BE-1]`: FDS(블랙컨슈머 이상거래탐지) 및 주간 통계를 위한 독립된 `report_batch.py` 및 K8s CronJob 인프라 세팅.
   * `[AI Lead]`: LangGraph Supervisor (Star Topology) 기반 에이전트 조립 및 Fast-track Routing (Vision detects Mint -> Auto-refund, Policy/Critic 생략) 파이프라인 완성.
-  * `[FE-1]`: 모바일 웹 Canvas 리사이징(WebP 압축) 및 S3 다이렉트 업로드 연동 완료.
+  * `[FE-1]`: 모바일 웹 Canvas 리사이징(WebP 압축) 및 CloudFront Edge 다이렉트 업로드 연동 완료.
 * **[3주차] API 오케스트레이션 및 비동기 연동**
   * `[BE-2]`: AI 판독 결과를 `BE-3` WMS API와 내부 연결하여 자동 입/출고 완성. Redis & Celery 강제 적용(Celery/Redis 완전 배제). 클라이언트 SSE 푸시 적용.
   * `[FE-2]`: 대시보드 레이아웃 구현 및 백엔드 더미 로그 연결.

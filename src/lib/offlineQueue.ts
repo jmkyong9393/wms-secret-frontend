@@ -4,11 +4,12 @@
 export class OfflineQueue {
   // TODO: [팀원 구현 영역] idb 패키지 dbPromise 초기화
 
-  async enqueue(order_id: string, image_url: string): Promise<void> {
+  async enqueue(_order_id: string, _image_url: string): Promise<void> {
     // TODO: IndexedDB에 오프라인 검수 요청 저장 로직
+    // [방어 로직] 401(Unauthorized) 에러로 인한 통신 실패는 오프라인 큐에 담지 않고 폐기해야 함.
   }
 
-  async getPendingTasks(): Promise<any[]> {
+  async getPendingTasks(): Promise<unknown[]> {
     // TODO: 펜딩된 모든 작업 조회 로직
     return [];
   }

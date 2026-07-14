@@ -5,7 +5,7 @@
 ## 🚀 Tech Stack
 - **Framework:** Next.js (App Router)
 - **Language:** TypeScript
-- **Styling & UI:** Tailwind CSS, shadcn/ui, Base UI, Lucide-react
+- **Styling & UI:** Tailwind CSS v4, shadcn/ui, Base UI, Lucide-react
 - **State Management:** Jotai (Atomic 패턴 전역 상태 및 Queue 관리)
 - **Data Fetching:** TanStack Query (비동기 폴링 및 캐싱)
 - **Edge Pre-processing:** WebRTC (커스텀 카메라 UI), WASM OpenCV.js
@@ -18,7 +18,7 @@
 
 ### 2. 클라이언트 사이드 압축 및 S3 Direct Upload
 - 백엔드 병목을 막기 위해 브라우저 단에서 10MB 고화질 원본을 500KB 이하로 압축(`canvas.toBlob`)합니다.
-- 백엔드로부터 AWS S3 Pre-signed URL을 발급받아, **브라우저에서 직접 S3 버킷으로 바이너리를 PUT 업로드**하여 메인 서버의 트래픽을 완벽히 우회합니다.
+- 백엔드로부터 AWS AWS CloudFront Signed Cookie을 발급받아, **브라우저에서 직접 S3 버킷으로 바이너리를 PUT 업로드**하여 메인 서버의 트래픽을 완벽히 우회합니다.
 
 ### 3. TanStack Query 기반 비동기 Polling 처리
 - 백엔드(Celery)가 반환한 `job_id`를 기반으로 TanStack Query를 활용한 3초 주기 폴링(Polling) 또는 SSE 통신을 수행해, 검수 완료 시 하단 UI 뱃지만 부드럽게 업데이트합니다.

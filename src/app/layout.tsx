@@ -31,7 +31,7 @@ export default function RootLayout({
     >
       <body className="min-h-full">
         <Providers>
-          <MainLayout>{children}</MainLayout>
+          {children}
         </Providers>
       </body>
     </html>

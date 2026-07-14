@@ -35,7 +35,7 @@ sequenceDiagram
         Worker->>Worker: 4-D. 해당 번호 바구니에 도서 적재 후 다음 촬영 진행
     end
     
-    FE->>BE: 5. 비동기 POST /api/v1/inspections
+    FE->>BE: 5. Signed Cookie 보안 인증
     BE->>DB: 6. 상태 PENDING 저장
     BE->>Redis: 7. Task 큐 적재
     BE-->>FE: 8. 202 Accepted 응답
@@ -67,7 +67,7 @@ graph TD
     end
 
     subgraph "API & Orchestration (AWS EKS / FastAPI & Worker)"
-        C[FastAPI Router] -->|3. Redis 브로커 및 Celery Worker 기반 비동기 큐 INSERT 및 202 반환| E[(AWS RDS PostgreSQL)]
+        C[AWS CloudFront Edge Upload] -->|3. Redis 브로커 및 Celery Worker 기반 비동기 큐 INSERT 및 202 반환| E[(AWS RDS PostgreSQL)]
         C -->|클라이언트 SSE 실시간 푸시| A
         E -->|4. Celery/Redis 비동기 폴링| W[Worker Daemon]
         W -->|5. Multi-Agent 위임| D[LangGraph Workflow]
@@ -218,7 +218,7 @@ graph TD
 * **Mitigation:** **인프라 개발의 병렬 격리.** 5주 차까지는 익숙한 Docker Compose나 로컬 환경에서 핵심 비즈니스 로직(LangGraph) 완성에만 집중합니다. 백엔드 리드(BE-Pro) 1명만이 6주 차에 EKS(또는 온프레미스 K8s) 매니페스트를 작성하여 1차 배포를 시도하는 방식으로 리스크를 통제합니다.
 
 ### 🛑 3. 초기 인프라 세팅 병목으로 인한 API 통신 지연 (Infra Setup Delay)
-* **Risk:** AWS RDS(VPC) 및 S3(Presigned URL) 세팅에 시간이 소요되어 프론트엔드의 업로드 기능 개발이 지연될 수 있습니다.
+* **Risk:** AWS RDS(VPC) 및 S3(CloudFront Signed Cookie) 세팅에 시간이 소요되어 프론트엔드의 업로드 기능 개발이 지연될 수 있습니다.
 * **Mitigation:** **DB/스토리지 투트랙(Two-Track) 롤백.** 1주차 내에 AWS 환경 구성(Plan A)이 완료되지 않을 경우, 즉시 SaaS형 관리 서비스인 Supabase(Plan B)로 롤백하여 비즈니스 로직 개발에 지장이 없도록 통제합니다. 두 환경 모두 PostgreSQL(JSONB)을 지원하므로 코드 수정 비용은 0에 수렴합니다.
 
 ### 🛑 4. 비용 상승 방어 (Cost Optimization)
@@ -260,3 +260,5 @@ graph TD
 | 와이어프레임 설계 | 캔버스 리사이징   | 에이전트 로그 뷰어| 크로스 브라우징 QA|
 +-------------------+-------------------+-------------------+-------------------+
 ```
+
+
