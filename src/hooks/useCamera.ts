@@ -29,7 +29,7 @@ export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Camera start failed:", err);
       setError("카메라 접근 권한이 없거나, 지원하지 않는 브라우저입니다.");
     }

@@ -41,12 +41,12 @@
 **1주차 목표:** Next.js 모바일 뷰 라우팅 세팅 및 Device API(카메라) 연동 PoC
 * **Action Items (상세):**
   0. **[Day-1 블로커] RAG 데이터 및 전체 아키텍처 통합 설계 검수(Tech Lead):** 소한민(데이터)과 홍경표(AI)가 구축하는 `ai_knowledge_base` 스키마 구조가 FE/BE 전체 인터페이스 성능에 병목을 주지 않는지, 3주 조기 하차 전 전체적인 기술 책임자로서 최종 리뷰하고 승인할 것.
-  1. **Next.js 모바일 레이아웃 세팅:** `create-next-app` 명령어 기반 프로젝트 생성 및 모바일 해상도(375x812 등)에 최적화된 Viewport 적용. TailwindCSS 초기 설정.
+  1. **Next.js 모바일 레이아웃 세팅:** `create-next-app` 명령어 기반 프로젝트 생성 및 모바일 해상도(375x812 등)에 최적화된 Viewport 적용. Tailwind CSS v4 초기 설정.
   2. **네이티브 카메라 호출 PoC:** HTML5 `<input type="file" accept="image/*" capture="environment">` 속성을 이용해 스마트폰 후면 카메라를 강제 호출하고, 촬영된 이미지를 로컬 브라우저에 미리보기(Preview)로 띄우는 컴포넌트 개발. (Canvas 리사이징은 추후 진행)
   3. **Mock API 통신 테스트:** BE-3(박민우)가 띄워준 백엔드 더미 주소로 POST 요청을 보내어 응답을 제대로 받아오는지 CORS 이슈 선제 점검.
 
 ## 💻 6. [FE-2] 관리자 PC 대시보드 (박준희 Main)
-**1주차 목표:** Next.js App Router 기반 대시보드 레이아웃 및 뷰 분리
+**1주차 목표:** Next.js 16 App Router 기반 대시보드 레이아웃 및 뷰 분리
 * **Action Items (상세):**
   1. **정적 라우팅 구성:** `/admin` 디렉토리 하위에 '대시보드 홈', '실시간 검수 내역', '수동 승인 큐', '재고/출고 관리(Dynamic Pricing, Box Optimization 조회용)' 페이지 라우팅 생성.
   2. **Global Layout UI 뼈대:** 좌측 GNB(Global Navigation Bar) Sidebar와 상단 상태창 등 뼈대 화면 퍼블리싱. 화면 전환 시 렌더링 깜빡임 없도록 세팅.

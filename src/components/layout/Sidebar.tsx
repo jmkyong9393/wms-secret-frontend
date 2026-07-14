@@ -10,9 +10,19 @@ import {
   LineChart,
   Settings,
   Menu,
-  X
+  X,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { useState } from 'react';
+
+/**
+ * 전역 네비게이션 사이드바 컴포넌트입니다.
+ * 모바일에서는 햄버거 버튼을 통해 오버레이 형태로 표시되며,
+ * 데스크탑에서는 좌측에 고정(fixed)되어 출력됩니다.
+ * 
+ * @component
+ */
 
 // PM님이 요청하신 사이드바 추천 메뉴 구성
 const MENU_ITEMS = [
@@ -28,8 +38,9 @@ const BOTTOM_MENU_ITEMS = [
 ];
 
 export default function Sidebar() {
-  const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname(); // 현재 URL 경로를 파악하여 활성화된 메뉴 하이라이팅에 사용
+  const [isOpen, setIsOpen] = useState(false); // 모바일 환경에서의 사이드바 열림/닫힘 상태
+  const [isCoreOpen, setIsCoreOpen] = useState(true); // 'Core Menus' 아코디언 열림/닫힘 상태
 
   return (
     <>
@@ -57,34 +68,41 @@ export default function Sidebar() {
       `}>
         {/* Logo Area */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
-          <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+          <Link href="/" onClick={() => setIsOpen(false)} className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent hover:opacity-80 transition-opacity">
             WMS AI Platform
-          </span>
+          </Link>
         </div>
 
         {/* Main Menu */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-3">
-            Core Menus
+          <button 
+            onClick={() => setIsCoreOpen(!isCoreOpen)}
+            className="w-full flex items-center justify-between px-3 py-2 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors"
+          >
+            <span>Core Menus</span>
+            {isCoreOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+          
+          <div className={`space-y-1 overflow-hidden transition-all duration-300 ${isCoreOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+            {MENU_ITEMS.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive 
+                      ? 'bg-blue-50 text-blue-700' 
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  <item.icon className={`w-5 h-5 mr-3 ${isActive ? 'text-blue-700' : 'text-gray-400'}`} />
+                  {item.name}
+                </Link>
+              );
+            })}
           </div>
-          {MENU_ITEMS.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={() => setIsOpen(false)}
-                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive 
-                    ? 'bg-blue-50 text-blue-700' 
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`}
-              >
-                <item.icon className={`w-5 h-5 mr-3 ${isActive ? 'text-blue-700' : 'text-gray-400'}`} />
-                {item.name}
-              </Link>
-            );
-          })}
         </nav>
 
         {/* Bottom Menu */}

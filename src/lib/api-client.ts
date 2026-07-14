@@ -12,14 +12,16 @@ export const apiClient = axios.create({
   timeout: 10000, 
 });
 
+import Cookies from "js-cookie";
+
 // 인터셉터 (요청 전)
 apiClient.interceptors.request.use(
   (config) => {
-    // TODO: 로컬 스토리지나 쿠키에서 토큰을 가져와 헤더에 주입
-    // const token = localStorage.getItem("token");
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    // js-cookie를 통해 토큰 추출 및 주입
+    const token = Cookies.get("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -29,7 +31,13 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // TODO: 전역 에러 핸들링 (예: 401 인증 만료 시 로그인 페이지 리다이렉트)
+    // 401 Unauthorized 에러 발생 시 처리 방어 로직
+    if (error.response && error.response.status === 401) {
+      Cookies.remove("token");
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+    }
     return Promise.reject(error);
   }
 );

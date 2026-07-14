@@ -13,7 +13,7 @@
 주로 **사용자 눈에 보이는 뷰(View)와 레이아웃 구조**를 총괄하며, **타사 정책 데이터 RAG 청크 마스터 통합** 업무를 메인으로 병행합니다.
 - **주요 작업 폴더:** `app/` (페이지 라우팅), `components/` (UI 컴포넌트), `ai_knowledge_base/` (정책 데이터 마스터 통합)
 - **주요 업무:** 
-  - 기획 문서 및 요구사항을 바탕으로 공통 버튼, 인풋 등 재사용 가능한 UI 컴포넌트 제작 및 Tailwind CSS 반응형 웹 퍼블리싱 (FE 메인)
+  - 기획 문서 및 요구사항을 바탕으로 공통 버튼, 인풋 등 재사용 가능한 UI 컴포넌트 제작 및 Tailwind CSS v4 반응형 웹 퍼블리싱 (FE 메인)
   - Next.js `app/` 폴더 내의 페이지 레이아웃 뼈대 구축
   - (사전 준비 단계) 팀원들(소한민, 홍경표)이 수집한 타사 정책 YAML 데이터를 검토하고 `policy_data_master.yaml`로 통합 및 구조 설계 (정책 데이터 메인)
 
@@ -22,7 +22,7 @@
 - **주요 작업 폴더:** `services/` (API 호출), `stores/` (상태 관리), `hooks/` (비즈니스 로직)
 - **주요 업무:**
   - 백엔드(FastAPI) 명세서를 바탕으로 `axios` 또는 `fetch` API 함수 세팅
-  - S3 Pre-signed URL 업로드 로직 및 폴링(Polling) 처리 로직 구현
+  - AWS CloudFront Signed Cookie 업로드 로직 및 폴링(Polling) 처리 로직 구현
   - Jotai 및 TanStack Query를 활용한 전역 상태 및 비동기 서버 데이터 관리
 
 ---
@@ -32,7 +32,7 @@
 본 프로젝트는 물류 현장의 열악한 네트워크와 디바이스 환경을 극복하기 위해 아래의 기술 스택을 엄격하게 사용합니다.
 
 - **Framework:** Next.js (SSR/CSR 하이브리드 라우팅 적용)
-- **UI Components:** shadcn/ui & Base UI (Tailwind CSS 기반 컴포넌트 시스템 및 Lucide-react)
+- **UI Components:** shadcn/ui & Base UI (Tailwind CSS v4 기반 컴포넌트 시스템 및 Lucide-react)
 - **State Management:** Jotai (Atomic 패턴을 활용한 가벼운 전역 상태 및 큐 관리)
 - **Data Fetching:** TanStack Query (비동기 서버 상태, 캐싱 및 폴링 관리)
 - **Edge AI & 최적화:** 

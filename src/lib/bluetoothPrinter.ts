@@ -9,7 +9,7 @@ export class BluetoothPrinter {
     return false;
   }
 
-  async printLpnTag(lpnCode: string): Promise<void> {
+  async printLpnTag(_lpnCode: string): Promise<void> {
     // TODO: 연결된 프린터에 ZPL/TSPL 바코드 명령어 전송 로직 작성
   }
 
