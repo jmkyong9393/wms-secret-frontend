@@ -1,53 +1,67 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
-interface UseCameraOptions {
-  idealFacingMode?: 'environment' | 'user';
-}
-
-export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions = {}) {
-  const [stream, setStream] = useState<MediaStream | null>(null);
+export function useCamera() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   const startCamera = useCallback(async () => {
     try {
-      // 1. 디바이스 최대 화질을 가져오되, 모바일 브라우저 한계상 max 제약조건 사용 (디바이스 의존)
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: idealFacingMode,
-          // 해상도는 디바이스 최대로 요청
-          width: { ideal: 4096 },
-          height: { ideal: 2160 },
-        },
-        audio: false,
-      };
-
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      setStream(mediaStream);
-      setError(null);
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
+      // 이미 스트림이 있다면 재사용
+      if (streamRef.current && videoRef.current && videoRef.current.srcObject) {
+        setIsReady(true);
+        return;
       }
-    } catch (err) {
-      console.error("Camera start failed:", err);
-      setError("카메라 접근 권한이 없거나, 지원하지 않는 브라우저입니다.");
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'environment', // 모바일 후면 카메라 우선
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        },
+        audio: false
+      });
+      
+      streamRef.current = stream;
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', 'true'); // iOS Safari 전체화면 방지
+        await videoRef.current.play();
+        setIsReady(true);
+      }
+      setError(null);
+    } catch (err: any) {
+      console.error("Camera access error:", err);
+      setError(err.message || "카메라 접근에 실패했습니다.");
+      setIsReady(false);
     }
-  }, [idealFacingMode]);
+  }, []);
 
   const stopCamera = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      setStream(null);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
-  }, [stream]);
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsReady(false);
+  }, []);
 
-  // 컴포넌트 마운트 해제 시 카메라 즉시 종료 (메모리 및 배터리 누수 방지)
+  // 컴포넌트 언마운트 시 메모리 누수 방지
   useEffect(() => {
     return () => {
       stopCamera();
     };
   }, [stopCamera]);
 
-  return { stream, error, videoRef, startCamera, stopCamera };
+  return {
+    videoRef,
+    startCamera,
+    stopCamera,
+    isReady,
+    error
+  };
 }

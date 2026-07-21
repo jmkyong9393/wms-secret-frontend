@@ -1,47 +1,46 @@
-FROM node:20-alpine AS base
-
-# Install dependencies only when needed
-FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
+# Stage 1: Dependencies 설치 (캐시 레이어 극대화)
+FROM node:20-alpine AS deps
+# alpine 환경에서 자주 필요한 libc 호환 라이브러리 추가
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
 RUN npm ci
 
-# Rebuild the source code only when needed
-FROM base AS builder
+# Stage 2: Next.js 애플리케이션 빌드
+FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Disable telemetry during the build.
-ENV NEXT_TELEMETRY_DISABLED=1
-
+# next.config.ts 의 output: 'standalone' 설정에 의해 프로덕션용 파일만 추려짐
 RUN npm run build
 
-# Production image, copy all the files and run next
-FROM base AS runner
+# Stage 3: 초경량 Runtime 환경 구성
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+# 불필요한 Next.js 텔레메트리 비활성화로 자원 절약
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# 보안 강화를 위한 Non-root 시스템 유저 생성
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
+# 정적 에셋 복사
 COPY --from=builder /app/public ./public
+
+# Standalone 모드로 추출된 최소한의 파일만 복사 (용량 80% 이상 절감)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Non-root 권한 전환
 USER nextjs
 
 EXPOSE 3000
-
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# Next.js Standalone 결과물인 server.js 로 구동
 CMD ["node", "server.js"]
