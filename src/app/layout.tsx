@@ -4,6 +4,8 @@ import "./globals.css";
 import Providers from "@/components/providers";
 import MainLayout from "@/components/layout/MainLayout";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { A2HSBanner } from "@/components/a2hs-banner";
+import { GlobalErrorBoundary } from "@/components/error/GlobalErrorBoundary";
 import ReactQueryProvider from "@/lib/react-query-provider";
 
 const geistSans = Geist({
@@ -32,12 +34,15 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <ServiceWorkerRegistration />
-        <ReactQueryProvider>
-          <Providers>
-            {children}
-          </Providers>
-        </ReactQueryProvider>
+        <GlobalErrorBoundary>
+          <ServiceWorkerRegistration />
+          <A2HSBanner />
+          <ReactQueryProvider>
+            <Providers>
+              {children}
+            </Providers>
+          </ReactQueryProvider>
+        </GlobalErrorBoundary>
       </body>
     </html>
   );

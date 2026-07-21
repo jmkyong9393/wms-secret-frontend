@@ -1,0 +1,68 @@
+name: Frontend Prod CI/CD to EKS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'Dockerfile'
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: wms-secret-frontend
+  EKS_CLUSTER_NAME: wms-prod-cluster
+  KUBE_NAMESPACE: wms-prod
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials using OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-wms-role
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push Docker image to ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        
+        # Tag as latest as well
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Update Kubeconfig
+      run: |
+        aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+    - name: Deploy to EKS (Rolling Update)
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # K8s 매니페스트 적용 (존재하지 않으면 생성)
+        kubectl apply -f k8s/deployment.yml -n ${{ env.KUBE_NAMESPACE }}
+        kubectl apply -f k8s/service.yml -n ${{ env.KUBE_NAMESPACE }}
+        
+        # 새로운 이미지 태그로 롤링 업데이트 트리거
+        kubectl set image deployment/wms-frontend wms-frontend-container=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -n ${{ env.KUBE_NAMESPACE }}
+        
+        # 롤아웃 상태 대기
+        kubectl rollout status deployment/wms-frontend -n ${{ env.KUBE_NAMESPACE }}
