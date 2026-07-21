@@ -18,7 +18,21 @@ export function ServiceWorkerRegistration() {
     const handleOnline = async () => {
       console.log("Network came back online. Syncing Offline Queue...");
       const queue = new OfflineQueue();
-      await queue.syncPendingTasks();
+      await queue.syncPendingTasks(
+        async (blob, filename) => {
+          const { uploadImageToCloudFront } = await import('@/lib/s3_helper');
+          return await uploadImageToCloudFront(blob, filename);
+        },
+        async (isbn, lpn, url) => {
+          const { apiClient } = await import('@/lib/api-client');
+          const response = await apiClient.post('/api/v1/inspections', {
+            book_id: isbn,
+            location_id: lpn,
+            image_urls: [url]
+          });
+          return response.data;
+        }
+      );
     };
 
     window.addEventListener("online", handleOnline);

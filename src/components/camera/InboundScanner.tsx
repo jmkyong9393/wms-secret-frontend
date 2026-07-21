@@ -11,6 +11,7 @@ import { processImage } from '@/lib/image-processor';
 import { useAtom } from 'jotai';
 import { uploadQueueAtom } from '@/stores/uploadQueueAtoms';
 import { v4 as uuidv4 } from 'uuid';
+import { OfflineQueue } from '@/lib/offlineQueue';
 
 /**
  * 물류 입고(Inbound) 과정을 4단계로 제어하는 상태(State) 머신 타입니다.
@@ -199,8 +200,21 @@ export default function InboundScanner() {
         setUploadQueue(prev => prev.map(t => 
           t.id === pendingTask.id ? { ...t, status: 'COMPLETED' } : t
         ));
-      } catch (err) {
+      } catch (err: any) {
         console.error("Background Upload Error:", err);
+        
+        // [FE-4.1] 네트워크 오류 발생 시 IndexedDB 오프라인 큐에 백업 (방어막)
+        if (!navigator.onLine || err.message?.includes('Network Error') || err.message?.includes('Failed to fetch')) {
+          console.log("[OfflineQueue] Network error detected. Saving task to offline queue...");
+          const offlineQueue = new OfflineQueue();
+          await offlineQueue.enqueue({
+            taskId: pendingTask.id,
+            blob: pendingTask.blob,
+            isbn: pendingTask.isbn || 'UNKNOWN',
+            lpn: pendingTask.lpn || 'UNKNOWN'
+          });
+        }
+
         setUploadQueue(prev => prev.map(t => 
           t.id === pendingTask.id ? { ...t, status: 'FAILED' } : t
         ));

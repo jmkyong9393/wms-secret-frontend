@@ -4,7 +4,6 @@
  * IndexedDB를 활용하여 API 요청을 로컬에 적재(Queueing)하는 방어 로직 클래스.
  */
 import { openDB, IDBPDatabase } from 'idb';
-import { uploadAPI } from './api';
 
 const DB_NAME = 'WMS_OfflineQueue';
 const STORE_NAME = 'pendingTasks';
@@ -12,8 +11,10 @@ const DB_VERSION = 1;
 
 export interface PendingTask {
   id?: number;
-  order_id: string;
-  image_url: string;
+  taskId: string;
+  blob: Blob;
+  isbn: string;
+  lpn: string;
   timestamp: number;
 }
 
@@ -32,9 +33,9 @@ export class OfflineQueue {
   }
 
   // 작업 적재 (Enqueue)
-  async enqueue(order_id: string, image_url: string): Promise<void> {
+  async enqueue(taskInfo: Omit<PendingTask, 'timestamp' | 'id'>): Promise<void> {
     const db = await this.dbPromise;
-    const task: PendingTask = { order_id, image_url, timestamp: Date.now() };
+    const task: PendingTask = { ...taskInfo, timestamp: Date.now() };
     await db.add(STORE_NAME, task);
     
     // Service Worker에 Background Sync 태그 등록 시도
@@ -60,8 +61,11 @@ export class OfflineQueue {
     await db.delete(STORE_NAME, id);
   }
 
-  // 네트워크 복구 시 동기화 (Background Sync)
-  async syncPendingTasks(): Promise<void> {
+  // 네트워크 복구 시 동기화 (Background Sync) - 호출부에서 구현하도록 콜백 주입
+  async syncPendingTasks(
+    uploadFn: (blob: Blob, filename: string) => Promise<string>,
+    evaluateFn: (isbn: string, lpn: string, url: string) => Promise<any>
+  ): Promise<void> {
     if (!navigator.onLine) return;
 
     const tasks = await this.getPendingTasks();
@@ -73,19 +77,17 @@ export class OfflineQueue {
       if (!task.id) continue;
       
       try {
-        // 백엔드 API 재전송 시도 (api-client.ts 의 uploadAPI 활용 가정)
-        // 실제 프로젝트에선 FormData 구성 등 세부 처리가 필요할 수 있으나, 개념적 sync 로직으로 구현
-        await uploadAPI.uploadImage(task.order_id, new File([], "placeholder.jpg")); 
+        const filename = `condition_${task.lpn}_${task.taskId}.jpg`;
+        const uploadedUrl = await uploadFn(task.blob, filename);
+        await evaluateFn(task.isbn, task.lpn, uploadedUrl);
         
         console.log(`[OfflineQueue] Task ${task.id} synced successfully.`);
         await this.removeTask(task.id);
       } catch (error: any) {
         console.error(`[OfflineQueue] Sync failed for task ${task.id}`, error);
         
-        // [방어 로직] 401(Unauthorized) 에러로 인한 통신 실패는 오프라인 큐에 계속 담아두면
-        // 무한루프에 빠지므로 영구 폐기 처리. (JWT 만료로 인한 거부)
-        if (error.response?.status === 401) {
-          console.warn(`[OfflineQueue] Discarding task ${task.id} due to 401 Unauthorized.`);
+        if (error.response?.status === 401 || error.response?.status === 400) {
+          console.warn(`[OfflineQueue] Discarding task ${task.id} due to non-retriable error.`);
           await this.removeTask(task.id);
         }
       }

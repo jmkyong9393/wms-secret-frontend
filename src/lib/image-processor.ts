@@ -12,6 +12,8 @@ export interface ProcessedImage {
   blurScore: number;
 }
 
+import imageCompression from 'browser-image-compression';
+
 /**
  * 라플라시안 분산(Laplacian Variance) 알고리즘 구현
  * 값이 낮을수록 경계선(Edge)이 뭉개진 상태이므로 흔들림이 심한 사진입니다.
@@ -106,20 +108,42 @@ export async function processImage(video: HTMLVideoElement): Promise<ProcessedIm
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      (blob) => {
+      async (blob) => {
         if (!blob) {
           reject(new Error("Canvas toBlob failed"));
           return;
         }
-        resolve({
-          blob,
-          previewUrl: URL.createObjectURL(blob),
-          isBlurred,
-          blurScore,
-        });
+        
+        try {
+          // 브라우저 이미지 압축 적용 (최대 1MB)
+          const options = {
+            maxSizeMB: 1,
+            maxWidthOrHeight: 1920,
+            useWebWorker: true,
+            fileType: "image/jpeg"
+          };
+          
+          const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+          const compressedFile = await imageCompression(file, options);
+
+          resolve({
+            blob: compressedFile,
+            previewUrl: URL.createObjectURL(compressedFile),
+            isBlurred,
+            blurScore,
+          });
+        } catch (error) {
+          console.error("Image compression failed, fallback to canvas blob:", error);
+          resolve({
+            blob,
+            previewUrl: URL.createObjectURL(blob),
+            isBlurred,
+            blurScore,
+          });
+        }
       },
       "image/jpeg",
-      0.7
+      0.9
     );
   });
 }
