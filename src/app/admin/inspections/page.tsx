@@ -1,5 +1,5 @@
-import InspectionsView from '@/features/inspections/components/InspectionsView';
+import AdminHitlDashboard from "@/app/admin/hitl/page";
 
 export default function InspectionsPage() {
-  return <InspectionsView />;
+  return <AdminHitlDashboard />;
 }

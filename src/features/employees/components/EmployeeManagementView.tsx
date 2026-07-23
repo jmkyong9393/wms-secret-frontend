@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useAtomValue } from "jotai";
-import { Plus } from "lucide-react";
+import { Plus, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import * as XLSX from "xlsx";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -12,13 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { currentUserAtom } from "@/features/auth/store/authAtoms";
+import { userAtom } from "@/stores/auth";
 import { VALID_ROLES, type Role, type UserStatus } from "@/features/auth/types/authTypes";
 import { canManageEmployees } from "@/features/employees/utils/permissions";
 import { ROLE_LABEL, STATUS_LABEL } from "@/features/employees/utils/badges";
 import { useEmployeesQuery } from "@/features/employees/hooks/useEmployeesQuery";
 import { EmployeeTable } from "@/features/employees/components/EmployeeTable";
 import { BulkCreateEmployeeModal } from "@/features/employees/components/BulkCreateEmployeeModal";
+import { SingleCreateEmployeeModal } from "@/features/employees/components/SingleCreateEmployeeModal";
+import { listEmployeesAction } from "@/features/employees/actions/employeeActions";
 import type { EmployeeListParams } from "@/features/employees/types/employee";
 
 const PAGE_SIZE = 20;
@@ -26,27 +29,80 @@ const ROLE_FILTER_ALL = "ALL" as const;
 const STATUS_FILTER_ALL = "ALL" as const;
 
 export function EmployeeManagementView() {
-  const currentUser = useAtomValue(currentUserAtom);
-  const canManage = canManageEmployees(currentUser);
+  const user = useAtomValue(userAtom);
+  // User type from stores/auth uses employee_id, while CurrentUser expects employeeId.
+  // We can just cast it for permissions because permissions only checks .role
+  const canManage = canManageEmployees(user as any);
 
   const [keyword, setKeyword] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | typeof ROLE_FILTER_ALL>(ROLE_FILTER_ALL);
   const [statusFilter, setStatusFilter] = useState<UserStatus | typeof STATUS_FILTER_ALL>(
     STATUS_FILTER_ALL
   );
+  const [sortBy, setSortBy] = useState<string>("role");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
-  const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+  const [isBulkCreateModalOpen, setBulkCreateModalOpen] = useState(false);
+  const [isSingleCreateModalOpen, setSingleCreateModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const params: EmployeeListParams = {
     keyword: keyword.trim() || undefined,
     role: roleFilter === ROLE_FILTER_ALL ? undefined : roleFilter,
     status: statusFilter === STATUS_FILTER_ALL ? undefined : statusFilter,
+    sort_by: sortBy,
+    sort_order: sortOrder,
     page,
     size: PAGE_SIZE,
   };
 
   const { data, isLoading, isError } = useEmployeesQuery(params);
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+
+  const handleExportExcel = async () => {
+    if (!user) return;
+    try {
+      setIsExporting(true);
+      const res = await listEmployeesAction({
+        keyword: keyword.trim() || undefined,
+        role: roleFilter === ROLE_FILTER_ALL ? undefined : roleFilter,
+        status: statusFilter === STATUS_FILTER_ALL ? undefined : statusFilter,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        page: 1,
+        size: 9999,
+      });
+
+      const allowedRoles = user.role === "MASTER" 
+        ? ["MASTER", "ADMIN", "WORKER", "GUEST"] 
+        : ["ADMIN", "WORKER", "GUEST"];
+
+      const filtered = res.items.filter((item) => allowedRoles.includes(item.role));
+      
+      const exportData = filtered.map((item) => ({
+        "사번": item.employee_id,
+        "이름": item.name,
+        "역할": ROLE_LABEL[item.role] || item.role,
+        "상태": STATUS_LABEL[item.status] || item.status,
+        "가입일": new Date(item.created_at).toLocaleDateString("ko-KR"),
+      }));
+
+      if (exportData.length === 0) {
+        alert("다운로드할 데이터가 없습니다.");
+        return;
+      }
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "직원목록");
+      XLSX.writeFile(wb, "직원_목록.xlsx");
+    } catch (error) {
+      console.error("Failed to export", error);
+      alert("엑셀 다운로드에 실패했습니다.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -56,10 +112,15 @@ export function EmployeeManagementView() {
           <p className="text-sm text-gray-500 mt-1">직원 계정을 조회하고 상태·역할을 관리합니다.</p>
         </div>
         {canManage && (
-          <Button onClick={() => setCreateModalOpen(true)}>
-            <Plus className="w-4 h-4" />
-            직원 일괄 생성
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setSingleCreateModalOpen(true)}>
+              <Plus className="w-4 h-4" />
+              직원 등록
+            </Button>
+            <Button variant="outline" onClick={() => setBulkCreateModalOpen(true)}>
+              엑셀 일괄 등록
+            </Button>
+          </div>
         )}
       </div>
 
@@ -108,6 +169,28 @@ export function EmployeeManagementView() {
             <SelectItem value="INACTIVE">{STATUS_LABEL.INACTIVE}</SelectItem>
           </SelectContent>
         </Select>
+        
+        <Select
+          value={`${sortBy}-${sortOrder}`}
+          onValueChange={(value) => {
+            setPage(1);
+            const [sBy, sOrder] = value.split("-");
+            setSortBy(sBy);
+            setSortOrder(sOrder as "asc" | "desc");
+          }}
+        >
+          <SelectTrigger className="ml-auto w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="role-asc">직급 높은 순</SelectItem>
+            <SelectItem value="role-desc">직급 낮은 순</SelectItem>
+            <SelectItem value="created_at-desc">최신 가입 순</SelectItem>
+            <SelectItem value="created_at-asc">오래된 가입 순</SelectItem>
+            <SelectItem value="name-asc">이름 가나다 순</SelectItem>
+            <SelectItem value="employee_id-asc">사번 순</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading && <p className="text-sm text-gray-400">불러오는 중...</p>}
@@ -115,9 +198,23 @@ export function EmployeeManagementView() {
 
       {data && (
         <>
-          <EmployeeTable employees={data.items} currentUser={currentUser} />
+          <EmployeeTable employees={data.items} currentUser={user as any} />
           <div className="flex items-center justify-between text-sm text-gray-500">
-            <span>총 {data.total}명</span>
+            <div className="flex items-center gap-4">
+              <span>총 {data.total}명</span>
+              {canManage && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleExportExcel} 
+                  disabled={isExporting}
+                  className="h-8"
+                >
+                  <Download className="w-3.5 h-3.5 mr-2" />
+                  {isExporting ? "다운로드 중..." : "목록 다운로드"}
+                </Button>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 type="button"
@@ -146,9 +243,14 @@ export function EmployeeManagementView() {
       )}
 
       <BulkCreateEmployeeModal
-        open={isCreateModalOpen}
-        onClose={() => setCreateModalOpen(false)}
-        currentUser={currentUser}
+        open={isBulkCreateModalOpen}
+        onClose={() => setBulkCreateModalOpen(false)}
+        currentUser={user as any}
+      />
+      <SingleCreateEmployeeModal
+        open={isSingleCreateModalOpen}
+        onClose={() => setSingleCreateModalOpen(false)}
+        currentUser={user as any}
       />
     </div>
   );

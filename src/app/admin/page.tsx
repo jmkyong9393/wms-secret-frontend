@@ -111,7 +111,7 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm lg:col-span-2 overflow-hidden">
           <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
             <h2 className="text-lg font-bold text-gray-800">최근 AI 판독 및 적치 현황</h2>
-            <Link href="/inventory" className="text-sm text-blue-600 font-bold hover:underline flex items-center">
+            <Link href="/admin/queue" className="text-sm text-blue-600 font-bold hover:underline flex items-center">
               전체 재고 보기 <ArrowRight className="w-4 h-4 ml-1" />
             </Link>
           </div>
@@ -182,7 +182,7 @@ export default function DashboardPage() {
                   <p className="text-xs text-red-600/90 mt-1.5 font-medium leading-relaxed">
                     '이것이 자바다' 도서의 파손 폐기율이 높아 C-존의 가용 재고가 부족합니다.
                   </p>
-                  <Link href="/po" className="text-xs font-bold text-red-700 mt-3 inline-flex items-center hover:underline bg-red-100 px-3 py-1.5 rounded-lg">
+                  <Link href="/admin/inspections" className="text-xs font-bold text-red-700 mt-3 inline-flex items-center hover:underline bg-red-100 px-3 py-1.5 rounded-lg">
                     자동 발주 승인하러 가기 <ArrowRight className="w-3 h-3 ml-1" />
                   </Link>
                 </div>
@@ -196,7 +196,7 @@ export default function DashboardPage() {
                   <p className="text-xs text-blue-600/90 mt-1.5 font-medium leading-relaxed">
                     금주 반품 입고량이 지난주 대비 15% 증가했습니다. AI 리소스 추가 할당을 권장합니다.
                   </p>
-                  <Link href="/reports" className="text-xs font-bold text-blue-700 mt-3 inline-flex items-center hover:underline bg-blue-100 px-3 py-1.5 rounded-lg">
+                  <Link href="/admin/inspections" className="text-xs font-bold text-blue-700 mt-3 inline-flex items-center hover:underline bg-blue-100 px-3 py-1.5 rounded-lg">
                     AI 품질 리포트 보기 <ArrowRight className="w-3 h-3 ml-1" />
                   </Link>
                 </div>

@@ -1,0 +1,1 @@
+fetch('https://www.yes24.com/Product/Search?domain=ALL&query=9788988474846').then(r=>r.text()).then(h => { const match = h.match(/<a class="gd_name"[^>]*>(.*?)<\/a>/); console.log(match ? match[1] : 'Not found'); })

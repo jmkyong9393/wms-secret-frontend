@@ -8,6 +8,7 @@
  */
 export const EMPLOYEE_LIST_ENDPOINT = "/api/v1/users/admin";
 export const EMPLOYEE_BULK_CREATE_ENDPOINT = "/api/v1/users/admin/create-accounts";
+export const EMPLOYEE_NEXT_ID_ENDPOINT = "/api/v1/users/admin/next-employee-id";
 export const employeeStatusEndpoint = (employeeId: string) =>
   `/api/v1/users/admin/${employeeId}/status`;
 export const employeeRoleEndpoint = (employeeId: string) =>

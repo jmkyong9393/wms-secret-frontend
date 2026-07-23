@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -21,6 +23,7 @@ import {
 import {
   useUpdateEmployeeStatusMutation,
   useUpdateEmployeeRoleMutation,
+  useDeleteEmployeeMutation,
 } from "@/features/employees/hooks/useEmployeeMutations";
 import { ConfirmDialog } from "@/features/employees/components/ConfirmDialog";
 
@@ -31,7 +34,8 @@ interface EmployeeTableProps {
 
 type PendingAction =
   | { type: "status"; employeeId: string; name: string; nextStatus: UserStatus }
-  | { type: "role"; employeeId: string; name: string; nextRole: AssignableRole };
+  | { type: "role"; employeeId: string; name: string; nextRole: AssignableRole }
+  | { type: "delete"; employeeId: string; name: string };
 
 /**
  * 직원 목록 및 계정 관리 테이블
@@ -50,7 +54,8 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
 
   const updateStatusMutation = useUpdateEmployeeStatusMutation();
   const updateRoleMutation = useUpdateEmployeeRoleMutation();
-  const isMutating = updateStatusMutation.isPending || updateRoleMutation.isPending;
+  const deleteMutation = useDeleteEmployeeMutation();
+  const isMutating = updateStatusMutation.isPending || updateRoleMutation.isPending || deleteMutation.isPending;
 
   const handleConfirm = () => {
     if (!pendingAction) return;
@@ -59,11 +64,19 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
         { employeeId: pendingAction.employeeId, payload: { status: pendingAction.nextStatus } },
         { onSuccess: () => setPendingAction(null) }
       );
-    } else {
+    } else if (pendingAction.type === "role") {
       updateRoleMutation.mutate(
         { employeeId: pendingAction.employeeId, payload: { role: pendingAction.nextRole } },
         { onSuccess: () => setPendingAction(null) }
       );
+    } else if (pendingAction.type === "delete") {
+      deleteMutation.mutate(pendingAction.employeeId, {
+        onSuccess: () => setPendingAction(null),
+        onError: (error: any) => {
+          alert(error.message || "삭제에 실패했습니다.");
+          setPendingAction(null);
+        },
+      });
     }
   };
 
@@ -77,19 +90,21 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
             <th className="px-4 py-3 font-medium">역할</th>
             <th className="px-4 py-3 font-medium">상태</th>
             <th className="px-4 py-3 font-medium">가입일</th>
+            <th className="px-4 py-3 font-medium text-center">관리</th>
           </tr>
         </thead>
         <tbody>
           {employees.length === 0 && (
             <tr>
-              <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+              <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
                 조건에 맞는 직원이 없습니다.
               </td>
             </tr>
           )}
           {employees.map((employee) => {
-            const isSelf = currentUser?.employeeId === employee.employee_id;
+            const isSelf = (currentUser?.employeeId || (currentUser as any)?.employee_id) === employee.employee_id;
             const nextStatus: UserStatus = employee.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+            const disabledManage = !canManage || isSelf || isMutating || (currentUser?.role !== "MASTER" && employee.role === "MASTER");
             // MASTER는 역할 변경 대상에서 제외 — ASSIGNABLE_ROLES에 없으므로 셀렉트 자체를 노출하지 않음
             const showRoleSelect = employee.role !== "MASTER";
 
@@ -117,7 +132,7 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
                             nextRole,
                           });
                         }}
-                        disabled={!canManage || isSelf || isMutating}
+                        disabled={disabledManage}
                       >
                         <SelectTrigger size="sm">
                           <SelectValue />
@@ -153,12 +168,28 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
                           nextStatus,
                         })
                       }
-                      disabled={!canManage || isSelf || isMutating}
+                      disabled={disabledManage}
                     />
                   </div>
                 </td>
                 <td className="px-4 py-3 text-gray-500">
                   {new Date(employee.created_at).toLocaleDateString("ko-KR")}
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={disabledManage}
+                    onClick={() =>
+                      setPendingAction({
+                        type: "delete",
+                        employeeId: employee.employee_id,
+                        name: employee.name,
+                      })
+                    }
+                  >
+                    <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-600" />
+                  </Button>
                 </td>
               </tr>
             );
@@ -173,9 +204,11 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
             ? `${pendingAction.name}님의 상태를 ${
                 pendingAction.nextStatus === "ACTIVE" ? "활성" : "비활성"
               }(으)로 변경할까요?`
-            : pendingAction
+            : pendingAction?.type === "role"
               ? `${pendingAction.name}님의 역할을 ${ROLE_LABEL[pendingAction.nextRole]}(으)로 변경할까요?`
-              : ""
+              : pendingAction?.type === "delete"
+                ? `${pendingAction.name}님의 계정을 영구 삭제하시겠습니까?`
+                : ""
         }
         isLoading={isMutating}
         onConfirm={handleConfirm}

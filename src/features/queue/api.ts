@@ -1,5 +1,18 @@
 import { apiClient } from '@/lib/api-client';
-import { InventoryFilterDTO, InventoryResponse } from '@/features/inventory/types';
+export interface InventoryFilterDTO {
+  page?: number;
+  size?: number;
+  zone?: string;
+  grade?: string;
+}
+
+export interface InventoryResponse {
+  content: any[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
 
 const BASE_URL = '/api/v1/inventory';
 

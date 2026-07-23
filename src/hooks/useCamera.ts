@@ -17,8 +17,10 @@ export function useCamera() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: 'environment', // 모바일 후면 카메라 우선
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
+          width: { ideal: 1280 },    // 바코드 인식을 위해 해상도를 너무 높이지 않고 720p로 최적화
+          height: { ideal: 720 },
+          // @ts-ignore
+          advanced: [{ focusMode: "continuous" }] // 지원되는 기기에서 자동 초점 활성화
         },
         audio: false
       });

@@ -68,7 +68,7 @@ export default function Header() {
               <User className="w-4 h-4" />
             </div>
             <span className="ml-2 text-sm font-medium text-gray-700 hidden md:flex items-center">
-              {user ? user.username : '로그인 필요'}
+              {user ? user.name : '로그인 필요'}
               <svg className="w-4 h-4 ml-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
             </span>
           </button>
@@ -88,8 +88,8 @@ export default function Header() {
               ) : (
                 <>
                   <div className="px-4 py-2 border-b border-gray-100">
-                    <p className="text-sm font-medium text-gray-900">{user.username}</p>
-                    <p className="text-xs text-gray-500 truncate">{user.role}</p>
+                    <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                    <p className="text-xs text-gray-500 truncate">{user.employee_id} ({user.role})</p>
                   </div>
                   <button
                     onClick={() => {

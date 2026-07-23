@@ -4,10 +4,10 @@ import { atomWithStorage } from 'jotai/utils';
 // 사용자 권한 타입 정의
 export type Role = 'MASTER' | 'WORKER' | 'GUEST' | 'PENDING';
 
-// 사용자 정보 인터페이스
 export interface User {
   id: string;
-  username: string;
+  employee_id: string;
+  name: string;
   role: Role;
 }
 
