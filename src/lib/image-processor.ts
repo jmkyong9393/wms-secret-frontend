@@ -69,24 +69,43 @@ function calculateBlurScore(imageData: ImageData): number {
 
 /**
  * 10MB 상당의 원본 비디오 프레임을 모바일 화면 해상도에 맞춰 압축하고 흔들림을 측정합니다.
+ * @param video 카메라 스트림이 나오는 비디오 엘리먼트
+ * @param guideBox UI 상에 그려진 흰색 점선 영역 엘리먼트 (이 영역만 크롭하기 위함)
  */
-export async function processImage(video: HTMLVideoElement): Promise<ProcessedImage> {
+export async function processImage(video: HTMLVideoElement, guideBox: HTMLDivElement): Promise<ProcessedImage> {
   const canvas = document.createElement("canvas");
   const vw = video.videoWidth;
   const vh = video.videoHeight;
 
-  // FHD(1920x1080) 기준으로 리사이징
-  const MAX_SIZE = 1920;
-  let targetWidth = vw;
-  let targetHeight = vh;
+  // --- [핵심 개선] 스마트폰/PC 화면 크기에 상관없이 UI 가이드박스 영역만 정확히 도려내기 (Dynamic BBox Crop) ---
+  
+  // 1. 화면에 렌더링된 비디오와 가이드박스의 실제 물리적 크기 및 위치 가져오기
+  const videoRect = video.getBoundingClientRect();
+  const guideRect = guideBox.getBoundingClientRect();
 
-  if (vw > vh && vw > MAX_SIZE) {
-    targetHeight = Math.round((vh * MAX_SIZE) / vw);
-    targetWidth = MAX_SIZE;
-  } else if (vh > vw && vh > MAX_SIZE) {
-    targetWidth = Math.round((vw * MAX_SIZE) / vh);
-    targetHeight = MAX_SIZE;
-  }
+  // 2. object-cover 속성으로 인해 잘려나간 비디오의 스케일(비율) 계산
+  // object-cover는 가로/세로 중 더 많이 꽉 차는 쪽을 기준으로 스케일업합니다.
+  const scale = Math.max(videoRect.width / vw, videoRect.height / vh);
+
+  // 3. 화면 상에서 비디오가 렌더링될 때 중앙 정렬(object-position: center)되면서 생기는 오프셋(잘린 여백) 계산
+  // 실제 비디오가 렌더링된 물리적 크기
+  const renderedVideoWidth = vw * scale;
+  const renderedVideoHeight = vh * scale;
+  // 화면 중앙에 렌더링되므로, 비디오 영역(videoRect)과 실제 그려진 영역의 차이 절반이 오프셋
+  const offsetX = (videoRect.width - renderedVideoWidth) / 2;
+  const offsetY = (videoRect.height - renderedVideoHeight) / 2;
+
+  // 4. 가이드박스의 화면상 좌표를 순수 원본 비디오(Raw Video) 픽셀 좌표로 역산(Mapping)
+  // guideRect.left - videoRect.left : 비디오 컨테이너 좌상단 기준 가이드박스의 X 위치
+  const sourceX = Math.max(0, (guideRect.left - videoRect.left - offsetX) / scale);
+  const sourceY = Math.max(0, (guideRect.top - videoRect.top - offsetY) / scale);
+  const sourceW = Math.min(vw - sourceX, guideRect.width / scale);
+  const sourceH = Math.min(vh - sourceY, guideRect.height / scale);
+
+  // 최종 캔버스 해상도 결정 (가로 최대 1080px 제한으로 용량 최적화)
+  const MAX_CANVAS_WIDTH = 1080;
+  const targetWidth = Math.min(sourceW, MAX_CANVAS_WIDTH);
+  const targetHeight = targetWidth * (sourceH / sourceW);
 
   canvas.width = targetWidth;
   canvas.height = targetHeight;
@@ -94,9 +113,10 @@ export async function processImage(video: HTMLVideoElement): Promise<ProcessedIm
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas context is not supported");
 
-  ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+  // 역산된 정확한 픽셀 좌표(sourceX, Y)에서 가이드박스 크기(sourceW, H)만큼만 캔버스에 그리기
+  ctx.drawImage(video, sourceX, sourceY, sourceW, sourceH, 0, 0, targetWidth, targetHeight);
 
-  // 흔들림 검사를 위해 중앙부 400x400 영역 크롭 추출
+  // 흔들림 검사를 위해 중앙부 400x400 영역 크롭 추출 (이전과 동일)
   const cropSize = Math.min(targetWidth, targetHeight, 400);
   const startX = (targetWidth - cropSize) / 2;
   const startY = (targetHeight - cropSize) / 2;

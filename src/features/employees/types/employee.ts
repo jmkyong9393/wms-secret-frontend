@@ -19,6 +19,8 @@ export interface EmployeeListParams {
   keyword?: string;
   role?: Role;
   status?: UserStatus;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
   page?: number;
   size?: number;
 }

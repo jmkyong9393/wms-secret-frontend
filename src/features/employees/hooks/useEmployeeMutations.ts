@@ -2,10 +2,11 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  bulkCreateEmployees,
-  updateEmployeeStatus,
-  updateEmployeeRole,
-} from "@/features/employees/api/employeeService";
+  bulkCreateEmployeesAction,
+  updateEmployeeStatusAction,
+  updateEmployeeRoleAction,
+  deleteEmployeeAction,
+} from "@/features/employees/actions/employeeActions";
 import { employeeKeys } from "@/features/employees/constants/queryKeys";
 import type {
   BulkCreateEmployeeRequest,
@@ -23,7 +24,7 @@ import type {
 export function useBulkCreateEmployeesMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: BulkCreateEmployeeRequest) => bulkCreateEmployees(payload),
+    mutationFn: (payload: BulkCreateEmployeeRequest) => bulkCreateEmployeesAction(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: employeeKeys.all });
     },
@@ -39,7 +40,7 @@ export function useUpdateEmployeeStatusMutation() {
     }: {
       employeeId: string;
       payload: UpdateEmployeeStatusRequest;
-    }) => updateEmployeeStatus(employeeId, payload),
+    }) => updateEmployeeStatusAction(employeeId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: employeeKeys.all });
     },
@@ -55,7 +56,17 @@ export function useUpdateEmployeeRoleMutation() {
     }: {
       employeeId: string;
       payload: UpdateEmployeeRoleRequest;
-    }) => updateEmployeeRole(employeeId, payload),
+    }) => updateEmployeeRoleAction(employeeId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: employeeKeys.all });
+    },
+  });
+}
+
+export function useDeleteEmployeeMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (employeeId: string) => deleteEmployeeAction(employeeId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: employeeKeys.all });
     },

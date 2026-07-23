@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "WMS AI Platform",
+  title: "Nexus - WMS AI Platform",
   description: "AI-powered B2B Warehouse Management System",
 };
 

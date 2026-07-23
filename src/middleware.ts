@@ -37,10 +37,7 @@ export function middleware(request: NextRequest) {
     if (role === 'WORKER' && pathname.startsWith('/admin')) {
       return NextResponse.redirect(new URL('/inbound', request.url));
     }
-    // MASTER가 현장 작업자용(/inbound/*) 접근 시도 시 차단
-    if (role === 'MASTER' && pathname.startsWith('/inbound')) {
-      return NextResponse.redirect(new URL('/admin', request.url));
-    }
+    // MASTER는 모든 페이지 접근 허용
   }
 
   return NextResponse.next();

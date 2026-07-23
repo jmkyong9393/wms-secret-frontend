@@ -4,6 +4,15 @@ import { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Camera, Flashlight, RefreshCcw, Keyboard, Package, CheckCircle2, ScanLine, Printer, ArrowRight, BookOpen, ChevronLeft, User } from 'lucide-react';
 import { PrinterHelper } from '@/lib/printerHelper';
+import { useCamera } from '@/features/inbound/hooks/useCamera';
+import { processImage } from '@/lib/image-processor';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { uploadQueueAtom } from '@/stores/atoms';
+import { userAtom } from '@/stores/auth';
+import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
+import { BrowserMultiFormatReader as ZXingBrowserReader } from '@zxing/browser';
+import { QRCodeSVG } from 'qrcode.react';
+import { LpnPrintLabel } from '@/features/inbound/components/LpnPrintLabel';
 
 type Step = 'SCAN_BARCODE' | 'PRINT_STICKER' | 'VISION_EVALUATION' | 'RESULT';
 
@@ -24,13 +33,31 @@ export default function InboundScannerPage() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [currentLpn, setCurrentLpn] = useState('LPN-260713-A001');
+  const [currentLpn, setCurrentLpn] = useState('');
+  const [bookInfo, setBookInfo] = useState<any>(null);
+  const [isLoadingBook, setIsLoadingBook] = useState(false);
 
   // Multi-Capture State
-  const [capturedImages, setCapturedImages] = useState<string[]>([]);
+  const [capturedImages, setCapturedImages] = useState<{ url: string, blob: Blob }[]>([]);
   const [capturePhase, setCapturePhase] = useState<'FRONT' | 'BACK' | 'INNER'>('FRONT');
   
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const { videoRef, startCamera, stopCamera } = useCamera();
+  const guideBoxRef = useRef<HTMLDivElement>(null);
+  const setUploadQueue = useSetAtom(uploadQueueAtom);
+  const user = useAtomValue(userAtom);
+
+  const generateLPN = () => {
+    const today = new Date();
+    const dateStr = today.getFullYear().toString().slice(-2) + 
+                    ('0' + (today.getMonth() + 1)).slice(-2) + 
+                    ('0' + today.getDate()).slice(-2);
+    
+    let seq = parseInt(localStorage.getItem(`lpn_seq_${dateStr}`) || '1', 10);
+    const seqStr = String(seq).padStart(3, '0');
+    localStorage.setItem(`lpn_seq_${dateStr}`, String(seq + 1));
+    
+    return `LPN-${dateStr}-A${seqStr}`;
+  };
 
   // ---------------------------------------------------------------------------
   // [UX 렌더링 최적화 1] TanStack Query (React Query) Mutation
@@ -38,12 +65,18 @@ export default function InboundScannerPage() {
   // 사용자가 '촬영 완료'를 눌렀을 때, 백엔드의 응답 시간(네트워크 지연)을 기다리지 않고
   // 화면을 즉각적으로 전환(0초 지연)시키는 '낙관적 업데이트(Optimistic Update)' 기법을 적용합니다.
   const evaluateMutation = useMutation({
-    mutationFn: async (data: { lpn: string, images: string[] }) => {
-      // 1. 백엔드로 촬영된 이미지 URL들과 도서 식별 번호(LPN)를 POST 전송
+    mutationFn: async (data: { lpn: string, images: Blob[], book_metadata?: any }) => {
+      const getBase64 = (blob: Blob): Promise<string> => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+      const base64Images = await Promise.all(data.images.map(getBase64));
+
       const res = await fetch("http://localhost:8000/api/v1/inbound/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
+        body: JSON.stringify({ lpn: data.lpn, images: base64Images, book_metadata: data.book_metadata })
       });
       if (!res.ok) throw new Error("Evaluation failed");
       return res.json();
@@ -99,10 +132,40 @@ export default function InboundScannerPage() {
         // 100% 완료 시 연결을 끊고 불필요한 네트워크 리소스 낭비 방지
         if (parsed.progress === 100) {
           evtSource.close();
-          // 완료된 건은 5초 뒤에 큐에서 스르륵 사라지도록 UX 처리
-          setTimeout(() => {
-            setQueue(prev => prev.filter(q => q.id !== job_id));
-          }, 5000);
+          
+          // [추가] 모의 데이터 대신 실제 AI 등급 결과와 도서 정보를 Local Storage에 누적 저장
+          const localEvals = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
+          const newEval = { 
+            job_id: job_id,
+            lpn: lpn, 
+            grade: parsed.grade, 
+            score: parsed.ubci_score,
+            reasonCode: parsed.defect_description || parsed.message,
+            message: parsed.message, 
+            timestamp: new Date().toISOString(),
+            isbn: variables.book_metadata?.isbn || '알 수 없음',
+            title: variables.book_metadata?.title || '스캔된 도서',
+            author: variables.book_metadata?.author || '-',
+            publisher: variables.book_metadata?.publisher || '-',
+            category: variables.book_metadata?.categoryName?.split('>').pop() || '일반'
+          };
+          
+          const existingIndex = localEvals.findIndex((item: any) => item.lpn === lpn);
+          if (existingIndex >= 0) {
+            // 이전에 저장된 동일 LPN이 있다면 덮어쓰기 (재검수 시 중복 방지)
+            localEvals[existingIndex] = newEval;
+          } else {
+            localEvals.push(newEval);
+          }
+          
+          localStorage.setItem('local_evaluations', JSON.stringify(localEvals));
+          // 완료된 건 중 S/A 등급(정상)은 5초 뒤에 큐에서 스르륵 사라지도록 UX 처리.
+          // 반려나 예외 상황은 사용자가 직접 확인할 수 있게 사라지지 않음.
+          if (parsed.grade && (parsed.grade.includes('S') || parsed.grade.includes('A') || parsed.grade.includes('NORMAL') || parsed.grade.includes('MINT'))) {
+            setTimeout(() => {
+              setQueue(prev => prev.filter(q => q.id !== job_id));
+            }, 5000);
+          }
         }
       };
       
@@ -121,32 +184,164 @@ export default function InboundScannerPage() {
     }
   });
 
-  // 카메라 제어 Effect
   useEffect(() => {
-    let stream: MediaStream | null = null;
-    
-    const startCamera = async () => {
-      if (step === 'VISION_EVALUATION') {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment' } 
-          });
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
+    if (step === 'SCAN_BARCODE' || step === 'VISION_EVALUATION') {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // 실제 바코드(ISBN) 스캐닝 로직 (ZXing Browser)
+  const codeReader = useRef<any>(null);
+
+  useEffect(() => {
+    if (step === 'SCAN_BARCODE') {
+      if (!codeReader.current) {
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.EAN_13, 
+          BarcodeFormat.EAN_8,
+          BarcodeFormat.UPC_A,
+          BarcodeFormat.UPC_E,
+          BarcodeFormat.CODE_128,
+          BarcodeFormat.CODE_39,
+          BarcodeFormat.QR_CODE // LPN 재촬영을 위해 QR코드 인식 추가
+        ]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        codeReader.current = new ZXingBrowserReader(hints);
+      }
+
+      let scanning = true;
+      let controlsRef: any = null;
+      let timeoutId: NodeJS.Timeout;
+
+      const startScanning = async () => {
+        if (!videoRef.current) return;
+
+        const onSuccess = async (text: string) => {
+          if (!scanning) return;
+          scanning = false;
+          if (controlsRef) {
+            controlsRef.stop();
+            controlsRef = null;
           }
+          
+          const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+          audio.play().catch(() => {});
+
+          // --- LPN 재촬영 (Retake) 워크플로우 ---
+          if (text.toUpperCase().startsWith('LPN-')) {
+            const lpn = text.toUpperCase();
+            setCurrentLpn(lpn);
+            
+            // 로컬 스토리지에서 기존 도서 정보 조회 (가장 최신 데이터를 가져오기 위해 뒤에서부터 검색)
+            const localEvals = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
+            const existingBook = [...localEvals].reverse().find((e: any) => e.lpn === lpn);
+            
+            if (existingBook) {
+              setIsbn(existingBook.isbn || '');
+              setBookInfo({
+                isbn: existingBook.isbn,
+                title: existingBook.title,
+                author: existingBook.author,
+                publisher: existingBook.publisher,
+                categoryName: existingBook.category,
+                isRescan: true
+              });
+            } else {
+              setIsbn('');
+              setBookInfo({ title: '정보 없음 (재촬영 진행)', categoryName: 'LPN 재스캔', isRescan: true });
+            }
+            
+            setIsLoadingBook(false);
+            setStep('PRINT_STICKER');
+            return;
+          }
+
+          // --- 신규 ISBN 입고 워크플로우 ---
+          setIsbn(text);
+          setCurrentLpn(generateLPN());
+          setBookInfo(null);
+          setIsLoadingBook(true);
+          setStep('PRINT_STICKER');
+
+          // 백그라운드에서 알라딘 API 연동 도서 정보 조회
+          try {
+            const res = await fetch(`/api/book?isbn=${text}`);
+            if (res.ok) {
+              const data = await res.json();
+              setBookInfo(data);
+            } else {
+              setBookInfo({ title: '도서 정보 조회 실패 (API 키 확인 필요)' });
+            }
+          } catch (e) {
+            setBookInfo({ title: '도서 정보 조회 에러' });
+          } finally {
+            setIsLoadingBook(false);
+          }
+        };
+
+        // 1. ZXing Browser 오픈소스 엔진 (최적화)
+        try {
+          await codeReader.current?.decodeFromVideoElement(videoRef.current, (result: any, error: any, controls: any) => {
+            controlsRef = controls;
+            if (result && scanning) {
+              const text = result.getText();
+              if (text && text.length >= 4) {
+                onSuccess(text);
+              }
+            }
+          });
         } catch (err) {
-          console.error("카메라 접근 실패:", err);
+          console.warn("ZXing decode error:", err);
         }
-      }
-    };
 
-    startCamera();
+        // 2. 최신 브라우저 내장 하드웨어 가속 바코드 디텍터 (병렬 실행)
+        if ('BarcodeDetector' in window) {
+          try {
+            // @ts-ignore
+            const barcodeDetector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'qr_code'] }); 
+            
+            const detectLoop = async () => {
+              if (!scanning || !videoRef.current) return;
+              try {
+                const barcodes = await barcodeDetector.detect(videoRef.current);
+                if (barcodes.length > 0) {
+                  const text = barcodes[0].rawValue;
+                  if (text && text.length >= 4) {
+                    onSuccess(text);
+                    return;
+                  }
+                }
+              } catch (err) {
+                // 무시 (비디오 덜 로딩됨 등)
+              }
+              if (scanning) {
+                requestAnimationFrame(detectLoop);
+              }
+            };
+            
+            detectLoop();
+          } catch (e) {
+            console.warn("BarcodeDetector 병렬 실행 불가:", e);
+          }
+        }
+      };
 
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
+      // 비디오가 켜지고 약간의 지연 후 스캐닝 시작
+      timeoutId = setTimeout(startScanning, 500);
+
+      return () => {
+        scanning = false;
+        clearTimeout(timeoutId);
+        if (controlsRef) {
+          controlsRef.stop();
+          controlsRef = null;
+        }
+      };
+    }
   }, [step]);
 
   // 뒤로가기 핸들러
@@ -168,11 +363,25 @@ export default function InboundScannerPage() {
     }
   };
 
-  const takePhoto = () => {
-    if (capturePhase === 'FRONT') setCapturePhase('BACK');
-    else if (capturePhase === 'BACK') setCapturePhase('INNER');
-    // 실제 카메라 캡처 로직 대신 썸네일(데이터 URL) 모의 추가
-    setCapturedImages(prev => [...prev, `mock-img-${prev.length + 1}`]);
+  const takePhoto = async () => {
+    if (!videoRef.current || !guideBoxRef.current) {
+      alert("카메라 또는 가이드 영역을 찾을 수 없습니다.");
+      return;
+    }
+    try {
+      const result = await processImage(videoRef.current, guideBoxRef.current);
+      if (result.isBlurred) {
+        alert("사진이 너무 흔들렸습니다. 다시 촬영해 주세요.");
+        return;
+      }
+      
+      setCapturedImages(prev => [...prev, { url: result.previewUrl, blob: result.blob }]);
+      
+      if (capturePhase === 'FRONT') setCapturePhase('BACK');
+      else if (capturePhase === 'BACK') setCapturePhase('INNER');
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
@@ -217,75 +426,70 @@ export default function InboundScannerPage() {
 
       {/* Simulated Viewport / Content Area */}
       <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden pt-16">
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-600 to-black"></div>
+        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-600 to-black z-0"></div>
+        
+        {(step === 'SCAN_BARCODE' || step === 'VISION_EVALUATION') && (
+          <video 
+            ref={videoRef} 
+            autoPlay 
+            playsInline 
+            muted 
+            className="absolute inset-0 w-full h-full object-cover z-0"
+          />
+        )}
         
         {step === 'SCAN_BARCODE' && (
-          <div className="relative w-64 h-64 sm:w-72 sm:h-72">
+          <div className="relative w-64 h-64 sm:w-72 sm:h-72 z-10">
             <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-emerald-500 rounded-tl-xl"></div>
             <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-emerald-500 rounded-tr-xl"></div>
             <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-emerald-500 rounded-bl-xl"></div>
             <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-emerald-500 rounded-br-xl"></div>
             <div className="absolute left-0 right-0 h-0.5 bg-emerald-500 shadow-[0_0_15px_3px_rgba(16,185,129,0.7)] animate-scan-laser z-10 w-full"></div>
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-white/40 text-sm font-semibold tracking-wider text-center">도서 뒷면의<br/>ISBN 바코드를 스캔하세요</span>
+              <span className="text-white/40 text-sm font-semibold tracking-wider text-center">도서 뒷면의 ISBN<br/>또는 재촬영 LPN QR 스캔</span>
             </div>
           </div>
         )}
 
         {step === 'PRINT_STICKER' && (
           <div className="relative z-10 flex flex-col items-center">
-            <div className="w-48 h-12 bg-slate-800 border-b-4 border-slate-700 rounded-t-xl z-20 flex items-center justify-center">
+            <div className="w-48 h-12 bg-slate-800 border-b-4 border-slate-700 rounded-t-xl z-20 flex items-center justify-center mb-1">
               <span className="text-slate-400 text-xs font-bold">라벨 프린터 (연동됨)</span>
             </div>
-            <div className="relative w-40 h-56 bg-white shadow-2xl overflow-hidden flex flex-col justify-between p-3 -mt-2 z-10 animate-print">
-              <div className="border-2 border-dashed border-gray-300 w-full h-full p-2 flex flex-col items-center text-center justify-between">
-                <div className="flex flex-col w-full">
-                  <span className="text-[9px] text-gray-500 font-bold bg-gray-100 py-0.5 w-full uppercase tracking-widest">WMS LPN Label</span>
-                  <span className="text-[11px] font-mono text-gray-900 font-extrabold mt-1 tracking-tighter">{currentLpn}</span>
-                </div>
-                
-                <div className="w-20 h-20 bg-gray-200 p-1 my-1 flex-shrink-0">
-                  {/* 가짜 QR 코드 이미지 영역 */}
-                  <div className="w-full h-full bg-[url('https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg')] bg-contain bg-no-repeat bg-center opacity-90"></div>
-                </div>
-                
-                <div className="w-full text-left bg-gray-50 p-1.5 border border-gray-200 mt-1">
-                  <p className="text-[8px] text-gray-500 mb-0.5">담당자 (Worker)</p>
-                  <p className="text-[10px] font-bold text-gray-800 flex items-center">
-                    <User className="w-3 h-3 mr-1 text-gray-500"/>
-                    WKR-9901 (박준희)
-                  </p>
-                </div>
-              </div>
+            {/* 50x30mm(가로형) 라벨 렌더링. 화면에 표시하기 위해 약간의 scale, box-shadow 적용 */}
+            <div className="relative z-10 animate-print shadow-2xl bg-white border border-gray-300 transform scale-[1.7] origin-top mb-20 mt-4 rounded-sm">
+              <LpnPrintLabel data={{
+                lpn_barcode: currentLpn,
+                book: {
+                  title: bookInfo?.title || '미등록 도서',
+                  author: bookInfo?.author || '-',
+                  isbn: isbn || '-'
+                },
+                worker_id: user?.name ? `${user.employee_id} (${user.name})` : 'WM2607001 (최초관리자)'
+              }} />
             </div>
           </div>
         )}
 
         {step === 'VISION_EVALUATION' && (
-          <div className="absolute inset-0 w-full h-full bg-black z-0">
-            {/* 실제 카메라 비디오 스트림 */}
-            <video 
-              ref={videoRef} 
-              autoPlay 
-              playsInline 
-              muted 
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-            
+          <div className="absolute inset-0 w-full h-full z-10">
             {/* 오버레이 및 뷰파인더 가이드 */}
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none pb-20">
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none pb-2 pt-12">
               {/* 바깥 영역을 어둡게 처리하기 위한 그림자 꼼수 */}
-              <div className="relative w-3/5 md:w-1/2 aspect-[1/1.4] max-h-[75%] border-4 border-dashed border-white/60 rounded-3xl flex items-center justify-center shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+              <div 
+                ref={guideBoxRef}
+                className="relative w-[90%] md:w-[75%] aspect-[1/1.45] max-h-[90%] border-4 border-dashed border-white/60 rounded-3xl flex items-center justify-center shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+              >
                 
                 {/* 십자선 */}
                 <div className="absolute w-8 h-1 bg-white/40 rounded-full"></div>
                 <div className="absolute w-1 h-8 bg-white/40 rounded-full"></div>
 
                 {/* 툴팁 버블 */}
-                <div className="absolute -top-12 bg-gray-800/80 backdrop-blur-sm text-white text-sm font-bold px-5 py-2 rounded-full shadow-lg text-center">
+                <div className="absolute -top-12 bg-gray-800/80 backdrop-blur-sm text-white text-sm font-bold px-5 py-2 rounded-full shadow-lg text-center whitespace-nowrap">
                   {capturePhase === 'FRONT' && "1. 도서 정면(표지)을 촬영하세요"}
                   {capturePhase === 'BACK' && "2. 도서 후면(뒷표지)을 촬영하세요"}
-                  {capturePhase === 'INNER' && "3. 내부 훼손 부위(모서리, 내지 등)를 자유롭게 촬영하세요"}
+                  {capturePhase === 'INNER' && "3. 내부 훼손 부위(모서리, 내지 등) 자유 촬영"}
                 </div>
 
                 {isAnalyzing && (
@@ -301,8 +505,10 @@ export default function InboundScannerPage() {
             <div className="absolute bottom-4 left-4 right-4 z-20 flex space-x-2 overflow-x-auto pb-2">
               {capturedImages.map((img, idx) => (
                 <div key={idx} className="w-14 h-20 bg-slate-800 rounded-lg border-2 border-emerald-500 flex-shrink-0 flex items-center justify-center relative overflow-hidden">
-                  <span className="text-xs font-bold text-white z-10">{idx === 0 ? '정면' : idx === 1 ? '후면' : '내지'}</span>
-                  <div className="absolute inset-0 bg-white/20"></div>
+                  <span className="absolute top-1 text-[10px] font-bold text-white z-10 drop-shadow-md bg-black/40 px-1 rounded">{idx === 0 ? '정면' : idx === 1 ? '후면' : '내지'}</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={img.url} alt="capture" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-white/10 pointer-events-none"></div>
                 </div>
               ))}
             </div>
@@ -317,12 +523,14 @@ export default function InboundScannerPage() {
             <div className="bg-gray-100 px-3 py-1 rounded mb-2 border border-gray-200">
               <span className="text-xs font-mono font-bold text-gray-600 tracking-wider">{currentLpn}</span>
             </div>
-            <h2 className="text-xl font-bold text-gray-800 mb-3">클린 아키텍처</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-3">
+              {bookInfo?.title || '미등록 도서'}
+            </h2>
             <div className="px-4 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full mb-5 shadow-sm">
-              <span className="text-emerald-700 font-extrabold">UBCI: S등급 (최상)</span>
+              <span className="text-emerald-700 font-extrabold">AI 검수 큐 등록 완료</span>
             </div>
             <p className="text-sm text-gray-500 font-medium">
-              AI 검수 및 등급 매핑이 완료되었습니다.<br/>S구역 컨베이어 벨트에 올려주세요.
+              AI 판독 에이전트가 검수를 시작했습니다.<br/>다음 도서 스캔을 진행하세요.
             </p>
           </div>
         )}
@@ -338,15 +546,66 @@ export default function InboundScannerPage() {
             <div className="flex gap-2">
               <input 
                 type="text" 
-                placeholder="ISBN 수동 입력 (13자리)" 
+                placeholder="ISBN 또는 LPN (재촬영) 수동 입력" 
                 value={isbn}
                 onChange={(e) => setIsbn(e.target.value)}
                 className="flex-1 border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
               />
               <button 
-                onClick={() => {
-                  setCurrentLpn('LPN-260713-A' + String(Math.floor(Math.random() * 900) + 100));
+                onClick={async () => {
+                  const inputVal = isbn.trim();
+                  if (!inputVal || inputVal.length < 4) {
+                    alert('유효한 바코드를 입력해주세요.');
+                    return;
+                  }
+                  
+                  // LPN 재촬영 모드 전환
+                  if (inputVal.toUpperCase().startsWith('LPN-')) {
+                    const lpn = inputVal.toUpperCase();
+                    setCurrentLpn(lpn);
+                    
+                    const localEvals = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
+                    const existingBook = [...localEvals].reverse().find((e: any) => e.lpn === lpn);
+                    
+                    if (existingBook) {
+                      setIsbn(existingBook.isbn || '');
+                      setBookInfo({
+                        isbn: existingBook.isbn,
+                        title: existingBook.title,
+                        author: existingBook.author,
+                        publisher: existingBook.publisher,
+                        categoryName: existingBook.category,
+                        isRescan: true
+                      });
+                    } else {
+                      setIsbn('');
+                      setBookInfo({ title: '정보 없음 (재촬영 진행)', categoryName: 'LPN 재스캔', isRescan: true });
+                    }
+                    
+                    setIsLoadingBook(false);
+                    setStep('PRINT_STICKER');
+                    return;
+                  }
+
+                  // 신규 입고 모드
+                  setCurrentLpn(generateLPN());
+                  setBookInfo(null);
+                  setIsLoadingBook(true);
                   setStep('PRINT_STICKER');
+
+                  try {
+                    const res = await fetch(`/api/book?isbn=${inputVal}`);
+                    if (res.ok) {
+                      const data = await res.json();
+                      setBookInfo(data);
+                    } else {
+                      setBookInfo({ title: '도서 정보 조회 실패 (API 키 확인 필요)' });
+                    }
+                  } catch (e) {
+                    setBookInfo({ title: '도서 정보 조회 에러' });
+                  } finally {
+                    setIsLoadingBook(false);
+                  }
                 }}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-xl font-bold transition-colors shadow-lg shadow-emerald-200"
               >
@@ -359,38 +618,101 @@ export default function InboundScannerPage() {
         {step === 'PRINT_STICKER' && (
           <div className="space-y-4 pt-4 animate-in slide-in-from-right-4">
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-2 shadow-inner">
-              <p className="text-xs text-gray-500 mb-1">인식된 도서 (ISBN)</p>
-              <p className="font-bold text-gray-800">클린 아키텍처 (9788966263158)</p>
-              <div className="mt-2 flex items-center justify-between border-t border-gray-200 pt-2">
+              <p className="text-xs text-gray-500 mb-2">인식된 도서 (ISBN: {isbn})</p>
+              
+              {isLoadingBook ? (
+                <div className="flex items-center space-x-2 py-2">
+                  <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm text-gray-600 font-medium">알라딘 API 정보 불러오는 중...</span>
+                </div>
+              ) : bookInfo?.title ? (
+                <div className="flex gap-3 items-start">
+                  {bookInfo.imageUrl && (
+                    <img src={bookInfo.imageUrl} alt="book cover" className="w-16 h-24 object-cover rounded border border-gray-200 shadow-sm shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-emerald-600 font-bold mb-0.5 truncate">{bookInfo.categoryName?.split('>').pop()}</p>
+                    <p className="font-bold text-gray-800 text-sm leading-tight mb-1 line-clamp-2">{bookInfo.title}</p>
+                    <p className="text-[11px] text-gray-500 mb-1">{bookInfo.author} | {bookInfo.publisher}</p>
+                    {bookInfo.price && <p className="text-[11px] font-bold text-slate-700 mb-1">{bookInfo.price.toLocaleString()}원</p>}
+                    {bookInfo.description && (
+                      <p className="text-[10px] text-gray-400 line-clamp-2 leading-tight">
+                        {bookInfo.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="font-bold text-gray-800">{bookInfo?.title || '미등록 도서'}</p>
+              )}
+
+              <div className="mt-3 flex items-center justify-between border-t border-gray-200 pt-2">
                 <span className="text-xs text-blue-600 font-bold">발급 예정 LPN</span>
                 <span className="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{currentLpn}</span>
               </div>
             </div>
-            <button 
-              onClick={async () => {
-                setIsPrinting(true);
-                try {
-                  const printer = new PrinterHelper();
-                  const connected = await printer.connect();
-                  if (connected) {
-                    await printer.printLpnTag(currentLpn, "클린 아키텍처");
-                    await printer.disconnect();
-                  } else {
-                    alert("프린터 연결 실패 (WebUSB 연동을 확인해주세요)");
+            {bookInfo?.isRescan ? (
+              <div className="flex gap-2 mt-2">
+                <button 
+                  onClick={async () => {
+                    setIsPrinting(true);
+                    try {
+                      const printer = new PrinterHelper();
+                      const connected = await printer.connect();
+                      if (connected) {
+                        await printer.printLpnTag(currentLpn, bookInfo?.title || "재촬영 도서");
+                        await printer.disconnect();
+                      } else {
+                        alert("프린터 연결 실패 (WebUSB 연동을 확인해주세요)");
+                      }
+                    } catch (e) {
+                      console.error(e);
+                    } finally {
+                      setIsPrinting(false);
+                      setStep('VISION_EVALUATION');
+                    }
+                  }}
+                  disabled={isPrinting}
+                  className="flex-1 bg-slate-200 hover:bg-slate-300 disabled:bg-slate-100 text-slate-700 py-4 rounded-xl font-bold flex items-center justify-center transition-all shadow-sm"
+                >
+                  {isPrinting ? <RefreshCcw className="w-5 h-5 animate-spin mr-2" /> : <Printer className="w-5 h-5 mr-2" />}
+                  라벨 재출력
+                </button>
+                <button 
+                  onClick={() => setStep('VISION_EVALUATION')}
+                  className="flex-[2] bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-xl font-bold flex items-center justify-center transition-all shadow-lg shadow-purple-200"
+                >
+                  <Camera className="w-5 h-5 mr-2" />
+                  기존 라벨지 유지 및 재촬영 진행
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={async () => {
+                  setIsPrinting(true);
+                  try {
+                    const printer = new PrinterHelper();
+                    const connected = await printer.connect();
+                    if (connected) {
+                      await printer.printLpnTag(currentLpn, bookInfo?.title || "도서");
+                      await printer.disconnect();
+                    } else {
+                      alert("프린터 연결 실패 (WebUSB 연동을 확인해주세요)");
+                    }
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setIsPrinting(false);
+                    setStep('VISION_EVALUATION');
                   }
-                } catch (e) {
-                  console.error(e);
-                } finally {
-                  setIsPrinting(false);
-                  setStep('VISION_EVALUATION');
-                }
-              }}
-              disabled={isPrinting}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-4 rounded-xl font-bold flex items-center justify-center transition-all shadow-lg shadow-blue-200"
-            >
-              {isPrinting ? <RefreshCcw className="w-5 h-5 animate-spin mr-2" /> : <Printer className="w-5 h-5 mr-2" />}
-              {isPrinting ? '라벨 출력 중...' : '검열지 프린트 및 부착 완료'}
-            </button>
+                }}
+                disabled={isPrinting}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-4 rounded-xl font-bold flex items-center justify-center transition-all shadow-lg shadow-blue-200"
+              >
+                {isPrinting ? <RefreshCcw className="w-5 h-5 animate-spin mr-2" /> : <Printer className="w-5 h-5 mr-2" />}
+                {isPrinting ? '라벨 출력 중...' : '검열지 프린트 및 부착 완료'}
+              </button>
+            )}
           </div>
         )}
 
@@ -417,10 +739,22 @@ export default function InboundScannerPage() {
                     return;
                   }
                   
-                  // React Query Mutation 호출 (낙관적 업데이트 실행됨)
+                  // 백그라운드 큐 업로더에 작업 적재
+                  setUploadQueue(prev => [
+                    ...prev,
+                    ...capturedImages.map((img, i) => ({
+                      id: `local_${Date.now()}_${i}`,
+                      blob: img.blob,
+                      previewUrl: img.url,
+                      status: 'PENDING' as const,
+                    }))
+                  ]);
+
+                  // 낙관적 UI 진행
                   evaluateMutation.mutate({
                     lpn: currentLpn,
-                    images: capturedImages
+                    images: capturedImages.map(img => img.blob),
+                    book_metadata: bookInfo
                   });
                 }}
                 disabled={evaluateMutation.isPending || capturedImages.length < 2}
@@ -503,7 +837,10 @@ export default function InboundScannerPage() {
                       </div>
                     </div>
                   ) : (
-                    <span className="text-xs font-bold text-emerald-700 bg-emerald-200 px-2 py-1 rounded shadow-sm whitespace-nowrap">{item.grade}</span>
+                    <div className="flex flex-col items-end">
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-200 px-2 py-1 rounded shadow-sm whitespace-nowrap">{item.grade}</span>
+                      {item.message && <span className="text-[10px] text-gray-500 mt-1 text-right max-w-[120px] truncate" title={item.message}>{item.message}</span>}
+                    </div>
                   )}
                 </div>
               </div>

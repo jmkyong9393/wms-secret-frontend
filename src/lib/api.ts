@@ -1,6 +1,9 @@
 import Cookies from "js-cookie";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BASE_URL = rawApiUrl.endsWith("/api/v1")
+  ? rawApiUrl
+  : `${rawApiUrl.replace(/\/$/, "")}/api/v1`;
 
 /**
  * Next.js App Router에 최적화된 Native Fetch Wrapper.
@@ -8,7 +11,10 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v
  */
 async function fetchClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
-  const token = Cookies.get("token");
+  let token = Cookies.get("token");
+  if (!token && typeof window !== "undefined") {
+    token = localStorage.getItem("wms_auth_token") || localStorage.getItem("token") || undefined;
+  }
 
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
@@ -21,8 +27,7 @@ async function fetchClient<T>(endpoint: string, options: RequestInit = {}): Prom
   const response = await fetch(url, {
     ...options,
     headers,
-    // Next.js 환경 특화 설정 (기본적으로 SSR/SSG 최적화 캐싱 적용 가능)
-    // cache: 'no-store', // 동적 데이터의 경우 활성화
+    credentials: "include",
   });
 
   if (!response.ok) {
