@@ -15,6 +15,9 @@ export interface HitlTask {
   image_urls: string[];
   status: string;
   ubci_score?: number;
+  special_notes?: string;
+  human_issue_notes?: string;
+  inspection_type?: "RETURN" | "BUYBACK";
   agent_logs?: {
     defect_coordinates?: DefectCoordinate[];
     reason?: string;
@@ -23,6 +26,7 @@ export interface HitlTask {
   };
   created_at: string;
 }
+
 
 export interface HitlOverrideRequest {
   ticketId: string;
