@@ -150,43 +150,63 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-          <div className="flex gap-2 overflow-x-auto py-1">
-            {images.map((url, idx) => (
-              <button
-                key={idx}
-                onClick={() => {
-                  setImgError(false);
-                  setCurrentIdx(idx);
-                }}
-                className={`w-12 h-16 rounded overflow-hidden border-2 transition-all bg-gray-200 ${
-                  currentIdx === idx ? "border-blue-600 ring-2 ring-blue-100 scale-105" : "border-gray-200 opacity-60 hover:opacity-100"
-                }`}
-              >
-                <img
-                  src={url}
-                  alt={`thumb-${idx}`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = "none";
-                  }}
-                />
-              </button>
-            ))}
-          </div>
-
-          <div className="text-right text-xs text-gray-500">
-            <div>
-              이미지 <span className="font-bold text-gray-900">{images.length > 0 ? currentIdx + 1 : 0}</span> / {images.length}
+        {/* Footer & Notes Section */}
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
+          {/* AI Special Notes Badge */}
+          {task.special_notes && (
+            <div className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+              <span className="font-bold bg-amber-200/80 px-2 py-0.5 rounded text-[11px] text-amber-950">
+                AI 시각 특이사항 (special_notes)
+              </span>
+              <span className="line-clamp-1">{task.special_notes}</span>
             </div>
-            {task.ubci_score !== undefined && (
-              <div className="mt-0.5 text-blue-600 font-bold">
-                UBCI 점수: <span className="text-sm">{task.ubci_score}</span>점
+          )}
+
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2 overflow-x-auto py-1">
+              {images.map((url, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setImgError(false);
+                    setCurrentIdx(idx);
+                  }}
+                  className={`w-12 h-16 rounded overflow-hidden border-2 transition-all bg-gray-200 ${
+                    currentIdx === idx ? "border-blue-600 ring-2 ring-blue-100 scale-105" : "border-gray-200 opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <img
+                    src={url}
+                    alt={`thumb-${idx}`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+
+            <div className="text-right text-xs text-gray-500">
+              <div className="flex items-center justify-end gap-2">
+                {task.inspection_type && (
+                  <span className={`px-2 py-0.5 text-[11px] font-bold rounded ${
+                    task.inspection_type === "BUYBACK" ? "bg-purple-100 text-purple-700 border border-purple-200" : "bg-blue-100 text-blue-700 border border-blue-200"
+                  }`}>
+                    {task.inspection_type === "BUYBACK" ? "중고 바이백 정산" : "고객 반품 환불"}
+                  </span>
+                )}
+                <span>이미지 <strong className="text-gray-900">{images.length > 0 ? currentIdx + 1 : 0}</strong> / {images.length}</span>
               </div>
-            )}
+              {task.ubci_score !== undefined && (
+                <div className="mt-1 text-blue-600 font-bold">
+                  UBCI 점수: <span className="text-sm">{task.ubci_score}</span>점
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
       </div>
     </div>
   );
