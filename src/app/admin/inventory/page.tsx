@@ -56,6 +56,29 @@ interface InventoryItem {
   date: string;
 }
 
+const formatKSTDate = (dateStr: string) => {
+  if (!dateStr) return '-';
+  try {
+    const isoStr = (dateStr.includes('Z') || dateStr.includes('+'))
+      ? dateStr
+      : `${dateStr.replace(' ', 'T')}Z`;
+    const date = new Date(isoStr);
+    if (isNaN(date.getTime())) return dateStr;
+    return new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(date).replace(/\. /g, '-').replace('.', '');
+  } catch (e) {
+    return dateStr;
+  }
+};
+
 export default function InventoryDashboardPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
