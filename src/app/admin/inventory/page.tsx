@@ -681,10 +681,12 @@ export default function InventoryDashboardPage() {
                               ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800'
                               : item.grade === 'NORMAL'
                               ? 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800'
-                              : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800'
+                              : item.grade === 'REJECT'
+                              ? 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-700'
                           }`}
                         >
-                          {item.grade} ({item.ubci_score}점)
+                          {item.grade ? `${item.grade} (${item.ubci_score ?? '-'}점)` : '미정 (검수 대기)'}
                         </span>
                       </td>
 
@@ -706,7 +708,7 @@ export default function InventoryDashboardPage() {
                         <p className="text-gray-900 dark:text-white font-mono text-sm font-black">{item.worker_id}</p>
                         <p className="text-gray-500 dark:text-gray-400 text-xs font-mono flex items-center gap-1 mt-1 font-medium">
                           <Clock className="w-3.5 h-3.5 text-gray-400" />
-                          {item.date}
+                          {formatKSTDate(item.date)}
                         </p>
                       </td>
 
