@@ -51,7 +51,6 @@ async function fetchClient<T>(endpoint: string, options: RequestInit = {}): Prom
 export const api = {
   // 3주차: 반품 도서 AI 검수 파이프라인 트리거
   triggerInspection: async (data: { book_id: string; location_id?: string; image_urls: string[] }) => {
-    // 202 Accepted 및 job_id 반환을 기대
     return fetchClient<any>("/returns/inspections", {
       method: "POST",
       body: JSON.stringify(data),
@@ -60,13 +59,12 @@ export const api = {
 };
 
 export const uploadAPI = {
-  // Offline Queue 등에서 사용하기 위한 임시 인터페이스
   uploadImage: async (order_id: string, file: File) => {
     const formData = new FormData();
     formData.append("file", file);
     return fetchClient<any>(`/returns/orders/${order_id}/upload`, {
       method: "POST",
-      body: formData, // FormData는 Content-Type을 수동으로 세팅하지 않음 (브라우저가 boundary 자동 할당)
+      body: formData,
     });
   },
 };
@@ -79,6 +77,33 @@ export const adminAPI = {
     return fetchClient<any>("/admin/hitl/override", {
       method: "POST",
       body: JSON.stringify({ items }),
+    });
+  }
+};
+
+export const inventoryAPI = {
+  getInventory: async () => {
+    return fetchClient<any[]>("/inventory/", { method: "GET" });
+  },
+  createLpn: async (data: { book_id?: string; isbn?: string; worker_id?: string }) => {
+    return fetchClient<any>("/inventory/lpn", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  getLpnList: async () => {
+    return fetchClient<any[]>("/inventory/lpn", { method: "GET" });
+  }
+};
+
+export const poAPI = {
+  getSuggestedPo: async () => {
+    return fetchClient<any[]>("/po/suggested", { method: "GET" });
+  },
+  approvePo: async (book_ids: string[]) => {
+    return fetchClient<any>("/po/approve", {
+      method: "POST",
+      body: JSON.stringify({ book_ids }),
     });
   }
 };

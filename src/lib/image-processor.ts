@@ -72,16 +72,16 @@ function calculateBlurScore(imageData: ImageData): number {
  * @param video 카메라 스트림이 나오는 비디오 엘리먼트
  * @param guideBox UI 상에 그려진 흰색 점선 영역 엘리먼트 (이 영역만 크롭하기 위함)
  */
-export async function processImage(video: HTMLVideoElement, guideBox: HTMLDivElement): Promise<ProcessedImage> {
+export async function processImage(video: HTMLVideoElement, guideBox?: HTMLDivElement | null): Promise<ProcessedImage> {
   const canvas = document.createElement("canvas");
-  const vw = video.videoWidth;
-  const vh = video.videoHeight;
+  const vw = video.videoWidth || 1280;
+  const vh = video.videoHeight || 720;
 
   // --- [핵심 개선] 스마트폰/PC 화면 크기에 상관없이 UI 가이드박스 영역만 정확히 도려내기 (Dynamic BBox Crop) ---
   
   // 1. 화면에 렌더링된 비디오와 가이드박스의 실제 물리적 크기 및 위치 가져오기
   const videoRect = video.getBoundingClientRect();
-  const guideRect = guideBox.getBoundingClientRect();
+  const guideRect = guideBox ? guideBox.getBoundingClientRect() : videoRect;
 
   // 2. object-cover 속성으로 인해 잘려나간 비디오의 스케일(비율) 계산
   // object-cover는 가로/세로 중 더 많이 꽉 차는 쪽을 기준으로 스케일업합니다.
