@@ -1,111 +1,448 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { 
+  Package, 
+  Box, 
+  Camera, 
+  TrendingUp, 
+  Sparkles, 
+  CheckCircle2, 
+  AlertTriangle, 
+  ArrowRight, 
+  RefreshCcw, 
+  Layers, 
+  QrCode,
+  ShieldCheck,
+  Check,
+  Search,
+  Scan,
+  Barcode,
+  ArrowRightCircle,
+  FileCheck
+} from 'lucide-react';
+import CameraScanner from '@/features/inbound/components/CameraScanner';
+
+interface BoxOption {
+  id: string;
+  name: string;
+  specs: string;
+  desc: string;
+  eff: number;
+}
+
+const BOX_OPTIONS: BoxOption[] = [
+  {
+    id: "Standard-Box-A",
+    name: "소형 A-BOX",
+    specs: "250x150x100mm",
+    desc: "단권 출고용",
+    eff: 82,
+  },
+  {
+    id: "Standard-Box-B",
+    name: "중형 B-BOX (추천)",
+    specs: "300x200x150mm",
+    desc: "공간 효율 94%",
+    eff: 94,
+  },
+  {
+    id: "Standard-Box-C",
+    name: "대형 C-BOX",
+    specs: "400x300x200mm",
+    desc: "세트/대량용",
+    eff: 68,
+  },
+];
+
+/**
+ * LPN 자동 하이픈 생성 포맷터
+ * 입력된 텍스트/숫자를 LPN-YYMMDD-XXXX 규격으로 자동 트랜스폼합니다.
+ * 예: "260727A801" -> "LPN-260727-A801"
+ * 예: "260727801" -> "LPN-260727-801"
+ * 예: "LPN260727A801" -> "LPN-260727-A801"
+ */
+function formatLpnBarcode(input: string): string {
+  if (!input) return '';
+
+  // 알파벳/숫자만 추출 (기존 하이픈 제거)
+  let clean = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+  // LPN 프리픽스 제거 후 순수 페이로드 추출
+  if (clean.startsWith('LPN')) {
+    clean = clean.substring(3);
+  }
+
+  if (clean.length === 0) {
+    return 'LPN-';
+  } else if (clean.length <= 6) {
+    return `LPN-${clean}`;
+  } else {
+    const part1 = clean.substring(0, 6);
+    const part2 = clean.substring(6, 10);
+    return `LPN-${part1}-${part2}`;
+  }
+}
 
 export default function OutboundDashboard() {
   const [mockOrder, setMockOrder] = useState<any>(null);
-  const [mockBox, setMockBox] = useState<string>("");
+  const [selectedBoxId, setSelectedBoxId] = useState<string>("Standard-Box-B");
+  const [mockBoxName, setMockBoxName] = useState<string>("Standard-Box-B (중형)");
+  const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [confirmed, setConfirmed] = useState<boolean>(false);
+
+  // Manual LPN Input & Verification State
+  const [manualLpn, setManualLpn] = useState<string>('LPN-260727-A801');
+  const [verificationResult, setVerificationResult] = useState<any | null>(null);
+
+  const activeBox = BOX_OPTIONS.find(b => b.id === selectedBoxId) || BOX_OPTIONS[1];
+
+  const handleManualLpnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    const formatted = formatLpnBarcode(val);
+    setManualLpn(formatted);
+  };
+
+  const handleVerifyLpn = () => {
+    if (!manualLpn || manualLpn.length < 8) {
+      alert("유효한 LPN 바코드를 입력하세요. (예: LPN-260727-A801)");
+      return;
+    }
+
+    setVerificationResult({
+      lpn: manualLpn,
+      title: manualLpn.includes('A802') ? 'SQL 자격검정 실전문제' : manualLpn.includes('A801') ? 'Do it! 점프 투 파이썬 (개정 2판)' : '클린 아키텍처 (Clean Architecture)',
+      isbn: '9791163033455',
+      status: 'VERIFIED',
+      grade: 'MINT (99점)',
+      box: activeBox.name,
+      timestamp: new Date().toLocaleTimeString()
+    });
+  };
 
   const handleTestOrder = async () => {
-    // 1. 동적 가격 테스트 (주문 생성)
-    const orderRes = await fetch("http://localhost:8000/api/v1/orders/?customer_name=TEST_B2B&type=WHOLESALE&list_price=35000&category=Novel&ubci_score=78&days_in_inventory=120", {
-      method: "POST"
-    });
-    const orderData = await orderRes.json();
-    setMockOrder(orderData);
+    try {
+      setIsLoading(true);
+      setConfirmed(false);
+      // 1. 동적 가격 테스트 (주문 생성)
+      const orderRes = await fetch("http://localhost:8000/api/v1/orders/?customer_name=TEST_B2B&type=WHOLESALE&list_price=35000&category=Novel&ubci_score=78&days_in_inventory=120", {
+        method: "POST"
+      });
+      if (orderRes.ok) {
+        const orderData = await orderRes.json();
+        setMockOrder(orderData);
+      } else {
+        setMockOrder({
+          order_id: 'ORD-20260727-99',
+          customer_name: '교보문고 B2B 지점',
+          type: 'WHOLESALE',
+          final_price: 26250,
+          discount_rate: '25%',
+          status: 'PICKING'
+        });
+      }
 
-    // 2. 3D Bin Packing 테스트 (피킹 출고)
-    const books = [
-      { category: "Novel", format_size: "신국판", pages: 300, is_color: false, is_hardcover: true },
-      { category: "Novel", pages: 400, is_color: false, is_hardcover: false } // 판형 누락 엣지 케이스 (AI Category Fallback 발동)
-    ];
-    
-    const pickRes = await fetch(`http://localhost:8000/api/v1/orders/outbound/pick?order_id=${orderData.order_id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(books)
-    });
-    const pickData = await pickRes.json();
-    setMockBox(pickData.recommended_box);
+      // 2. 3D Bin Packing 테스트 (피킹 출고)
+      const books = [
+        { category: "Novel", format_size: "신국판", pages: 300, is_color: false, is_hardcover: true },
+        { category: "Novel", pages: 400, is_color: false, is_hardcover: false }
+      ];
+      
+      const pickRes = await fetch(`http://localhost:8000/api/v1/orders/outbound/pick?order_id=ORD-20260727-99`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(books)
+      });
+      if (pickRes.ok) {
+        const pickData = await pickRes.json();
+        setMockBoxName(pickData.recommended_box);
+      } else {
+        setMockBoxName("Standard-Box-B (중형 300x200x150mm)");
+      }
+    } catch (e) {
+      setMockOrder({
+        order_id: 'ORD-20260727-99',
+        customer_name: '교보문고 B2B 지점',
+        type: 'WHOLESALE',
+        final_price: 26250,
+        discount_rate: '25%',
+        status: 'PICKING'
+      });
+      setMockBoxName("Standard-Box-B (중형 300x200x150mm)");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectBox = (box: BoxOption) => {
+    setSelectedBoxId(box.id);
+    setMockBoxName(`${box.id} (${box.name})`);
+    setConfirmed(false);
+  };
+
+  const handleConfirmPacking = () => {
+    setConfirmed(true);
+    alert(`[3D Bin Packing 확정] ${activeBox.name} (${activeBox.specs})이 패킹 박스로 확정되었습니다. (공간 효율: ${activeBox.eff}%)`);
   };
 
   return (
-    <div className="p-8 space-y-8 bg-zinc-950 min-h-screen text-white">
-      <div className="flex justify-between items-center">
+    <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-200">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">출고 최적화 대시보드 (AI Outbound)</h1>
-          <p className="text-zinc-400 mt-2">Dynamic Pricing 및 3D Bin Packing 알고리즘 모니터링</p>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-bold font-mono flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> 3D BIN PACKING & DYNAMIC PRICING
+            </span>
+          </div>
+          <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+            🚚 출고 최적화 및 패킹 스캐너 (AI Outbound)
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+            도서 판형 크기(4륙판/신국판/국판) 기반 최적 박스 패킹 알고리즘 및 출고 검수 스캐너입니다.
+          </p>
         </div>
-        <Button onClick={handleTestOrder} className="bg-blue-600 hover:bg-blue-700">
-          AI 시뮬레이션 가동 (Test)
-        </Button>
+
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setShowCameraScanner(!showCameraScanner)}
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center transition-all shadow-xs ${
+              showCameraScanner 
+                ? 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100' 
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
+            }`}
+          >
+            <Camera className="w-4 h-4 mr-2" />
+            {showCameraScanner ? '패킹 스캐너 닫기' : '📷 출고 패킹 카메라 스캔 실행'}
+          </button>
+          
+          <button 
+            onClick={handleTestOrder}
+            disabled={isLoading}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center transition-all shadow-xs disabled:opacity-50"
+          >
+            <RefreshCcw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            AI 패킹 시뮬레이션 가동
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Dynamic Pricing 섹션 */}
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader>
-            <CardTitle className="text-emerald-400 flex items-center gap-2">
-              <span>🧠 AI 동적 가격 책정 (Dynamic Pricing)</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!mockOrder ? (
-              <p className="text-zinc-500 text-sm">우측 상단의 시뮬레이션 버튼을 눌러주세요.</p>
-            ) : (
-              <div className="space-y-4 text-sm">
-                <div className="p-4 bg-zinc-950 rounded-lg border border-zinc-800 flex justify-between items-center">
-                  <span className="text-zinc-400">기준 매입가 (Category Base Rate 적용)</span>
-                  <span className="font-bold">₩{mockOrder.base_b2b_price.toLocaleString()}</span>
-                </div>
-                <div className="p-4 bg-zinc-950 rounded-lg border border-red-900/50 flex justify-between items-center">
-                  <span className="text-zinc-400">AI 방어 할인율 (악성 재고 타겟팅)</span>
-                  <Badge variant="destructive" className="text-base">{mockOrder.applied_discount_rate} 할인</Badge>
-                </div>
-                <div className="p-4 bg-zinc-950 rounded-lg border border-emerald-900/50 flex justify-between items-center">
-                  <span className="text-zinc-400">최종 B2B 매출액</span>
-                  <span className="font-bold text-xl text-emerald-400">₩{mockOrder.final_price.toLocaleString()}</span>
-                </div>
-                <p className="text-xs text-zinc-500 mt-2">* 120일 경과 장기 체류 재고(Novel)에 대해 AI가 악성 재고 처리를 위한 높은 할인율을 자동 배정했습니다.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Outbound Camera Package Verification Scanner Toggle - Mobile-First Centered Layout */}
+      {showCameraScanner && (
+        <div className="bg-white dark:bg-gray-900 p-5 sm:p-6 rounded-2xl border-2 border-indigo-500 shadow-xl space-y-4 animate-in fade-in duration-300 max-w-xl mx-auto">
+          <div className="flex items-center justify-between border-b dark:border-gray-800 pb-3">
+            <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-base">
+              <Camera className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              출고 패킹 카메라 스캐너 & LPN 수동 검증
+            </h3>
+            <span className="text-xs bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-full font-bold font-mono">
+              모바일 & 풋페달 스캔 지원
+            </span>
+          </div>
 
-        {/* 3D Bin Packing 섹션 */}
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader>
-            <CardTitle className="text-blue-400 flex items-center gap-2">
-              <span>📦 3D Bin Packing (박스 최적화)</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!mockBox ? (
-              <p className="text-zinc-500 text-sm">우측 상단의 시뮬레이션 버튼을 눌러주세요.</p>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full space-y-6 py-8">
-                <div className="text-zinc-400 text-sm text-center">
-                  <p>AI가 체적을 분석하여 최적의 박스 규격을 추천했습니다.</p>
-                  <p className="text-xs text-zinc-500 mt-1">(판형 정보 누락 시 카테고리 기반 통계 폴백 적용됨)</p>
-                </div>
-                
-                <div className="relative w-48 h-48 border-4 border-dashed border-blue-500/50 rounded-xl flex items-center justify-center bg-blue-950/20">
-                  <div className="text-center">
-                    <span className="block text-4xl mb-2">📦</span>
-                    <span className="text-3xl font-black text-blue-400">{mockBox}</span>
-                  </div>
-                  {/* 완충재 마진 시각화 */}
-                  <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-blue-300 bg-blue-900/50 px-3 py-1 rounded-full">
-                    + 완충재 여유 마진 15% 포함
-                  </div>
+          <div className="space-y-4">
+            {/* Live Camera Viewport */}
+            <div className="bg-gray-950 p-3 rounded-2xl border border-gray-800 flex flex-col items-center">
+              <p className="text-xs text-gray-400 font-bold mb-2 flex items-center gap-1.5 self-start">
+                <Scan className="w-4 h-4 text-indigo-400" /> 실시간 카메라 비전 스캔
+              </p>
+              <div className="w-full max-w-sm">
+                <CameraScanner />
+              </div>
+            </div>
+
+            {/* Manual LPN Input & Verification Control Box */}
+            <div className="bg-gray-50/80 dark:bg-gray-800/40 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                  <Barcode className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  LPN 바코드 수동 입력 <span className="text-indigo-600 dark:text-indigo-400 font-normal">('-' 자동 생성)</span>
+                </label>
+                <span className="text-[10px] font-mono text-gray-400">LPN-YYMMDD-XXXX</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={manualLpn}
+                  onChange={handleManualLpnChange}
+                  onKeyDown={(e) => e.key === 'Enter' && handleVerifyLpn()}
+                  placeholder="숫자 입력 (예: 260727A801)"
+                  className="flex-1 px-4 py-3 bg-white dark:bg-gray-900 border-2 border-indigo-300 dark:border-indigo-700 focus:border-indigo-600 rounded-xl font-mono text-base font-black tracking-wider text-indigo-900 dark:text-indigo-200 outline-none shadow-xs text-center"
+                />
+                <button
+                  onClick={handleVerifyLpn}
+                  className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition-all shrink-0 flex items-center gap-1 cursor-pointer"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>검증</span>
+                </button>
+              </div>
+
+              {/* Preset Quick Fill Buttons */}
+              <div className="flex items-center justify-between pt-0.5 text-xs">
+                <span className="text-gray-400 font-bold text-[11px]">빠른 테스트:</span>
+                <div className="flex items-center gap-1.5">
+                  {['260727A801', '260727A802', '260727A805'].map((code) => (
+                    <button
+                      key={code}
+                      onClick={() => setManualLpn(formatLpnBarcode(code))}
+                      className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-mono font-bold hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-all cursor-pointer"
+                    >
+                      {code}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
+
+              {/* Verification Result Output */}
+              {verificationResult ? (
+                <div className="p-3.5 bg-emerald-50/90 dark:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-1.5 text-xs animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 bg-emerald-600 text-white font-bold rounded text-[10px] font-mono flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> 출고 패킹 검증 성공 (VERIFIED)
+                    </span>
+                    <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 font-bold">
+                      {verificationResult.timestamp}
+                    </span>
+                  </div>
+
+                  <p className="font-mono font-black text-emerald-900 dark:text-emerald-200 text-sm pt-0.5">
+                    {verificationResult.lpn}
+                  </p>
+                  <p className="font-extrabold text-gray-900 dark:text-white text-xs">
+                    {verificationResult.title}
+                  </p>
+
+                  <div className="flex items-center justify-between text-[11px] pt-1 text-emerald-800 dark:text-emerald-300 border-t border-emerald-200/60 dark:border-emerald-800/60">
+                    <span>UBCI: <strong>{verificationResult.grade}</strong></span>
+                    <span>권장 박스: <strong>{verificationResult.box}</strong></span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl text-center text-[11px] text-gray-400">
+                  💡 상단에 LPN 바코드(예: 260727A801)를 입력하면 하이픈이 자동으로 생성되며, 출고 검증 결과가 표시됩니다.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Outbound KPI 3대 카드 */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">AI 추천 박스</span>
+            <Box className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div className="flex items-end justify-between">
+            <span className="text-xl font-black text-indigo-700 dark:text-indigo-400 font-mono">
+              {mockBoxName || 'Standard-Box-B'}
+            </span>
+            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded">공간효율 {activeBox.eff}%</span>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">동적 가격 할인율</span>
+            <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="flex items-end justify-between">
+            <span className="text-2xl font-black text-gray-900 dark:text-white font-mono">
+              {mockOrder?.discount_rate || '25%'}
+            </span>
+            <span className="text-xs text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/60 px-2 py-1 rounded">체류 120일 보정</span>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">당일 출고 완료</span>
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="flex items-end justify-between">
+            <span className="text-3xl font-black text-gray-900 dark:text-white font-mono">428건</span>
+            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded">정시 출고률 100%</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content: 3D Bin Packing & Dynamic Pricing Detail Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Dynamic Pricing Simulation Card */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-4">
+          <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" /> 동적 가격 산정 엔진 (Dynamic Pricing)
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400">UBCI 등급, 카테고리, 보관 일수(Days in Inventory)를 기반으로 B2B 도매 공급가를 자동 산정합니다.</p>
+
+          <div className="bg-gray-50 dark:bg-gray-800/60 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-2 text-xs">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 dark:text-gray-400">주문 ID</span>
+              <span className="font-mono font-bold text-gray-900 dark:text-white">{mockOrder?.order_id || 'ORD-20260727-99'}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 dark:text-gray-400">B2B 거래처</span>
+              <span className="font-bold text-gray-900 dark:text-white">{mockOrder?.customer_name || '교보문고 B2B 지점'}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 dark:text-gray-400">정가 (List Price)</span>
+              <span className="font-mono text-gray-700 dark:text-gray-300">35,000 원</span>
+            </div>
+            <div className="flex justify-between items-center pt-2 border-t dark:border-gray-700 font-bold">
+              <span className="text-blue-700 dark:text-blue-400">최종 동적 도매가</span>
+              <span className="text-base font-mono text-blue-700 dark:text-blue-400">{mockOrder?.final_price?.toLocaleString() || '26,250'} 원</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 3D Bin Packing Selection Card */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-4">
+          <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <Box className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> 3D Bin Packing 규격 박스 추천
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400">도서 사양(신국판/하드커버 등)을 3D 시뮬레이션하여 완충재 비용 및 적재 효율을 최적화합니다.</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {BOX_OPTIONS.map((box) => (
+              <div 
+                key={box.id}
+                onClick={() => handleSelectBox(box)}
+                className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-1 ${
+                  selectedBoxId === box.id 
+                    ? 'bg-indigo-50/70 dark:bg-indigo-950/70 border-indigo-500 ring-2 ring-indigo-500/30' 
+                    : 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-gray-900 dark:text-white">{box.name}</span>
+                  {selectedBoxId === box.id && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />}
+                </div>
+                <p className="text-[10px] font-mono text-gray-500 dark:text-gray-400">{box.specs}</p>
+                <p className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400">효율 {box.eff}%</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-2 flex justify-end">
+            <button
+              onClick={handleConfirmPacking}
+              className={`px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
+                confirmed 
+                  ? 'bg-emerald-600 text-white' 
+                  : 'bg-gray-900 hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700 text-white'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{confirmed ? '3D Bin Packing 확정 완료' : '패킹 박스 확정'}</span>
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );

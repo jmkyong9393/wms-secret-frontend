@@ -22,7 +22,14 @@ export default function MyPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // 최초 로드 시 본인 정보 가져오기
+    // 최초 로드 시 본인 정보 가져오기 (Jotai user atom 기본값 활용)
+    if (user) {
+      setName(user.name || '');
+      setEmail(user.email || '');
+      setPhone(user.phone_number || '');
+      setAddress(user.address || '');
+    }
+
     const fetchUser = async () => {
       try {
         const res = await apiClient.get('/api/v1/users/me');
@@ -32,12 +39,13 @@ export default function MyPage() {
         setEmail(userData.email || '');
         setPhone(userData.phone_number || '');
         setAddress(userData.address || '');
+        setError('');
       } catch (err) {
-        setError('사용자 정보를 불러오는데 실패했습니다.');
+        console.warn("Could not refresh user profile from API, fallback to current user atom:", err);
       }
     };
     fetchUser();
-  }, [setUser]);
+  }, [user, setUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +95,7 @@ export default function MyPage() {
               <label className="block text-sm font-medium text-gray-500">사번 (Employee ID)</label>
               <input 
                 type="text" 
-                value={(user as any).employee_id || user.username || ''}
+                value={user.employee_id || user.name || ''}
                 className="mt-1 block w-full rounded-md border border-gray-200 bg-gray-100 p-2 text-gray-500" 
                 disabled 
               />

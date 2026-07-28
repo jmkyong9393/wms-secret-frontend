@@ -3,11 +3,17 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSetAtom } from 'jotai';
-import { userAtom } from '@/stores/auth';
+import { userAtom, Role } from '@/stores/auth';
 import { apiClient } from '@/lib/api-client';
 import Cookies from 'js-cookie';
 import { Button } from '@/components/ui/button';
 import { AUTH_TOKEN_STORAGE_KEY } from '@/features/auth/store/authAtoms';
+import { 
+  UserCheck, 
+  Sparkles,
+  ArrowRight,
+  ShieldCheck
+} from 'lucide-react';
 
 export default function LoginPage() {
   const [employee_id, setEmployeeId] = useState('');
@@ -17,7 +23,7 @@ export default function LoginPage() {
   const router = useRouter();
   const setUser = useSetAtom(userAtom);
 
-  // 로그인 페이지 진입 시 기존 스토리지 초기화 (세션 만료 시 찌꺼기 제거)
+  // 로그인 페이지 진입 시 기존 스토리지 초기화
   useEffect(() => {
     localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
     localStorage.removeItem('auth-user');
@@ -26,79 +32,200 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!employee_id || !password) {
+      setError('사번과 비밀번호를 입력해 주세요.');
+      return;
+    }
+
     setError('');
     setLoading(true);
 
     try {
-      // 1. 백엔드로 로그인 요청
+      // 1. POST /api/v1/users/login - 실제 백엔드 PostgreSQL DB 인증
       const response = await apiClient.post('/api/v1/users/login', { employee_id, password });
-      const { access_token, must_change_password } = response.data;
+      
+      if (!response.data?.access_token) {
+        throw new Error("인증 토큰 수신 실패");
+      }
 
-      // 2. JWT 토큰을 localStorage 및 쿠키에 저장
-      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, access_token);
-      Cookies.set('token', access_token);
+      const access_token = response.data.access_token;
 
-      // 3. /me API 호출하여 사용자 정보 가져오기
+      // 2. GET /api/v1/users/me - DB 원본 유저 프로필 수신
       const userResponse = await apiClient.get('/api/v1/users/me', {
         headers: { Authorization: `Bearer ${access_token}` }
       });
-      const user = userResponse.data;
-      
-      Cookies.set('role', user.role);
-      setUser(user);
 
-      // 4. 온보딩 상태 확인 후 리다이렉트 분기 처리
-      if (must_change_password) {
-        router.push('/onboarding');
-      } else if (user.role === 'WORKER') {
-        router.push('/inbound'); // 작업자는 입고 화면으로
+      const dbUser = userResponse.data;
+      const userRole: Role = (dbUser?.role as Role) || 'MASTER';
+
+      // 3. 토큰 및 쿠키 세팅
+      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, access_token);
+      Cookies.set('token', access_token, { expires: 7 });
+      Cookies.set('role', userRole, { expires: 7 });
+      setUser(dbUser);
+
+      // 4. RBAC 리다이렉트
+      if (userRole === 'WORKER') {
+        router.push('/worker/inspections');
       } else {
-        router.push('/'); // 관리자는 대시보드로
+        router.push('/admin/dashboard');
       }
-      
+
     } catch (err: any) {
-      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
-        setError('사번 또는 비밀번호가 올바르지 않습니다.');
+      console.error("Login Error:", err);
+      if (err.code === "ERR_NETWORK" || err.message?.includes("Network Error") || !err.response) {
+        setError("백엔드 서버(http://localhost:8000) 연결 실패! 백엔드 서버가 종료되어 있어 통신할 수 없습니다.");
       } else {
-        setError('서버 통신에 실패했습니다. 네트워크 상태를 확인해주세요.');
+        const msg = err.response?.data?.message || err.response?.data?.detail || '사번 또는 비밀번호가 올바르지 않습니다.';
+        setError(msg);
       }
     } finally {
       setLoading(false);
     }
   };
 
+
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md bg-white p-8 shadow-md rounded-lg">
-        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">WMS AI Platform</h1>
-        {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">사번</label>
-            <input 
-              type="text" 
-              value={employee_id}
-              onChange={(e) => setEmployeeId(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500" 
-              placeholder="예: KT2607001"
-              required 
+    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/30 flex items-center justify-center p-4 sm:p-6 lg:p-12 relative overflow-hidden font-sans text-gray-900 transition-colors duration-200">
+      
+      {/* Soft Light Ambient Glow Orbs */}
+      <div className="absolute -top-40 -left-40 w-[600px] h-[600px] bg-blue-200/40 rounded-full blur-[140px] pointer-events-none animate-pulse"></div>
+      <div className="absolute -bottom-40 -right-40 w-[600px] h-[600px] bg-indigo-200/40 rounded-full blur-[140px] pointer-events-none"></div>
+
+      {/* Main Container Layout */}
+      <div className="w-full max-w-6xl flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-16 z-10">
+        
+        {/* LEFT SIDE: Bright Clean Giant Hero Emblem & Brief Intro */}
+        <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left space-y-6 max-w-xl">
+          
+          {/* Giant Light Mode Emblem Showcase */}
+          <div className="relative group">
+            <div className="absolute -inset-1.5 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-3xl blur-xl opacity-30 group-hover:opacity-60 transition duration-500"></div>
+            <img 
+              src="/nexus_hero_light_emblem.jpg" 
+              alt="Bright Giant Nexus Hero Emblem" 
+              className="relative w-64 sm:w-80 md:w-96 lg:w-[420px] h-auto rounded-3xl border-2 border-blue-200 shadow-xl object-cover hover:scale-105 transition-transform duration-300 bg-white"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">비밀번호</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500" 
-              required 
-            />
+
+          {/* Clean Title & Brief Description */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-center lg:justify-start gap-2 mb-1">
+              <span className="px-3.5 py-1 bg-blue-100/80 text-blue-800 border border-blue-200 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 shadow-xs">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" /> B2B ENTERPRISE WMS v2.6.0
+              </span>
+            </div>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 tracking-tight font-mono">
+              Nexus <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">WMS</span>
+            </h1>
+            <p className="text-base sm:text-lg font-extrabold text-blue-950 tracking-tight">
+              멀티 에이전트 AI 기반 B2B 스마트 물류 관제 파이프라인
+            </p>
+            <p className="text-xs sm:text-sm text-gray-600 max-w-md pt-1 leading-relaxed">
+              비전 딥러닝 앙상블, UBCI 검증 등급 평가, LangGraph Multi-Agent 오케스트레이션 및 3D Bin Packing 알고리즘이 통합된 차세대 풀필먼트 관제실입니다.
+            </p>
           </div>
-          <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-md" disabled={loading}>
-            {loading ? '로그인 중...' : '로그인'}
-          </Button>
-        </form>
+
+          {/* Author Metadata Tag */}
+          <div className="pt-2 text-xs text-gray-500 font-mono">
+            대표자: <strong className="text-gray-900 font-bold">장문경 (Lead Architect & Project Owner)</strong> | 팀: AI_05조
+          </div>
+        </div>
+
+        {/* RIGHT SIDE: Shifted Bright Clean Login Card */}
+        <div className="w-full lg:w-[440px] bg-white/95 border border-gray-200/90 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6 text-gray-900">
+          
+          {/* Form Header */}
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-bold font-mono mb-2 border border-blue-200">
+              <UserCheck className="w-3.5 h-3.5 text-blue-600" /> SECURE AUTHENTICATION
+            </div>
+            <h2 className="text-2xl font-black text-gray-900 tracking-tight">
+              관제실 로그인
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              사번과 비밀번호를 입력하여 접속하십시오.
+            </p>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center gap-2 animate-in fade-in">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+              {error}
+            </div>
+          )}
+
+          {/* Form Fields */}
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
+                <span>사번 (Employee ID)</span>
+                <span className="text-[10px] text-gray-400 font-mono">예: WM2607001</span>
+              </label>
+              <input 
+                type="text" 
+                value={employee_id}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-xs font-mono font-bold border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50 text-gray-900 transition-all" 
+                placeholder="사번 입력 (예: WM2607001)"
+                required 
+              />
+            </div>
+
+
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
+                <span>비밀번호 (Password)</span>
+                <a href="#" onClick={(e) => { e.preventDefault(); alert("관리자(jmkyong2002@naver.com)에게 비밀번호 재설정을 문의하세요."); }} className="text-[10px] text-blue-600 hover:underline">재설정 요청</a>
+              </label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-xs font-mono font-bold border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50 text-gray-900 transition-all" 
+                placeholder="비밀번호 입력"
+                required 
+              />
+            </div>
+
+            <Button 
+              type="submit" 
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold text-xs shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              disabled={loading}
+            >
+              {loading ? (
+                <span>로그인 처리 중...</span>
+              ) : (
+                <>
+                  <span>NEXUS 관제실 접속</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </Button>
+          </form>
+
+          {/* Legal Compliance Footer */}
+          <div className="pt-4 border-t border-gray-200 text-center space-y-2 text-[11px] text-gray-500 font-mono">
+            <div className="flex items-center justify-center gap-3 font-bold">
+              <a href="/privacy" className="text-gray-900 font-black hover:text-blue-600 underline underline-offset-4">개인정보 처리방침</a>
+              <span className="text-gray-300">|</span>
+              <a href="/terms" className="text-gray-600 hover:text-blue-600">이용약관</a>
+              <span className="text-gray-300">|</span>
+              <a href="/opensource" className="text-gray-600 hover:text-blue-600">오픈소스라이선스</a>
+            </div>
+
+            <div className="text-[10px] text-gray-400">
+              Contact: <a href="mailto:jmkyong2002@naver.com" className="hover:underline text-blue-600 font-bold">jmkyong2002@naver.com</a>
+              <p className="mt-0.5">© 2026 Nexus AI_05조. All rights reserved.</p>
+            </div>
+          </div>
+
+        </div>
+
       </div>
+
     </div>
   );
 }

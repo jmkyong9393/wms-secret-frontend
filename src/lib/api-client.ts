@@ -15,13 +15,20 @@ export const apiClient = axios.create({
   timeout: 10000,
 });
 
+import Cookies from "js-cookie";
+
 // API 요청 전 실행되는 공통 처리
 apiClient.interceptors.request.use(
   (config) => {
-    const token =
+    let token =
       typeof window !== "undefined"
         ? localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
         : null;
+    
+    if (!token && typeof window !== "undefined") {
+      token = Cookies.get("token") || null;
+    }
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
