@@ -255,7 +255,7 @@ export default function OutboundDashboard() {
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center transition-all shadow-xs disabled:opacity-50"
           >
             <RefreshCcw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            AI 패킹 시뮬레이션 가동
+            {isLoading ? 'AI 시뮬레이션 처리 중...' : 'AI 패킹 시뮬레이션 가동'}
           </button>
         </div>
       </div>
