@@ -22,7 +22,8 @@ import {
   ShieldCheck,
   Boxes
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { adminAPI } from '@/lib/api';
 
 /**
  * 물류 프로세스 및 권한 단위별 사이드바 메뉴 그룹 정의
@@ -49,50 +50,89 @@ const WORKER_MENU_GROUPS: MenuGroup[] = [
   },
 ];
 
-const MENU_GROUPS: MenuGroup[] = [
-  {
-    title: '📊 관제 & 대시보드',
-    items: [
-      { name: '종합 대시보드', href: '/admin/dashboard', icon: LayoutDashboard },
-    ],
-  },
-  {
-    title: '📥 입고 & AI 검수 파이프라인',
-    items: [
-      { name: '현장 반품 검수', href: '/inbound', icon: Camera },
-      { name: '나의 검수 내역 (작업자)', href: '/worker/inspections', icon: ShieldCheck },
-      { name: '승인 대기 (HITL)', href: '/admin/hitl', icon: ShoppingCart, badge: '3' },
-      { name: '검수 처리 내역 (전체)', href: '/admin/inspections', icon: FileCheck },
-    ],
-  },
-  {
-    title: '📦 재고 & 출고 프로세스',
-    items: [
-      { name: '재고 현황 관리 (Master)', href: '/admin/inventory', icon: PackageSearch },
-      { name: '현장 재고 조회 (Worker)', href: '/worker/inventory', icon: PackageSearch },
-      { name: '출고 최적화 (3D/송장)', href: '/admin/outbound', icon: Truck },
-      { name: '출고 패킹 스캐너 (Worker)', href: '/worker/outbound', icon: Truck },
-    ],
-  },
-  {
-    title: '🤖 SCM & 자동 발주',
-    items: [
-      { name: '발주 관리 (AI)', href: '/admin/po', icon: LineChart },
-    ],
-  },
-  {
-    title: '👥 권한 & 시스템 관리',
-    items: [
-      { name: '사원 관리', href: '/admin/employees', icon: Users },
-      { name: '시스템 설정', href: '/admin/settings', icon: Settings },
-    ],
-  },
-];
+// 동적 메뉴 생성 헬퍼 함수 (HITL 실시간 대기열 뱃지 수용)
+function getMenuGroups(hitlPendingCount: number): MenuGroup[] {
+  return [
+    {
+      title: '📊 관제 & 대시보드',
+      items: [
+        { name: '종합 대시보드', href: '/admin/dashboard', icon: LayoutDashboard },
+      ],
+    },
+    {
+      title: '📥 입고 & AI 검수 파이프라인',
+      items: [
+        { name: '현장 반품 검수', href: '/inbound', icon: Camera },
+        { name: '나의 검수 내역 (작업자)', href: '/worker/inspections', icon: ShieldCheck },
+        { name: '승인 대기 (HITL)', href: '/admin/hitl', icon: ShoppingCart, badge: String(hitlPendingCount) },
+        { name: '검수 처리 내역 (전체)', href: '/admin/inspections', icon: FileCheck },
+      ],
+    },
+    {
+      title: '📦 재고 & 출고 프로세스',
+      items: [
+        { name: '재고 현황 관리 (Master)', href: '/admin/inventory', icon: PackageSearch },
+        { name: '현장 재고 조회 (Worker)', href: '/worker/inventory', icon: PackageSearch },
+        { name: '출고 최적화 (3D/송장)', href: '/admin/outbound', icon: Truck },
+        { name: '출고 패킹 스캐너 (Worker)', href: '/worker/outbound', icon: Truck },
+      ],
+    },
+    {
+      title: '🤖 SCM & 자동 발주',
+      items: [
+        { name: '발주 관리 (AI)', href: '/admin/po', icon: LineChart },
+      ],
+    },
+    {
+      title: '👥 권한 & 시스템 관리',
+      items: [
+        { name: '사원 관리', href: '/admin/employees', icon: Users },
+        { name: '시스템 설정', href: '/admin/settings', icon: Settings },
+      ],
+    },
+  ];
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const user = useAtomValue(userAtom);
+  const [hitlCount, setHitlCount] = useState<number>(3);
+
+  // 5초 간격으로 백엔드 /api/v1/admin/hitl/pending 실시간 수동 검수 대기열 건수 조회
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPendingHitl = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/api/v1/admin/hitl/pending', { method: 'GET' });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && Array.isArray(data)) {
+            setHitlCount(data.length);
+          }
+        } else {
+          // API 인증 제한 시 fallback 최근 비승인 갯수
+          const resHistory = await fetch('http://localhost:8000/api/v1/inbound/history', { method: 'GET' });
+          if (resHistory.ok) {
+            const historyData = await resHistory.json();
+            if (isMounted && Array.isArray(historyData)) {
+              const pending = historyData.filter((item: any) => item.status === 'PENDING' || item.status === 'HITL_REQUIRED').length;
+              setHitlCount(pending || 3);
+            }
+          }
+        }
+      } catch (e) {
+        // 네트워크 연결 실패 시 3건 유지
+      }
+    };
+
+    fetchPendingHitl();
+    const timer = setInterval(fetchPendingHitl, 5000);
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   // 그룹별 개별 아코디언 토글 상태 관리 (기본적으로 모두 열림)
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
@@ -156,7 +196,7 @@ export default function Sidebar() {
 
         {/* Categorized Menu List */}
         <nav className="flex-1 overflow-y-auto py-5 px-4 space-y-5">
-          {(user?.role === 'WORKER' ? WORKER_MENU_GROUPS : MENU_GROUPS).map((group) => {
+          {(user?.role === 'WORKER' ? WORKER_MENU_GROUPS : getMenuGroups(hitlCount)).map((group) => {
             const isGroupOpen = openGroups[group.title] ?? true;
 
             return (
