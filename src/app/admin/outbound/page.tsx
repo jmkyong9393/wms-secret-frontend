@@ -96,6 +96,7 @@ export default function OutboundDashboard() {
   // Manual LPN Input & Verification State
   const [manualLpn, setManualLpn] = useState<string>('LPN-260727-A801');
   const [verificationResult, setVerificationResult] = useState<any | null>(null);
+  const [aiReasoningLog, setAiReasoningLog] = useState<string>('');
 
   const activeBox = BOX_OPTIONS.find(b => b.id === selectedBoxId) || BOX_OPTIONS[1];
 
@@ -185,6 +186,9 @@ export default function OutboundDashboard() {
       if (pickRes.ok) {
         const pickData = await pickRes.json();
         setMockBoxName(pickData.recommended_box);
+        if (pickData.ai_reasoning_log) {
+          setAiReasoningLog(pickData.ai_reasoning_log);
+        }
       } else {
         setMockBoxName("Standard-Box-B (중형 300x200x150mm)");
       }
@@ -457,7 +461,7 @@ export default function OutboundDashboard() {
           </div>
 
           {/* Interactive WebGL/CSS 3D Bin Packing Simulator */}
-          <BinPacking3DViewer selectedBox={activeBox} />
+          <BinPacking3DViewer selectedBox={activeBox} aiRecommendationLog={aiReasoningLog} />
 
           <div className="pt-2 flex justify-end">
             <button
