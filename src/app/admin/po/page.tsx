@@ -25,7 +25,8 @@ export default function PurchaseOrderPage() {
     {
       id: 'PO-20260727-01',
       isbn: '9788965402603',
-      title: '이것이 자바다 (개정판)',
+      title: 'SQL 자격검정 실전문제 (한국데이터산업진흥원)',
+    // title: '이것이 자바다 (개정판)',
       author: '신용권',
       publisher: '한빛미디어',
       currentStock: 3,
@@ -39,7 +40,8 @@ export default function PurchaseOrderPage() {
     {
       id: 'PO-20260727-02',
       isbn: '9788998756505',
-      title: 'OpenGL로 배우는 3차원 컴퓨터 그래픽스',
+      title: 'SQL 자격검정 실전문제 (한국데이터산업진흥원)',
+    // title: 'OpenGL로 배우는 3차원 컴퓨터 그래픽스',
       author: '주우진',
       publisher: '한빛아카데미',
       currentStock: 5,
@@ -53,7 +55,8 @@ export default function PurchaseOrderPage() {
     {
       id: 'PO-20260726-01',
       isbn: '9788966263158',
-      title: '클린 아키텍처',
+      title: 'SQL 자격검정 실전문제 (한국데이터산업진흥원)',
+    // title: '클린 아키텍처',
       author: '로버트 C. 마틴',
       publisher: '인사이트',
       currentStock: 18,

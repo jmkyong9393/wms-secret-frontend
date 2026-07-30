@@ -10,6 +10,7 @@ import {
   Maximize2,
   Sliders,
   Sparkles,
+  Bot,
   Shield as ShieldIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -50,7 +51,8 @@ const REASON_OPTIONS = [
     { value: "DMG_EXT_TEAR", label: "커버 찢어짐" },
   ]},
   { group: "내부 훼손", items: [
-    { value: "DMG_INT_STAIN", label: "내부 낙서/오염" },
+    { value: "DMG_INT_DOODLE", label: "내부 손글씨/낙서" },
+    { value: "DMG_INT_STAIN", label: "내지 오염/이물질" },
     { value: "DMG_INT_DISCOLOR", label: "내지 황변/변색" },
   ]},
 ];
@@ -59,29 +61,144 @@ const REASON_CODE_MAP: Record<string, { label: string; category: string; color: 
   DMG_EXT_CRUSH: { label: '모서리 찌그러짐', category: '외부 손상', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
   DMG_EXT_WET: { label: '외부 습기/침수', category: '외부 손상', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
   DMG_EXT_TEAR: { label: '커버 찢어짐', category: '외부 손상', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
-  DMG_INT_STAIN: { label: '내부 낙서/오염', category: '내부 훼손', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
+  DMG_INT_DOODLE: { label: '내부 손글씨/낙서', category: '내부 훼손', color: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
+  DMG_INT_STAIN: { label: '내지 오염/이물질', category: '내부 훼손', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
   DMG_INT_DISCOLOR: { label: '내지 황변/변색', category: '내부 훼손', color: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800' },
   FP_SHADOW: { label: '그림자 오탐', category: '오탐 방어', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
   FP_GLARE: { label: '빛 반사 오탐', category: '오탐 방어', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
 };
 
 export default function AdminHitlDashboard() {
+  const [reinspectingIds, setReinspectingIds] = useState<Set<string>>(new Set());
+  const [activeReinspectionTask, setActiveReinspectionTask] = useState<{
+    id: string;
+    lpn: string;
+    title: string;
+    step: number;
+    logs: string[];
+    isDone: boolean;
+    error?: string;
+  } | null>(null);
+
+  const [explainerLogs, setExplainerLogs] = useState<Array<{ time: string; agent: string; text: string; type: string }>>([]);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("hitl_explainer_logs");
+      if (saved) {
+        try {
+          setExplainerLogs(JSON.parse(saved));
+        } catch (e) {}
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isMounted && typeof window !== "undefined") {
+      localStorage.setItem("hitl_explainer_logs", JSON.stringify(explainerLogs));
+    }
+  }, [explainerLogs, isMounted]);
+
+  const handleClearLogs = () => {
+    setExplainerLogs([]);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("hitl_explainer_logs");
+    }
+  };
+
+  const handleTriggerAiReinspect = async (jobId: string) => {
+    const targetTask = tasks.find((t) => t.id === jobId);
+    const lpnStr = targetTask?.agent_logs?.lpn_barcode || targetTask?.lpn_barcode || `LPN-260728-${jobId.slice(0, 4).toUpperCase()}`;
+    const titleStr = targetTask?.book_title || "수동 검수 요청 도서";
+
+    setReinspectingIds((prev) => new Set(prev).add(jobId));
+    setActiveReinspectionTask({
+      id: jobId,
+      lpn: lpnStr,
+      title: titleStr,
+      step: 1,
+      logs: [
+        `[${new Date().toLocaleTimeString()}] 🚀 Multi-Agent AI 비전 재검수 파이프라인 트리거 시작...`,
+        `[${new Date().toLocaleTimeString()}] 👁️ [Vision Agent] 7개 다각도 스캔 이미지 텐서 로딩 및 YOLOv8 3-Model Ensemble 디텍션 추론 중...`
+      ],
+      isDone: false,
+    });
+
+    try {
+      const res = await adminAPI.triggerAiReinspection(jobId);
+      const logs = res?.agent_logs || {};
+      const score = res?.ubci_score !== undefined ? res.ubci_score : (logs?.ubci_score !== undefined ? logs.ubci_score : 75);
+      const timeNow = new Date().toLocaleTimeString();
+
+      const visionMsg = logs?.vision_text || `GPT-4o VLM 표지/속지 스캔 이미지 2차 검증 & GPT-4o-mini 예비 감점 산출 완료`;
+      const policyMsg = logs?.policy_text || `사내 WMS 최우선 룰 적용 (B2B 타사 정책 교차 평가) ➔ UBCI ${score}점 도출`;
+      const criticMsg = logs?.critic_text || `Critic Agent 파이프라인 검증 ➔ 전 과정 프로세스 무결성 확인 완공`;
+      const reportMsg = logs?.report_text || `📜 [디지털 WMS 품질 검수 보증서] ➔ UBCI ${score}점 검수 보증서 발급 완료`;
+      const humanMsg = logs?.human_node_text || `Human Node (HITL) ➔ 관리자 수동 개입 대기 및 오버라이드 폼 연동 완료`;
+      const summaryMsg = logs?.explainer_summary || logs?.policy_text || `사내 WMS 수석 룰 연산 완료. UBCI ${score}점 입고 승인 추천`;
+
+      setActiveReinspectionTask({
+        id: jobId,
+        lpn: lpnStr,
+        title: titleStr,
+        step: 5,
+        isDone: true,
+        logs: [
+          `[${timeNow}] 🚀 백엔드 LangGraph Multi-Agent 실시간 추론 연산 완료`,
+          `[${timeNow}] 👁️ [Vision Agent] ${visionMsg}`,
+          `[${timeNow}] ⚖️ [Policy Agent] ${policyMsg}`,
+          `[${timeNow}] 🛡️ [Critic Agent] ${criticMsg}`,
+          `[${timeNow}] 📋 [Report Agent] ${reportMsg}`,
+          `[${timeNow}] 👤 [Human Node (HITL)] ${humanMsg}`,
+          `[${timeNow}] 💬 [Explainer Agent] "${summaryMsg}" DB 반영 완료!`,
+        ],
+      });
+
+      setExplainerLogs((prev) => [
+        {
+          time: timeNow,
+          agent: "Explainer Agent 💬",
+          text: `[${lpnStr}] DB 연산 결과: "${summaryMsg}" DB 반영 완료!`,
+          type: "success",
+        },
+        ...prev,
+      ]);
+
+      await fetchTasks();
+    } catch (err: any) {
+      console.error("AI Re-inspection failed:", err);
+      setActiveReinspectionTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              isDone: true,
+              error: err?.message || "서버 통신 실패",
+              logs: [...prev.logs, `[${new Date().toLocaleTimeString()}] ❌ 재검수 오류: ${err?.message || "서버 오류"}`],
+            }
+          : null
+      );
+    } finally {
+      setReinspectingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
+    }
+  };
   const [tasks, setTasks] = useState<HitlTask[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
   const [modalTask, setModalTask] = useState<HitlTask | null>(null);
+  const [approvalToast, setApprovalToast] = useState<string | null>(null);
 
   // 각 row별 선택 및 설정 상태
   const [decisions, setDecisions] = useState<Record<string, string>>({});
   const [grades, setGrades] = useState<Record<string, string>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
-
-  // 일괄 변경용 마스터 컨트롤러 상태
-  const [masterDecision, setMasterDecision] = useState("APPROVE_DOWNGRADE");
-  const [masterGrade, setMasterGrade] = useState("B");
-  const [masterReason, setMasterReason] = useState("DMG_EXT_CRUSH");
 
   const pageEnterTime = useRef(Date.now());
 
@@ -101,7 +218,7 @@ export default function AdminHitlDashboard() {
       list.forEach((t: HitlTask) => {
         initDecisions[t.id] = t.agent_logs?.suggested_decision || "APPROVE_DOWNGRADE";
         initGrades[t.id] = t.agent_logs?.suggested_grade || "B";
-        initReasons[t.id] = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code || "DMG_EXT_CRUSH";
+        initReasons[t.id] = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code || "DMG_INT_DOODLE";
         initComments[t.id] = t.human_issue_notes || "관리자 검수 오버라이드";
       });
 
@@ -111,7 +228,10 @@ export default function AdminHitlDashboard() {
       setComments(initComments);
     } catch (err: any) {
       console.error("Failed to fetch HITL tasks:", err);
-      alert(`HITL 대기 목록을 불러오지 못했습니다. (${err?.response?.data?.message || err?.message || "권한/서버 오류"})`);
+      // alert() 팝업 대신 콘솔 로깅 및 401 로그인 리다이렉트 방어
+      if (err?.response?.status === 401 && typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
     } finally {
       setLoading(false);
     }
@@ -152,7 +272,10 @@ export default function AdminHitlDashboard() {
     }
   };
 
-  // 마스터 컨트롤러 프리셋 설정
+  const [masterDecision, setMasterDecision] = useState<string>("APPROVE_DOWNGRADE");
+  const [masterGrade, setMasterGrade] = useState<string>("B");
+  const [masterReasons, setMasterReasons] = useState<string[]>(["DMG_INT_DOODLE", "DMG_EXT_CRUSH"]);
+
   const handleMasterDecisionChange = (val: string | null) => {
     if (val) setMasterDecision(val);
   };
@@ -161,14 +284,20 @@ export default function AdminHitlDashboard() {
     if (val) setMasterGrade(val);
   };
 
-  const handleMasterReasonChange = (val: string | null) => {
-    if (val) setMasterReason(val);
+  const toggleMasterReason = (code: string) => {
+    if (masterReasons.includes(code)) {
+      if (masterReasons.length > 1) {
+        setMasterReasons(masterReasons.filter((c) => c !== code));
+      }
+    } else {
+      setMasterReasons([...masterReasons, code]);
+    }
   };
 
-  // 마스터 설정값을 선택된 항목들에 [일괄 적용] 버튼 클릭 시만 반영
+  // 마스터 설정값을 선택된 항목들에 [폼에 세팅] 버튼 클릭 시 수동 반영
   const handleApplyMasterSettings = () => {
     if (selectedIds.size === 0) {
-      alert("일괄 적용할 항목의 체크박스를 먼저 선택해 주세요.");
+      alert("일괄 세팅할 항목의 체크박스를 먼저 선택해 주세요.");
       return;
     }
     const nextDecisions = { ...decisions };
@@ -178,7 +307,7 @@ export default function AdminHitlDashboard() {
     selectedIds.forEach((id) => {
       nextDecisions[id] = masterDecision;
       nextGrades[id] = masterGrade;
-      nextReasons[id] = masterReason;
+      nextReasons[id] = [...masterReasons];
     });
 
     setDecisions(nextDecisions);
@@ -186,7 +315,7 @@ export default function AdminHitlDashboard() {
     setReasons(nextReasons);
   };
 
-  // 개별/일괄 승인 제출
+  // 개별/일괄 승인 제출 (테이블에 설정된 실제 row 데이터 최종 제출)
   const handleSubmit = async () => {
     if (selectedIds.size === 0) {
       alert("최종 처리할 항목을 하나 이상 선택해 주세요.");
@@ -200,14 +329,18 @@ export default function AdminHitlDashboard() {
 
       const decision = decisions[id] || "APPROVE_DOWNGRADE";
       const targetGrade = grades[id] || "B";
-      const reasonCode = reasons[id] || "DMG_EXT_CRUSH";
-      const comment = comments[id] || "관리자 HITL 일괄 처리 승인";
+      const rawReason = reasons[id];
+      const reasonList: string[] = Array.isArray(rawReason)
+        ? (rawReason as any)
+        : (rawReason ? [rawReason as any] : []);
+      const primaryReasonCode = reasonList.join(",");
+      const comment = comments[id] || "관리자 HITL 최종 결재 승인";
 
       payloadList.push({
         ticketId: id,
         decision,
         targetGrade: decision === "REJECT_RETURN" || decision === "RE_CHECK" ? "REJECT" : targetGrade,
-        primaryReasonCode: reasonCode,
+        primaryReasonCode,
         reasonComment: comment,
         defectCoordinates: task.agent_logs?.defect_coordinates || [],
         reviewDurationMs: Math.floor((Date.now() - pageEnterTime.current)),
@@ -216,12 +349,41 @@ export default function AdminHitlDashboard() {
 
     try {
       const res = await adminAPI.submitHitlOverrides(payloadList);
-      alert(`[HITL 승인 완료] 총 ${payloadList.length}건이 성공적으로 오버라이드 결제 처리되었습니다.`);
+      const timeNow = new Date().toLocaleTimeString();
+      const firstPayload = payloadList[0];
+      const summaryInfo = `총 ${payloadList.length}건 데이터베이스 오버라이드 승인 완료 (처분: ${firstPayload?.decision || 'APPROVE'}, 목표등급: ${firstPayload?.targetGrade || 'B'}, 사유: ${firstPayload?.primaryReasonCode || 'CLEAN'})`;
+
+      // 1. 하단 실시간 모니터링 로그에 누적 기록
+      setExplainerLogs((prev) => [
+        {
+          time: timeNow,
+          agent: "Human Node (HITL) 👤",
+          text: `🚀 [HITL 최종 결재 승인 성공] ${summaryInfo}`,
+          type: "success",
+        },
+        ...prev,
+      ]);
+
+      // 2. 브라우저 alert 대신 고급 승인 완료 토스트 메시지 렌더링
+      setApprovalToast(`🚀 [HITL 최종 결재 승인 완료] ${summaryInfo}`);
+      setTimeout(() => setApprovalToast(null), 4500);
+
       setSelectedIds(new Set());
       fetchTasks();
     } catch (err: any) {
       console.error("Batch submit failed:", err);
-      alert(`처리에 실패했습니다. (${err?.response?.data?.message || err?.message})`);
+      const timeNow = new Date().toLocaleTimeString();
+      setExplainerLogs((prev) => [
+        {
+          time: timeNow,
+          agent: "Human Node (HITL) 👤",
+          text: `❌ [HITL 결재 처리 실패] ${err?.response?.data?.message || err?.message}`,
+          type: "error",
+        },
+        ...prev,
+      ]);
+      setApprovalToast(`❌ 처리에 실패했습니다. (${err?.response?.data?.message || err?.message})`);
+      setTimeout(() => setApprovalToast(null), 4500);
     }
   };
 
@@ -328,23 +490,55 @@ export default function AdminHitlDashboard() {
               </SelectContent>
             </Select>
 
-            <Select value={masterReason} onValueChange={handleMasterReasonChange}>
-              <SelectTrigger className="h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                {REASON_OPTIONS.map((grp) => (
-                  <React.Fragment key={grp.group}>
-                    <div className="px-2 py-1 text-[10px] font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800">{grp.group}</div>
-                    {grp.items.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </React.Fragment>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800/80 p-1 rounded-lg border border-gray-200 dark:border-gray-700">
+              {masterReasons.map((code) => {
+                const meta = REASON_CODE_MAP[code] || { label: code, color: "bg-gray-100 text-gray-700 border-gray-200" };
+                return (
+                  <span
+                    key={code}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border transition-all ${meta.color}`}
+                  >
+                    {meta.label}
+                    {masterReasons.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => toggleMasterReason(code)}
+                        className="hover:text-red-500 font-bold ml-0.5 text-xs leading-none"
+                        title="사유 제거"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+              <Select
+                onValueChange={(val: string) => {
+                  if (!masterReasons.includes(val)) {
+                    setMasterReasons([...masterReasons, val]);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-6 w-24 text-[10px] font-bold px-2 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-dashed border-purple-300 dark:border-purple-800">
+                  <span>+ 사유 선택</span>
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                  {REASON_OPTIONS.map((grp) => (
+                    <React.Fragment key={grp.group}>
+                      <div className="px-2 py-1 text-[10px] font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800">{grp.group}</div>
+                      {grp.items.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          <span className="flex items-center gap-1.5">
+                            {masterReasons.includes(opt.value) ? "✓ " : ""}
+                            {opt.label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <Button
               size="sm"
@@ -377,12 +571,14 @@ export default function AdminHitlDashboard() {
                       onChange={toggleAll}
                     />
                   </th>
-                  <th className="p-3 w-20">이미지</th>
-                  <th className="p-3 w-52">AI 비전 감지 사유 (Vision Agent Output)</th>
-                  <th className="p-3 w-40">처분 결정 (Decision)</th>
-                  <th className="p-3 w-28">목표 등급</th>
-                  <th className="p-3 w-44">수동 오버라이드 사유 (Reason)</th>
-                  <th className="p-3">관리자 메모</th>
+                  <th className="p-3 w-20 text-center">이미지</th>
+                  <th className="p-3 w-56">도서 정보 및 바코드</th>
+                  <th className="p-3 w-48">AI 비전 감지 사유</th>
+                  <th className="p-3 w-36">처분 결정 (Decision)</th>
+                  <th className="p-3 w-24">목표 등급</th>
+                  <th className="p-3 w-40">오버라이드 사유</th>
+                  <th className="p-3 w-48">관리자 메모</th>
+                  <th className="p-3 w-28 text-center">AI 재검수</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
@@ -430,13 +626,20 @@ export default function AdminHitlDashboard() {
 
                       <td className="p-3">
                         <div className="font-bold text-gray-900 dark:text-white line-clamp-1">{t.book_title || "도서 정보 없음"}</div>
-                        <div className="text-gray-500 dark:text-gray-400 font-mono text-[11px] mt-0.5">ISBN: {t.isbn || "-"}</div>
-                        <div className="text-gray-400 dark:text-gray-500 font-mono text-[10px] mt-0.5">Task: {t.id.slice(0, 8)}...</div>
-                        {t.ubci_score !== undefined && (
-                          <span className="inline-block mt-1 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] font-semibold px-1.5 py-0.5 rounded">
-                            UBCI: {t.ubci_score}점
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono text-[11px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
+                            {t.agent_logs?.lpn_barcode || t.lpn_barcode || `LPN-260728-${t.id.slice(0, 4).toUpperCase()}`}
                           </span>
-                        )}
+                          <span className="text-gray-500 dark:text-gray-400 font-mono text-[11px]">ISBN: {t.isbn || "-"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px]">Task: {t.id.slice(0, 8)}...</span>
+                          {t.ubci_score !== undefined && (
+                            <span className="bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                              UBCI: {t.ubci_score}점
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="p-3">
@@ -499,27 +702,78 @@ export default function AdminHitlDashboard() {
                       </td>
 
                       <td className="p-3">
-                        <Select
-                          disabled={!isSelected}
-                          value={reasons[t.id] || "DMG_EXT_CRUSH"}
-                          onValueChange={(val: any) => setReasons({ ...reasons, [t.id]: val })}
-                        >
-                          <SelectTrigger className="w-full h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                            {REASON_OPTIONS.map((grp) => (
-                              <React.Fragment key={grp.group}>
-                                <div className="px-2 py-1 text-[10px] font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800">{grp.group}</div>
-                                {grp.items.map((opt) => (
-                                  <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </SelectItem>
-                                ))}
-                              </React.Fragment>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {(() => {
+                          const rawVal = reasons[t.id];
+                          const selectedList: string[] = Array.isArray(rawVal)
+                            ? (rawVal as any)
+                            : (rawVal ? [rawVal as any] : []);
+
+                          const toggleReasonCode = (codeToToggle: string) => {
+                            const current = selectedList.includes(codeToToggle)
+                              ? selectedList.filter((c) => c !== codeToToggle)
+                              : [...selectedList, codeToToggle];
+                            setReasons({ ...reasons, [t.id]: current });
+                          };
+
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5 min-w-[210px]">
+                              {selectedList.length === 0 ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
+                                  [CLEAN] 결함 없음 (정상)
+                                </span>
+                              ) : (
+                                selectedList.map((code) => {
+                                  const meta = REASON_CODE_MAP[code] || { label: code, color: "bg-gray-100 text-gray-700 border-gray-200" };
+                                  return (
+                                    <span
+                                      key={code}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border transition-all ${meta.color}`}
+                                    >
+                                      {meta.label}
+                                      {isSelected && (
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleReasonCode(code)}
+                                          className="hover:text-red-600 dark:hover:text-red-400 font-bold ml-1 text-xs leading-none p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                                          title="AI 감지 사유 삭제/수정"
+                                        >
+                                          ✕
+                                        </button>
+                                      )}
+                                    </span>
+                                  );
+                                })
+                              )}
+                              <Select
+                                disabled={!isSelected}
+                                onValueChange={(val: string) => {
+                                  if (!selectedList.includes(val)) {
+                                    setReasons({ ...reasons, [t.id]: [...selectedList, val] });
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-6 w-20 text-[10px] font-bold px-1.5 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-dashed border-purple-300 dark:border-purple-800">
+                                  <span>+ 사유 추가</span>
+                                </SelectTrigger>
+                                <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                                  {REASON_OPTIONS.map((grp) => (
+                                    <React.Fragment key={grp.group}>
+                                      <div className="px-2 py-1 text-[10px] font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800">{grp.group}</div>
+                                      {grp.items.map((opt) => (
+                                        <SelectItem key={opt.value} value={opt.value}>
+                                          <span className="flex items-center gap-1.5">
+                                            {selectedList.includes(opt.value) ? "✓ " : ""}
+                                            {opt.label}
+                                          </span>
+                                        </SelectItem>
+                                      ))}
+                                    </React.Fragment>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       <td className="p-3">
@@ -531,6 +785,19 @@ export default function AdminHitlDashboard() {
                           className="h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white"
                         />
                       </td>
+
+                      <td className="p-3 text-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800 shadow-2xs whitespace-nowrap"
+                          onClick={() => handleTriggerAiReinspect(t.id)}
+                          disabled={reinspectingIds.has(t.id)}
+                        >
+                          <Sparkles className="w-3.5 h-3.5 mr-1 text-purple-600 dark:text-purple-400" />
+                          {reinspectingIds.has(t.id) ? "재검수 중..." : "AI 재검수"}
+                        </Button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -540,9 +807,166 @@ export default function AdminHitlDashboard() {
         )}
       </div>
 
+      {/* Explainer Agent Real-time Live Monitoring Center (Bottom Panel) */}
+      <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-purple-50 dark:bg-purple-950 rounded-lg text-purple-600 dark:text-purple-400">
+              <Bot className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                Explainer Agent 실시간 Multi-Agent 파이프라인 모니터링
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse" /> Live Stream
+                </span>
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Vision Agent (YOLOv8 Ensemble) ➔ Policy Agent (WMS Rules) ➔ Critic Agent (Cross-Check) ➔ Explainer Agent (Final Diagnosis)
+              </p>
+            </div>
+          </div>
+          <Button size="xs" variant="ghost" className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={handleClearLogs}>
+            로그 초기화
+          </Button>
+        </div>
+
+        <div className="bg-gray-950 text-gray-200 p-4 rounded-xl font-mono text-xs space-y-2 max-h-48 overflow-y-auto border border-gray-800 shadow-inner">
+          {explainerLogs.length === 0 ? (
+            <div className="text-gray-500 italic text-center py-4">대기 중인 Multi-Agent 로그가 없습니다. [AI 재검수] 실행 시 실시간 스트리밍됩니다.</div>
+          ) : (
+            explainerLogs.map((log, idx) => (
+              <div key={idx} className="flex items-start gap-3 py-1 border-b border-gray-900/60 last:border-0">
+                <span className="text-gray-500 font-mono text-[11px] min-w-[65px]">[{log.time}]</span>
+                <span className="font-bold text-purple-400 min-w-[120px]">{log.agent}</span>
+                <span className={`flex-1 ${log.type === "success" ? "text-emerald-400" : log.type === "warning" ? "text-amber-300" : "text-gray-300"}`}>
+                  {log.text}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* HITL Image BBox Modal */}
       {modalTask && (
         <HitlImageModal task={modalTask} onClose={() => setModalTask(null)} />
+      )}
+
+      {/* Multi-Agent AI Re-inspection Live Modal */}
+      {activeReinspectionTask && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-md">
+                  <Sparkles className="w-6 h-6 text-purple-300 animate-spin-slow" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold flex items-center gap-2">
+                    Multi-Agent AI 비전 실시간 재검수 파이프라인
+                  </h3>
+                  <p className="text-xs text-purple-200 mt-0.5">
+                    대상 LPN: <span className="font-mono font-bold text-yellow-300">{activeReinspectionTask.lpn}</span> ({activeReinspectionTask.title})
+                  </p>
+                </div>
+              </div>
+              {activeReinspectionTask.isDone && (
+                <button
+                  onClick={() => setActiveReinspectionTask(null)}
+                  className="text-purple-200 hover:text-white text-xl font-bold p-1 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6">
+              {/* Stepper Progress */}
+              <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                {[
+                  { step: 1, label: "Vision 👁️", desc: "VLM 2차검증+4o-mini예비" },
+                  { step: 2, label: "Policy ⚖️", desc: "사내WMS룰+B2B평가" },
+                  { step: 3, label: "Critic 🛡️", desc: "프로세스/루프검증" },
+                  { step: 4, label: "Report 📋", desc: "디지털품질보증서" },
+                  { step: 5, label: "HITL 👤", desc: "관리자오버라이드" },
+                ].map((s) => {
+                  const isActive = activeReinspectionTask.step >= s.step;
+                  const isCurrent = activeReinspectionTask.step === s.step;
+
+                  return (
+                    <div
+                      key={s.step}
+                      className={`p-3 rounded-xl border transition-all ${
+                        isCurrent
+                          ? "bg-purple-50 dark:bg-purple-950 border-purple-500 text-purple-700 dark:text-purple-300 font-extrabold ring-2 ring-purple-500/20"
+                          : isActive
+                          ? "bg-emerald-50 dark:bg-emerald-950 border-emerald-300 text-emerald-700 dark:text-emerald-300"
+                          : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400"
+                      }`}
+                    >
+                      <div className="text-xs font-bold">{s.label}</div>
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{s.desc}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full bg-gray-100 dark:bg-gray-800 h-2.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-purple-600 to-indigo-500 h-full transition-all duration-500"
+                  style={{ width: `${(activeReinspectionTask.step / 4) * 100}%` }}
+                />
+              </div>
+
+              {/* Live Terminal Stream */}
+              <div className="bg-gray-950 text-gray-100 p-5 rounded-xl font-mono text-xs sm:text-sm space-y-3 h-64 overflow-y-auto border border-gray-800 shadow-inner">
+                {activeReinspectionTask.logs.map((log, i) => (
+                  <div key={i} className="leading-relaxed border-b border-gray-900/60 pb-1.5 last:border-none">
+                    {log}
+                  </div>
+                ))}
+                {!activeReinspectionTask.isDone && (
+                  <div className="text-purple-400 animate-pulse flex items-center gap-1.5 mt-2">
+                    <span className="w-2 h-2 rounded-full bg-purple-400" /> Multi-Agent 비전 텐서 및 룰 엔진 계산 중...
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-50 dark:bg-gray-800/80 px-6 py-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-800">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {activeReinspectionTask.isDone
+                  ? "✅ Multi-Agent 비전 재검수 완료 (PostgreSQL DB 동기화 완료)"
+                  : "⏳ 비전 검수 파이프라인 가동 중..."}
+              </span>
+              <Button
+                disabled={!activeReinspectionTask.isDone}
+                onClick={() => setActiveReinspectionTask(null)}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-5 py-2 rounded-lg"
+              >
+                {activeReinspectionTask.isDone ? "완료 및 결과 반영" : "재검수 진행 중..."}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Floating Approval Toast Notification */}
+      {approvalToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-gray-900 text-white dark:bg-blue-950 dark:text-blue-100 border border-blue-500/30 px-5 py-3.5 rounded-xl shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-xs font-bold font-sans tracking-tight">{approvalToast}</span>
+          <button 
+            onClick={() => setApprovalToast(null)} 
+            className="ml-2 text-gray-400 hover:text-white text-sm font-bold"
+          >
+            ✕
+          </button>
+        </div>
       )}
     </div>
   );

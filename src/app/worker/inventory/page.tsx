@@ -115,10 +115,10 @@ export default function WorkerInventoryPage() {
     }
 
     if (ubciScoreFilter !== 'ALL') {
-      if (ubciScoreFilter === '90_PLUS') result = result.filter((item) => item.ubci_score >= 90);
-      else if (ubciScoreFilter === '80_PLUS') result = result.filter((item) => item.ubci_score >= 80 && item.ubci_score < 90);
-      else if (ubciScoreFilter === '60_PLUS') result = result.filter((item) => item.ubci_score >= 60 && item.ubci_score < 80);
-      else if (ubciScoreFilter === 'UNDER_60') result = result.filter((item) => item.ubci_score < 60);
+      if (ubciScoreFilter === '90_PLUS') result = result.filter((item) => item.ubci_score >= 95);
+      else if (ubciScoreFilter === '80_PLUS') result = result.filter((item) => item.ubci_score >= 85 && item.ubci_score < 95);
+      else if (ubciScoreFilter === '60_PLUS') result = result.filter((item) => item.ubci_score >= 65 && item.ubci_score < 85);
+      else if (ubciScoreFilter === 'UNDER_60') result = result.filter((item) => item.ubci_score < 65);
     }
 
     result.sort((a, b) => {
@@ -148,7 +148,7 @@ export default function WorkerInventoryPage() {
         author: item.book.author,
         isbn: item.book.isbn,
       },
-      worker_id: item.worker_id,
+      worker_id: item.worker_id || 'WM2607001 (장문경)',
     });
   };
 
@@ -174,17 +174,20 @@ export default function WorkerInventoryPage() {
     ]);
   };
 
-  const getGradeBadge = (grade: string) => {
-    switch (grade) {
-      case 'MINT':
-        return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-extrabold rounded text-[11px] font-mono">MINT (90+)</span>;
-      case 'GOOD':
-        return <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 font-extrabold rounded text-[11px] font-mono">GOOD (70~89)</span>;
-      case 'NORMAL':
-        return <span className="px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-extrabold rounded text-[11px] font-mono">NORMAL (50~69)</span>;
-      default:
-        return <span className="px-2 py-0.5 bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-extrabold rounded text-[11px] font-mono">REJECT</span>;
+  const getGradeBadge = (grade: string, ubciScore?: number) => {
+    const g = (grade || '').toUpperCase();
+    const score = ubciScore !== undefined ? ubciScore : 85;
+
+    if (g === 'MINT' || g === 'S' || score >= 95) {
+      return <span className="px-2 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 font-extrabold rounded text-[11px] font-mono">S급 (MINT)</span>;
     }
+    if (g === 'GOOD' || g === 'A' || (score >= 85 && score < 95)) {
+      return <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-extrabold rounded text-[11px] font-mono">A급 (GOOD)</span>;
+    }
+    if (g === 'NORMAL' || g === 'B' || (score >= 65 && score < 85)) {
+      return <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 font-extrabold rounded text-[11px] font-mono">B급 (NORMAL)</span>;
+    }
+    return <span className="px-2 py-0.5 bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-extrabold rounded text-[11px] font-mono">C급 (REJECT)</span>;
   };
 
   return (
@@ -346,7 +349,7 @@ export default function WorkerInventoryPage() {
                     </td>
 
                     <td className="p-4 space-y-1">
-                      <div>{getGradeBadge(item.grade)}</div>
+                      <div>{getGradeBadge(item.grade, item.ubci_score)}</div>
                       <p className="text-[10px] text-gray-400 font-mono font-semibold">UBCI: {item.ubci_score}점</p>
                     </td>
 

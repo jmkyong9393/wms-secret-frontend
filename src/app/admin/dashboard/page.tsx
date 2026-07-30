@@ -55,11 +55,11 @@ const categoryData = [
   { name: '만화/웹툰', count: 220, fill: '#8b5cf6' },
 ];
 
-const ubciGradeData = [
+const ubciGradeDataDefault = [
   { name: 'MINT (90~100점)', value: 58, color: '#10b981' },
-  { name: 'GOOD (70~89점)', value: 28, color: '#3b82f6' },
-  { name: 'NORMAL (50~69점)', value: 10, color: '#f59e0b' },
-  { name: 'POOR (50점 미만)', value: 4, color: '#ef4444' },
+  { name: 'GOOD (75~89점)', value: 28, color: '#3b82f6' },
+  { name: 'NORMAL (60~74점)', value: 10, color: '#f59e0b' },
+  { name: 'REJECT (60점 미만)', value: 4, color: '#ef4444' },
 ];
 
 // Custom Recharts Tooltip Component for Pixel-Perfect Dark / Light Mode Support
@@ -85,6 +85,30 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function AdvancedDashboardPage() {
   const user = useAtomValue(userAtom);
+
+  const { data: kpi } = useQuery({
+    queryKey: ['dashboard-kpi'],
+    queryFn: async () => {
+      const res = await fetch('http://localhost:8000/api/v1/dashboard/kpi');
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: 5000,
+  });
+
+  const { data: charts } = useQuery({
+    queryKey: ['dashboard-charts'],
+    queryFn: async () => {
+      const res = await fetch('http://localhost:8000/api/v1/dashboard/charts');
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: 10000,
+  });
+
+  const ubciGradeData = charts?.ubci_grade_data || ubciGradeDataDefault;
+  const volumeDataChart = charts?.volume_data || volumeData;
+  const categoryDataChart = charts?.category_data || categoryData;
 
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 font-sans min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-200">
@@ -124,11 +148,13 @@ export default function AdvancedDashboardPage() {
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <span className="text-3xl font-black text-gray-900 dark:text-white font-mono tracking-tight">12,842</span>
+              <span className="text-3xl font-black text-gray-900 dark:text-white font-mono tracking-tight">
+                {kpi?.today_inspection !== undefined ? kpi.today_inspection.toLocaleString() : '0'}
+              </span>
               <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">건</span>
             </div>
             <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center">
-              <TrendingUp className="w-3 h-3 mr-1" />+18.6%
+              <TrendingUp className="w-3 h-3 mr-1" />실시간 동기화
             </span>
           </div>
         </div>
@@ -173,11 +199,13 @@ export default function AdvancedDashboardPage() {
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <span className="text-3xl font-black text-amber-600 dark:text-amber-400 font-mono tracking-tight">278</span>
+              <span className="text-3xl font-black text-amber-600 dark:text-amber-400 font-mono tracking-tight">
+                {kpi?.pending_issues !== undefined ? kpi.pending_issues.toLocaleString() : '0'}
+              </span>
               <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">건</span>
             </div>
             <span className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800">
-              처리 중
+              실시간 조율
             </span>
           </div>
         </div>
