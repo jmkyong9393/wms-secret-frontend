@@ -496,25 +496,28 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
 
         {/* 5 Cushion Materials Interactive Grid (Dynamic AI Recommended Cushion Tag Evaluation) */}
         {(() => {
-          const maxBookW = 188;
-          const maxBookD = 257;
-          const sideGapX = Math.max(0, boxW - maxBookW);
-          const sideGapY = Math.max(0, boxD - maxBookD);
-          const maxSideGap = Math.max(sideGapX, sideGapY);
+          // 3D Rotational Oriented Side Gap Calculation (Fix false side gap evaluation)
+          const bookW = 188;
+          const bookD = 257;
           const rawBookH = 47.7; // book1_H + book2_H
+
+          // Check both 0° and 90° rotations to find the best fit orientation
+          const gap1 = Math.max(Math.max(0, boxW - bookW), Math.max(0, boxD - bookD));
+          const gap2 = Math.max(Math.max(0, boxW - bookD), Math.max(0, boxD - bookW));
+          const orientedSideGap = Math.min(gap1, gap2);
           const voidZ = boxH - rawBookH;
 
-          // Dynamic AI Recommendation Rule:
-          // 1. Large Side Gap (>40mm) -> CUSH-04 (PE폼 4면 둘기)
-          // 2. Large Top Void (>20mm) -> CUSH-03 (뽁뽁이 상단 25mm 채움)
-          // 3. Slim Optimal Box -> CUSH-02 (친환경 벌집 종이)
+          // Dynamic AI Cushion Recommendation Rule matching AI 1st Best Pack:
+          // 1. Slim Optimal Box (BOOK-S1/S2 or low side gap <= 25mm) -> CUSH-02 (친환경 벌집 종이)
+          // 2. Large Top Void (>25mm) in deep box -> CUSH-03 (뽁뽁이 상단 25mm 채움)
+          // 3. Large Side Gap (>40mm) in standard wide box -> CUSH-04 (PE폼 4면 둘기)
           let dynamicRecommendedCushionId = "CUSH-02";
-          if (maxSideGap > 40) {
+          if (orientedSideGap > 40) {
             dynamicRecommendedCushionId = "CUSH-04";
-          } else if (voidZ > 20) {
+          } else if (voidZ > 25) {
             dynamicRecommendedCushionId = "CUSH-03";
-          } else if (voidZ <= 10) {
-            dynamicRecommendedCushionId = "CUSH-01";
+          } else {
+            dynamicRecommendedCushionId = "CUSH-02";
           }
 
           return (
@@ -604,9 +607,9 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
             const hasTopPad = (activeCushion.mode === 'top' || activeCushion.mode === 'both');
             const maxBookW = 188;
             const maxBookD = 257;
-            const sideGapX = Math.max(0, boxW - maxBookW);
-            const sideGapY = Math.max(0, boxD - maxBookD);
-            const maxSideGap = Math.max(sideGapX, sideGapY);
+            const gap1 = Math.max(Math.max(0, boxW - 188), Math.max(0, boxD - 257));
+            const gap2 = Math.max(Math.max(0, boxW - 257), Math.max(0, boxD - 188));
+            const maxSideGap = Math.min(gap1, gap2);
             const voidSpaceMM = Math.max(0, boxH - totalStackH);
 
             if (heightFillRatio > 100) {
