@@ -28,7 +28,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
   // 5 Real Industrial Cushion Materials Catalog (Top-Fill vs Side-Wrap vs All-Around)
   const cushionCatalog = [
     { id: "CUSH-01", name: "에어필로우 슬림패드", mode: "top", thick_mm: 9.0, thick: "9.0mm", target: "상단 유격 채움", desc: "상부 유격 충격 흡수 패드", isRec: false, color: "rgba(245, 158, 11, 0.8)", stroke: "rgba(180, 83, 9, 0.95)" },
-    { id: "CUSH-02", name: "친환경 벌집 종이", mode: "both", thick_mm: 12.0, thick: "12.0mm", target: "전면 래핑 패키징", desc: "양장본 프리미엄 친환경 래핑", isRec: true, color: "rgba(16, 185, 129, 0.85)", stroke: "rgba(4, 120, 87, 0.95)" },
+    { id: "CUSH-02", name: "친환경 벌집 종이", mode: "both", thick_mm: 12.0, thick: "12.0mm", target: "전면 래핑 패키징", desc: "양장본 프리미엄 친환경 래핑", isRec: false, color: "rgba(16, 185, 129, 0.85)", stroke: "rgba(4, 120, 87, 0.95)" },
     { id: "CUSH-03", name: "뽁뽁이 상단 25mm 채움", mode: "top", thick_mm: 25.0, thick: "25.0mm", target: "상단 집중 채움", desc: "뽁뽁이 3겹 상부 집중 채움", isRec: false, color: "rgba(245, 158, 11, 0.9)", stroke: "rgba(217, 119, 6, 0.95)" },
     { id: "CUSH-04", name: "PE폼/뽁뽁이 4면 둘기", mode: "side", thick_mm: 25.0, thick: "25.0mm", target: "측면 쏠림 방지", desc: "도서 4면 측면 25mm 둘기 가드", isRec: false, color: "rgba(6, 182, 212, 0.85)", stroke: "rgba(14, 116, 144, 0.95)" },
     { id: "CUSH-05", name: "에어 튜브 3D 범퍼", mode: "both", thick_mm: 20.0, thick: "20.0mm", target: "전방위 낙하 방지", desc: "초고위험 낙하 충격 3D 에어 범퍼", isRec: false, color: "rgba(99, 102, 241, 0.85)", stroke: "rgba(67, 56, 202, 0.95)" },
@@ -494,24 +494,58 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
           </span>
         </div>
 
-        {/* 5 Cushion Materials Interactive Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          {cushionCatalog.map((cush) => (
-            <div
-              key={cush.id}
-              onClick={() => setSelectedCushionId(cush.id)}
-              className={`p-2.5 rounded-xl border transition-all cursor-pointer space-y-1 ${
-                selectedCushionId === cush.id
-                  ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80 ring-2 ring-indigo-500/30'
-                  : 'bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-extrabold text-[10px] sm:text-[11px] text-gray-900 dark:text-white block leading-tight break-words">{cush.name}</span>
-                {cush.isRec && (
-                  <span className="text-[9px] font-bold bg-emerald-500 text-white px-1 rounded shrink-0">추천</span>
-                )}
-              </div>
+        {/* 5 Cushion Materials Interactive Grid (Dynamic AI Recommended Cushion Tag Evaluation) */}
+        {(() => {
+          const maxBookW = 188;
+          const maxBookD = 257;
+          const sideGapX = Math.max(0, boxW - maxBookW);
+          const sideGapY = Math.max(0, boxD - maxBookD);
+          const maxSideGap = Math.max(sideGapX, sideGapY);
+          const rawBookH = 47.7; // book1_H + book2_H
+          const voidZ = boxH - rawBookH;
+
+          // Dynamic AI Recommendation Rule:
+          // 1. Large Side Gap (>40mm) -> CUSH-04 (PE폼 4면 둘기)
+          // 2. Large Top Void (>20mm) -> CUSH-03 (뽁뽁이 상단 25mm 채움)
+          // 3. Slim Optimal Box -> CUSH-02 (친환경 벌집 종이)
+          let dynamicRecommendedCushionId = "CUSH-02";
+          if (maxSideGap > 40) {
+            dynamicRecommendedCushionId = "CUSH-04";
+          } else if (voidZ > 20) {
+            dynamicRecommendedCushionId = "CUSH-03";
+          } else if (voidZ <= 10) {
+            dynamicRecommendedCushionId = "CUSH-01";
+          }
+
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {cushionCatalog.map((cush) => {
+                const isRecommended = (cush.id === dynamicRecommendedCushionId);
+                return (
+                  <div
+                    key={cush.id}
+                    onClick={() => setSelectedCushionId(cush.id)}
+                    className={`p-2.5 rounded-xl border transition-all cursor-pointer space-y-1 ${
+                      selectedCushionId === cush.id
+                        ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80 ring-2 ring-indigo-500/30'
+                        : 'bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-[10px] sm:text-[11px] text-gray-900 dark:text-white block leading-tight break-words">{cush.name}</span>
+                      {isRecommended && (
+                        <span className="text-[9px] font-bold bg-emerald-500 text-white px-1 rounded shrink-0 shadow-xs animate-pulse">추천</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-bold">
+                      [{cush.mode === 'top' ? '상단채움' : cush.mode === 'side' ? '측면둘기' : '전방위래핑'}] ({cush.thick})
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
               <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-bold">
                 [{cush.mode === 'top' ? '상단채움' : cush.mode === 'side' ? '측면둘기' : '전방위래핑'}] ({cush.thick})
               </p>

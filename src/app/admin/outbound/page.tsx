@@ -34,7 +34,7 @@ interface BoxOption {
 
 const BOOK_SLIM_BOX_OPTIONS: BoxOption[] = [
   { id: "BOOK-S1", name: "도서슬림 소형 1호", specs: "250x150x50mm", desc: "단권 슬림형", eff: 98.2 },
-  { id: "BOOK-S2", name: "도서슬림 소형 2호 (추천)", specs: "250x150x60mm", desc: "도서 2권 밀착 슬림", eff: 94.5 },
+  { id: "BOOK-S2", name: "도서슬림 소형 2호", specs: "250x150x60mm", desc: "도서 2권 밀착 슬림", eff: 94.5 },
   { id: "BOOK-M1", name: "도서슬림 중형 1호", specs: "300x200x70mm", desc: "중형 도서 묶음", eff: 81.0 },
   { id: "BOOK-M2", name: "도서슬림 중형 2호", specs: "300x200x90mm", desc: "대형 도서 묶음", eff: 63.0 },
 ];
@@ -485,26 +485,32 @@ export default function OutboundDashboard() {
             </button>
           </div>
 
-          {/* 8-Box Tabbed Grid (4 Cards per Tab) */}
+          {/* 8-Box Tabbed Grid with Dynamic AI Best Recommendation Badge */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {(boxCategoryTab === 'slim' ? BOOK_SLIM_BOX_OPTIONS : STANDARD_COURIER_BOX_OPTIONS).map((box) => (
-              <div 
-                key={box.id}
-                onClick={() => handleSelectBox(box)}
-                className={`p-3 rounded-xl border transition-all cursor-pointer space-y-1 ${
-                  selectedBoxId === box.id 
-                    ? 'bg-indigo-50/70 dark:bg-indigo-950/70 border-indigo-500 ring-2 ring-indigo-500/30' 
-                    : 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-[11px] text-gray-900 dark:text-white truncate">{box.name}</span>
-                  {selectedBoxId === box.id && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />}
+            {(boxCategoryTab === 'slim' ? BOOK_SLIM_BOX_OPTIONS : STANDARD_COURIER_BOX_OPTIONS).map((box) => {
+              // Dynamic AI Box Recommendation: BOOK-S2 for slim tab, STD-01 for standard tab
+              const isRecommendedBox = (boxCategoryTab === 'slim' && box.id === 'BOOK-S2') || (boxCategoryTab === 'standard' && box.id === 'STD-01');
+              return (
+                <div 
+                  key={box.id}
+                  onClick={() => handleSelectBox(box)}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer space-y-1 ${
+                    selectedBoxId === box.id 
+                      ? 'bg-indigo-50/70 dark:bg-indigo-950/70 border-indigo-500 ring-2 ring-indigo-500/30' 
+                      : 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-[11px] text-gray-900 dark:text-white truncate">{box.name}</span>
+                    {isRecommendedBox && (
+                      <span className="text-[9px] font-extrabold bg-emerald-500 text-white px-1.5 py-0.5 rounded shrink-0 shadow-xs animate-pulse">추천</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] font-mono text-gray-500 dark:text-gray-400">{box.specs}</p>
+                  <p className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400">적재율 {box.eff}%</p>
                 </div>
-                <p className="text-[10px] font-mono text-gray-500 dark:text-gray-400">{box.specs}</p>
-                <p className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400">적재율 {box.eff}%</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Interactive WebGL/CSS 3D Bin Packing Simulator */}
