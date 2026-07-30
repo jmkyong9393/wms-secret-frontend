@@ -137,98 +137,89 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     const hd = boxD / 2;
     const bh = boxH;
 
-    // Draw Main Outer Box Walls (Bottom, Front, Back, Left, Right)
+    // Draw Main Outer Box Walls (Crisp Indigo Wireframe for White Background)
     drawCuboid(
       0, 0, 0,
       boxW, boxD, bh,
-      'rgba(99, 102, 241, 0.04)',
-      'rgba(129, 140, 248, 0.85)',
-      'rgba(165, 180, 252, 0.02)', // Translucent Top Rim
-      'rgba(99, 102, 241, 0.08)'
+      'rgba(79, 70, 229, 0.04)',
+      'rgba(79, 70, 229, 0.85)',
+      'rgba(99, 102, 241, 0.06)',
+      'rgba(67, 56, 202, 0.06)'
     );
 
     // Draw 4 Open Box Flaps Extending Outwards/Upwards at 45 Degrees!
     const flapLen = Math.min(45, bh * 0.35);
-    const flapAng = Math.PI / 4; // 45 deg
+    const flapAng = Math.PI / 4;
 
-    // Top Rim 4 Vertices
     const topV4 = project(-hw, bh, -hd);
     const topV5 = project(hw, bh, -hd);
     const topV6 = project(hw, bh, hd);
     const topV7 = project(-hw, bh, hd);
 
-    // Flap Outer Extended Coordinates
     const flapFront1 = project(-hw, bh + flapLen * Math.sin(flapAng), -hd - flapLen * Math.cos(flapAng));
     const flapFront2 = project(hw, bh + flapLen * Math.sin(flapAng), -hd - flapLen * Math.cos(flapAng));
 
     const flapRight1 = project(hw + flapLen * Math.cos(flapAng), bh + flapLen * Math.sin(flapAng), -hd);
     const flapRight2 = project(hw + flapLen * Math.cos(flapAng), bh + flapLen * Math.sin(flapAng), hd);
 
-    // Draw Front Open Flap
+    // Front Open Flap
     ctx.beginPath();
     ctx.moveTo(topV4.px, topV4.py);
     ctx.lineTo(topV5.px, topV5.py);
     ctx.lineTo(flapFront2.px, flapFront2.py);
     ctx.lineTo(flapFront1.px, flapFront1.py);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(129, 140, 248, 0.18)';
+    ctx.fillStyle = 'rgba(99, 102, 241, 0.12)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(165, 180, 252, 0.9)';
+    ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Draw Right Open Flap
+    // Right Open Flap
     ctx.beginPath();
     ctx.moveTo(topV5.px, topV5.py);
     ctx.lineTo(topV6.px, topV6.py);
     ctx.lineTo(flapRight2.px, flapRight2.py);
     ctx.lineTo(flapRight1.px, flapRight1.py);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
+    ctx.fillStyle = 'rgba(79, 70, 229, 0.1)';
     ctx.fill();
     ctx.stroke();
 
 
-    // 2. STACKED LAYERS WITH SNUG FIT (94% FIT RATIO, NO EMPTY VOID!)
-    
-    // Total available height inside box = bh (e.g. 150mm)
-    // Book 1 (Bottom: Softcover Novel "Do it! 점프 투 파이썬") -> 38% height
+    // 2. STACKED LAYERS WITH SNUG FIT (Vivid High Contrast against White Canvas)
     const book1H = Math.round(bh * 0.38); 
-
-    // Book 2 (Middle: Hardcover Novel "SQL 자격검정 실전문제") -> 46% height
     const book2H = Math.round(bh * 0.46); 
-
-    // Air Cushion Pad Layer (Top: Air Cushion Pillow Layer) -> 12% height (Snug Fill!)
     const airH = Math.round(bh * 0.12);
 
     // LAYER 1: Bottom Python Book (Vibrant Purple / Violet)
     drawCuboid(
       0, 2, 0,
       boxW * 0.94, boxD * 0.94, book1H,
-      'rgba(147, 51, 234, 0.88)',
-      'rgba(233, 213, 255, 0.95)',
+      'rgba(147, 51, 234, 0.9)',
+      'rgba(107, 33, 168, 0.95)',
       'rgba(168, 85, 247, 0.95)',
-      'rgba(126, 34, 206, 0.9)'
+      'rgba(126, 34, 206, 0.92)'
     );
 
     // LAYER 2: Middle SQL Book (Vibrant Emerald / Teal)
     drawCuboid(
       0, 2 + book1H + 2, 0,
       boxW * 0.94, boxD * 0.94, book2H,
-      'rgba(16, 185, 129, 0.88)',
-      'rgba(167, 243, 208, 0.95)',
+      'rgba(16, 185, 129, 0.9)',
+      'rgba(6, 95, 70, 0.95)',
       'rgba(52, 211, 153, 0.95)',
-      'rgba(4, 120, 87, 0.9)'
+      'rgba(4, 120, 87, 0.92)'
     );
 
-    // LAYER 3: Top Air Cushion Pad Layer (Vibrant Amber / Cushion Padding) -> SNUG 94% FULL HEIGHT FILL!
+    // LAYER 3: Top Air Cushion Pad Layer (Vibrant Amber / Gold)
     drawCuboid(
       0, 2 + book1H + book2H + 4, 0,
       boxW * 0.95, boxD * 0.95, airH,
-      'rgba(245, 158, 11, 0.65)',
-      'rgba(254, 243, 199, 0.95)',
-      'rgba(251, 191, 36, 0.85)',
-      'rgba(180, 83, 9, 0.7)'
+      'rgba(245, 158, 11, 0.75)',
+      'rgba(180, 83, 9, 0.95)',
+      'rgba(251, 191, 36, 0.9)',
+      'rgba(217, 119, 6, 0.85)'
     );
 
   }, [rotX, rotY, boxW, boxD, boxH, zoomLevel]);
@@ -301,11 +292,11 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
             <h4 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <span>Real 3D Open-Box Bin Packing 시뮬레이터</span>
               <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded text-[10px] font-mono font-extrabold uppercase tracking-wide">
-                Open-Flap 3D v3.0
+                Canvas 3D v3.1
               </span>
             </h4>
             <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-              상단 뚜껑 열린 박스 및 밀착 적재 시뮬레이션 ({boxW}W × {boxD}D × {boxH}H mm)
+              화이트 테마 3D 공간 & 오픈 박스 시뮬레이션 ({boxW}W × {boxD}D × {boxH}H mm)
             </p>
           </div>
         </div>
@@ -372,36 +363,33 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </div>
       </div>
 
-      {/* Real 3D HTML5 Canvas Viewport with Open Flaps Box */}
+      {/* Real 3D HTML5 Canvas Viewport with Clean WHITE Theme Backdrop */}
       <div
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        className="h-72 w-full bg-slate-900 dark:bg-slate-950 rounded-2xl border border-slate-800 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-inner"
+        className="h-72 w-full bg-slate-50 dark:bg-slate-900/90 rounded-2xl border border-gray-200 dark:border-gray-800 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-inner"
       >
-        {/* Clean Neutral Charcoal Grid Background */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-
-        {/* Ambient Radial Lighting Glow */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.08)_0%,transparent_70%)] pointer-events-none" />
+        {/* Subtle Soft Gray Grid Background for White Theme */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(0,0,0,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.05)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
 
         {/* 3D Canvas */}
         <canvas ref={canvasRef} width={600} height={280} className="w-full h-full object-contain" />
 
         {/* Dynamic Volume Fill Ratio Badge */}
-        <div className="absolute bottom-3 left-3 bg-slate-900/90 border border-slate-700/80 px-3 py-1.5 rounded-xl flex items-center gap-2 backdrop-blur-md">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-          <span className="text-xs font-mono text-slate-300">공간 밀착 적재율:</span>
-          <span className="text-sm font-black font-mono text-emerald-400">{selectedBox.eff}%</span>
+        <div className="absolute bottom-3 left-3 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl flex items-center gap-2 backdrop-blur-md shadow-xs">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+          <span className="text-xs font-mono text-gray-600 dark:text-gray-300">공간 밀착 적재율:</span>
+          <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">{selectedBox.eff}%</span>
         </div>
 
         {/* Rotate Toggle Button */}
         <button
           onClick={() => setAutoRotate(!autoRotate)}
-          className="absolute bottom-3 right-3 bg-slate-800/90 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl border border-slate-700 transition flex items-center gap-1.5 text-xs font-bold shadow-md"
+          className="absolute bottom-3 right-3 bg-white/90 dark:bg-gray-800/90 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 transition flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer"
         >
-          <RotateCw className={`w-3.5 h-3.5 ${autoRotate ? 'animate-spin text-indigo-400' : ''}`} />
+          <RotateCw className={`w-3.5 h-3.5 ${autoRotate ? 'animate-spin text-indigo-600 dark:text-indigo-400' : ''}`} />
           <span>{autoRotate ? '자동 회전 중' : '360° 회전'}</span>
         </button>
       </div>
@@ -409,7 +397,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
       {/* High-Contrast Distinct Stacking Layer Item Legend Panel */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-sans">
         {/* Amber Layer: Cushion Pad */}
-        <div className="flex items-center gap-2.5 p-2.5 bg-amber-50/70 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/80">
+        <div className="flex items-center gap-2.5 p-2.5 bg-amber-50/80 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/80">
           <div className="w-4 h-3 rounded bg-amber-500 shrink-0 shadow-xs border border-amber-600" />
           <div className="truncate">
             <span className="font-extrabold text-amber-900 dark:text-amber-200 block text-[11px]">상단: 완충재 Pad Layer</span>
@@ -418,7 +406,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </div>
 
         {/* Emerald Layer: SQL Hardcover */}
-        <div className="flex items-center gap-2.5 p-2.5 bg-emerald-50/70 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800/80">
+        <div className="flex items-center gap-2.5 p-2.5 bg-emerald-50/80 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800/80">
           <div className="w-4 h-4 rounded bg-emerald-500 shrink-0 shadow-xs border border-emerald-600" />
           <div className="truncate">
             <span className="font-extrabold text-emerald-900 dark:text-emerald-200 block text-[11px]">중단: SQL 자격검정</span>
@@ -427,7 +415,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </div>
 
         {/* Purple Layer: Python Softcover */}
-        <div className="flex items-center gap-2.5 p-2.5 bg-purple-50/70 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800/80">
+        <div className="flex items-center gap-2.5 p-2.5 bg-purple-50/80 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800/80">
           <div className="w-4 h-4 rounded bg-purple-600 shrink-0 shadow-xs border border-purple-700" />
           <div className="truncate">
             <span className="font-extrabold text-purple-900 dark:text-purple-200 block text-[11px]">하단: 점프 투 파이썬</span>
@@ -441,7 +429,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-300">
             <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span>AI Multi-Agent 3D Pack Optimizer 밀착 적재 분석 결과</span>
+            <span>AI Multi-Agent 3D Pack Optimizer 화이트 테마 추론 결과</span>
           </div>
           <span className="text-[10px] font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 font-bold">
             CONFIDENCE: 99.4%
@@ -473,35 +461,36 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </div>
       </div>
 
-      {/* Fullscreen 2.5X Enlargement Modal */}
+      {/* Fullscreen 2.5X Enlargement Modal (White Theme Redesigned!) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-indigo-500/40 w-full max-w-4xl rounded-2xl p-6 space-y-4 shadow-2xl relative">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2 text-white">
-                <Cpu className="w-6 h-6 text-indigo-400" />
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 w-full max-w-4xl rounded-2xl p-6 space-y-4 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
+              <div className="flex items-center gap-2 text-gray-900 dark:text-white">
+                <Cpu className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
                 <h3 className="text-lg font-black">Real 3D Open-Box Bin Packing 시뮬레이터 2.5X 관제</h3>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800 hover:bg-slate-700 transition cursor-pointer"
+                className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-xl bg-gray-100 dark:bg-gray-800 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Clean White Modal Viewport */}
             <div
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
-              className="h-96 w-full bg-slate-950 rounded-2xl border border-slate-800 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none"
+              className="h-96 w-full bg-slate-50 dark:bg-slate-950 rounded-2xl border border-gray-200 dark:border-gray-800 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none"
             >
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:30px_30px]" />
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(0,0,0,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.05)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:30px_30px]" />
               <canvas ref={modalCanvasRef} width={840} height={380} className="w-full h-full object-contain" />
             </div>
 
-            <div className="flex items-center justify-between text-xs text-slate-300 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300 pt-2 border-t border-gray-200 dark:border-gray-800">
               <span className="font-mono">규격: {selectedBox.specs} | 공간 밀착 적재율: {selectedBox.eff}%</span>
               <button
                 onClick={() => setIsModalOpen(false)}
