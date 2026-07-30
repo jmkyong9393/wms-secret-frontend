@@ -392,7 +392,7 @@ export default function OutboundDashboard() {
               {mockOrder?.discount_rate || '25%'}
             </span>
             <span className="text-xs text-blue-600 dark:text-blue-400 font-bold bg-blue-50 dark:bg-blue-950/60 px-2 py-1 rounded">
-              {mockOrder?.trend_badge_text || '카테고리 트렌드 보정: 0% (스테디셀러)'}
+              {mockOrder?.trend_badge_text || '비부패성 보관료 방어: -3.2% (120일 체류)'}
             </span>
           </div>
         </div>
