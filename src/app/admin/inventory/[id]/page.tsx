@@ -35,7 +35,7 @@ export default function InventoryDetailPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
     const [activePrintData, setActivePrintData] = useState<LpnLabelData | null>(null);
-  const [selectedImgIdx, setSelectedImgIdx] = useState<number>(3);
+  const [selectedImgIdx, setSelectedImgIdx] = useState<number>(0);
 
   useEffect(() => {
     if (!inventoryId) return;
@@ -236,8 +236,11 @@ export default function InventoryDetailPage() {
             <div className="md:col-span-2 relative bg-gray-900 rounded-xl overflow-hidden shadow-inner border border-gray-800 flex justify-center items-center p-2 min-h-[480px]">
               <div className="relative inline-block max-w-full rounded-lg overflow-hidden border border-gray-800 shadow-2xl">
                 <img
-                  src={resolveInspectionImages(data)[selectedImgIdx]}
+                  src={resolveInspectionImages(data)[selectedImgIdx] || resolveInspectionImages(data)[0]}
                   alt={`Scanned Image ${selectedImgIdx}`}
+                  onError={(e: any) => {
+                    e.target.src = resolveInspectionImages(data)[0] || "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500";
+                  }}
                   className="max-h-[520px] w-auto object-contain block"
                 />
                 
