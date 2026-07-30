@@ -112,7 +112,7 @@ export default function InspectionsPage() {
               ubci_score: it.ubci_score || 85,
               ai_confidence: 98.5,
               reviewer: 'WM2607001 (장문경)',
-              defect_summary: '수험서/문제집 내지 필기/낙서 (-15점 단일 고정 Cap 판독)',
+              defect_summary: (it.ubci_score >= 90 || it.grade === 'MINT' || it.grade === 'S' ? `MINT (${it.ubci_score || 95}점): 0-Defect 최상급 보존` : `GOOD (${it.ubci_score || 85}점): 표지 모서리 마모 및 내지 미세 필기 감가 산출`),
               processed_at: it.date || new Date().toISOString().substring(0, 19).replace('T', ' '),
               agent_logs: it.agent_logs || { defect_coordinates: resolveDefectCoordinates(it) },
               status: 'COMPLETED',
@@ -131,7 +131,7 @@ export default function InspectionsPage() {
               ],
               agent_votes: {
                 yolo: { grade: 'GOOD', score: 98.5 },
-                policy: { grade: 'GOOD', comment: '수험서/문제집 룰 적용: 내지 필기/낙서 (-15점) 단일 Cap' },
+                policy: { grade: 'GOOD', comment: 'WMS 표준 규정 연산: 표지 마모 및 내지 필기 감가 산출' },
                 critic: { approved: true, comment: '문제집 특성 검증: 문제풀이 필기 면적률 15% 미만 승인' },
                 restock: { reorder_needed: false, qty: 0 }
               }
@@ -184,7 +184,7 @@ export default function InspectionsPage() {
               ubci_score: it.ubci_score || 85,
               ai_confidence: 98.5,
               reviewer: 'WM2607001 (장문경)',
-              defect_summary: '수험서/문제집 내지 필기/낙서 (-15점 단일 고정 Cap 판독)',
+              defect_summary: (it.ubci_score >= 90 || it.grade === 'MINT' || it.grade === 'S' ? `MINT (${it.ubci_score || 95}점): 0-Defect 최상급 보존` : `GOOD (${it.ubci_score || 85}점): 표지 모서리 마모 및 내지 미세 필기 감가 산출`),
               processed_at: it.date || new Date().toISOString().substring(0, 19).replace('T', ' '),
               agent_logs: it.agent_logs || { defect_coordinates: resolveDefectCoordinates(it) },
               status: 'COMPLETED',
@@ -203,7 +203,7 @@ export default function InspectionsPage() {
               ],
               agent_votes: {
                 yolo: { grade: 'GOOD', score: 98.5 },
-                policy: { grade: 'GOOD', comment: '수험서/문제집 룰 적용: 내지 필기/낙서 (-15점) 단일 Cap' },
+                policy: { grade: 'GOOD', comment: 'WMS 표준 규정 연산: 표지 마모 및 내지 필기 감가 산출' },
                 critic: { approved: true, comment: '문제집 특성 검증: 문제풀이 필기 면적률 15% 미만 승인' },
                 restock: { reorder_needed: false, qty: 0 }
               }
@@ -283,7 +283,7 @@ export default function InspectionsPage() {
                 <th className="py-3 px-3 whitespace-nowrap">검수 ID / 일시</th>
                 <th className="py-3 px-3 whitespace-nowrap">LPN 바코드</th>
                 <th className="py-3 px-3 min-w-[200px]">도서 정보</th>
-                <th className="py-3 px-3 text-center whitespace-nowrap">다각도 스캔</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap">검수 촬영 이미지</th>
                 <th className="py-3 px-3 text-center whitespace-nowrap">AI 등급</th>
                 <th className="py-3 px-3 text-center whitespace-nowrap">최종 결정</th>
                 <th className="py-3 px-3 text-center whitespace-nowrap">판정 주체</th>
@@ -309,7 +309,7 @@ export default function InspectionsPage() {
                       className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-lg font-mono font-bold text-[11px] whitespace-nowrap cursor-pointer transition-all shadow-2xs"
                     >
                       <ImageIcon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                      <span className="whitespace-nowrap">{r.image_urls?.length || 7}개 각도</span>
+                      <span className="whitespace-nowrap">{resolveInspectionImages(r).length}장 이미지</span>
                     </button>
                   </td>
                   <td className="py-3.5 px-3 text-center font-mono whitespace-nowrap">
@@ -344,7 +344,7 @@ export default function InspectionsPage() {
                       className="px-3 py-1.5 bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 font-bold rounded-lg transition-colors text-xs inline-flex items-center gap-1 border border-blue-200 dark:border-blue-800 cursor-pointer whitespace-nowrap"
                     >
                       <Eye className="w-3.5 h-3.5 shrink-0" />
-                      <span className="whitespace-nowrap">다각도 AI 리포트</span>
+                      <span className="whitespace-nowrap">AI 검수 리포트</span>
                     </button>
                   </td>
                 </tr>
