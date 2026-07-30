@@ -571,8 +571,28 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
           </span>
         </div>
         <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-sans">
-          {aiRecommendationLog ||
-            `"실제 도서 규격(56.7mm)을 고정 맵핑한 결과, 높이 150mm/200mm 박스는 상부 유격을 유발하므로, 도서 슬림 전용 ${activeBox.name}(높이 ${boxH}mm) 선택 시 박스 높이 적재율 ${heightFillRatio}%로 가장 완벽히 밀착 적재됩니다."`}
+          {(() => {
+            const hasSideGuard = (activeCushion.mode === 'side' || activeCushion.mode === 'both');
+            const hasTopPad = (activeCushion.mode === 'top' || activeCushion.mode === 'both');
+            const maxBookW = 188;
+            const maxBookD = 257;
+            const sideGapX = Math.max(0, boxW - maxBookW);
+            const sideGapY = Math.max(0, boxD - maxBookD);
+            const maxSideGap = Math.max(sideGapX, sideGapY);
+            const voidSpaceMM = Math.max(0, boxH - totalStackH);
+
+            if (heightFillRatio > 100) {
+              return `"⚠️ [높이 초과 위험] 선택하신 ${activeBox.name}(높이 ${boxH}mm)은 적재 높이(${totalStackH}mm) 대비 용량이 부족하여 박스 덮개가 닫히지 않고 ${round(heightFillRatio - 100, 1)}% 높이 초과(OVERFLOW)가 발생합니다. 더 높이가 충분한 도서슬림 소형 2호(60mm) 선택을 권장합니다."`;
+            } else if (heightFillRatio < 75) {
+              return `"⚠️ [상부 유격 방치] 선택하신 ${activeBox.name}(높이 ${boxH}mm)은 상부 유격 공간이 ${round(voidSpaceMM, 1)}mm 과다 발생하여 택배 상자 찌그러짐 위험이 존재합니다. 완충재 상단 채움 패드 적용이나 슬림 박스 전환을 추천합니다."`;
+            } else if (maxSideGap > 40 && !hasSideGuard) {
+              return `"⚠️ [측면 쏠림 주의] 선택하신 ${activeBox.name}은 횡방향 측면 유격이 ${round(maxSideGap, 1)}mm 발생하여 운송 중 도서 쏠림 및 모서리 파손 위험이 큽니다. [PE폼/뽁뽁이 4면 둘기] 가드 적용 시 파손 방지 안전 점수가 대폭 향상됩니다."`;
+            } else if (activeBox.id === 'BOOK-S2' && activeCushion.id === 'CUSH-02') {
+              return `"✨ [AI 1위 최적화 완공] 도서 스택(47.7mm)과 ${activeCushion.name}(${activeCushion.thick}) 결합 시, Z축 높이 적재율 ${heightFillRatio}% 및 3D 부피 적재율 ${volumeFillRatio}%로 박스 유격을 완벽히 밀착 흡수하며, 파손 방지 안전 등급 SAFE (A+)를 달성했습니다."`;
+            } else {
+              return `"📦 [실시간 패킹 평가] 선택하신 ${activeBox.name}(${boxW}x${boxD}x${boxH}mm)과 ${activeCushion.name}(${activeCushion.thick}) 조합 평가 결과, Z축 적재율 ${heightFillRatio}% 및 3D 부피 적재율 ${volumeFillRatio}%로 적재 관제가 수행되고 있습니다."`;
+            }
+          })()}
         </p>
       </div>
 
