@@ -369,16 +369,30 @@ export default function OutboundDashboard() {
 
       {/* Outbound KPI 3대 카드 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800 shadow-xs">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-indigo-200 dark:border-indigo-900/60 shadow-xs ring-1 ring-indigo-500/10">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider">AI 추천 박스</span>
+            <span className="text-xs text-indigo-600 dark:text-indigo-400 font-extrabold uppercase tracking-wider flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5" /> AI 1위 추천 박스 & 완충재 팩
+            </span>
             <Box className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="flex items-end justify-between">
-            <span className="text-xl font-black text-indigo-700 dark:text-indigo-400 font-mono">
-              {mockBoxName || 'Standard-Box-B'}
-            </span>
-            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded">공간효율 {activeBox.eff}%</span>
+            <div>
+              <span className="text-base sm:text-lg font-black text-indigo-900 dark:text-indigo-200 font-mono block">
+                BOOK-S2 + 벌집종이 (12mm)
+              </span>
+              <span className="text-[11px] text-gray-500 dark:text-gray-400 font-bold block">
+                도서슬림 소형 2호 (250x150x60mm)
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-black bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded block">
+                공간효율 94.5%
+              </span>
+              <span className="text-[10px] text-indigo-600 dark:text-indigo-300 font-bold block pt-0.5">
+                SAFE (A+) 등급
+              </span>
+            </div>
           </div>
         </div>
 
@@ -459,7 +473,7 @@ export default function OutboundDashboard() {
           <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Box className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> 3D Bin Packing 규격 박스 추천
           </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400">도서 사양(신국판/하드커버 등)을 3D 시뮬레이션하여 완충재 비용 및 적재 효율을 최적화합니다.</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">작업자가 8종 규격 박스 및 5종 완충재를 시뮬레이터에서 직접 선택하여 3D 유격 및 파손 방지 등급을 사전 검수 후 출고 패킹을 확정합니다.</p>
 
           {/* Category Tab Switcher: Book Slim vs Standard Courier */}
           <div className="flex items-center justify-between gap-2 bg-gray-100 dark:bg-gray-800/80 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs">
