@@ -53,9 +53,13 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
 
   const airPad_H = 9.0; // Air Pad Cushion Fixed Height (mm)
 
-  // Real Dynamic Fill Ratio Calculation
+  // REAL DYNAMIC METRIC DUAL SEPARATION (PHYSICAL Z-HEIGHT VS 3D VOLUME)
   const totalStackH = book1_H + book2_H + airPad_H; // 56.7mm
-  const realHeightFillEff = Math.min(96.5, round((totalStackH / boxH) * 100, 1));
+  const heightFillRatio = round((totalStackH / boxH) * 100, 1); // Exact Z-height ratio (e.g. 113.4% in 50mm box!)
+
+  const totalStackVol = (book1_W * book1_D * book1_H) + (book2_W * book2_D * book2_H) + (book1_W * book1_D * airPad_H);
+  const totalBoxVol = boxW * boxD * boxH;
+  const volumeFillRatio = round((totalStackVol / totalBoxVol) * 100, 1); // Exact 3D Volume ratio
 
   function round(val: number, decimals: number) {
     const factor = Math.pow(10, decimals);
@@ -412,11 +416,22 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         {/* 3D Canvas */}
         <canvas ref={canvasRef} width={600} height={280} className="w-full h-full object-contain" />
 
-        {/* Dynamic Real Height Fill Ratio Badge */}
-        <div className="absolute bottom-3 left-3 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl flex items-center gap-2 backdrop-blur-md shadow-xs">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-          <span className="text-xs font-mono text-gray-600 dark:text-gray-300">박스 높이 적재율:</span>
-          <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">{realHeightFillEff}%</span>
+        {/* Dual Metric Display Badges: Z-Height Ratio vs 3D Volume Ratio */}
+        <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-2">
+          {/* Badge 1: Z-Height Ratio */}
+          <div className="bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl flex items-center gap-2 backdrop-blur-md shadow-xs">
+            <div className={`w-2.5 h-2.5 rounded-full ${heightFillRatio > 100 ? 'bg-red-500 animate-ping' : 'bg-emerald-500 animate-ping'}`} />
+            <span className="text-xs font-mono text-gray-600 dark:text-gray-300">📏 높이 적재율:</span>
+            <span className={`text-sm font-black font-mono ${heightFillRatio > 100 ? 'text-red-600 dark:text-red-400 font-extrabold' : 'text-emerald-600 dark:text-emerald-400'}`}>
+              {heightFillRatio}% {heightFillRatio > 100 ? '(초과!)' : ''}
+            </span>
+          </div>
+
+          {/* Badge 2: 3D Volume Ratio */}
+          <div className="bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl flex items-center gap-2 backdrop-blur-md shadow-xs">
+            <span className="text-xs font-mono text-gray-600 dark:text-gray-300">📦 3D 부피 적재율:</span>
+            <span className="text-sm font-black font-mono text-indigo-600 dark:text-indigo-400">{volumeFillRatio}%</span>
+          </div>
         </div>
 
         {/* Rotate Toggle Button */}
@@ -476,21 +491,26 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </p>
       </div>
 
-      {/* Dynamic Height Fill Safety Grade Calculation */}
+      {/* Dynamic Height Fill Safety Grade & Dual Metric Calculation */}
       {(() => {
         const stackH = 56.7;
-        const heightFillRatio = Math.min(100, (stackH / boxH) * 100);
+        const exactHeightRatio = round((stackH / boxH) * 100, 1);
         const voidSpaceMM = Math.max(0, boxH - stackH);
         
-        let score = (heightFillRatio / 100) * 65 + 20 + 15;
-        if (heightFillRatio < 85) {
-          score -= (voidSpaceMM / boxH) * 45;
+        let score = (Math.min(100, exactHeightRatio) / 100) * 65 + 20 + 15;
+        if (exactHeightRatio > 100) {
+          score -= (exactHeightRatio - 100) * 1.5; // Overflow penalty
+        } else if (exactHeightRatio < 85) {
+          score -= (voidSpaceMM / boxH) * 45; // Void penalty
         }
         score = Math.max(15, Math.round(score * 10) / 10);
 
         let badge = "SAFE (A+)";
         let colorClass = "text-emerald-600 dark:text-emerald-400";
-        if (score < 45) {
+        if (exactHeightRatio > 100) {
+          badge = "OVERFLOW (C)";
+          colorClass = "text-red-600 dark:text-red-400";
+        } else if (score < 45) {
           badge = "HAZARD (D)";
           colorClass = "text-red-600 dark:text-red-400";
         } else if (score < 60) {
@@ -505,21 +525,27 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         }
 
         return (
-          <div className="grid grid-cols-3 gap-3 text-center text-xs pt-1 border-t border-gray-200 dark:border-gray-800">
+          <div className="grid grid-cols-4 gap-2 text-center text-xs pt-1 border-t border-gray-200 dark:border-gray-800">
             <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
               <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">선택 규격 박스</span>
-              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm">{activeBox.name}</span>
+              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs truncate block">{activeBox.name}</span>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
-              <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">실제 적재 높이</span>
-              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm flex items-center justify-center gap-1">
-                <PackageCheck className="w-4 h-4 text-indigo-500" /> 56.7mm / {boxH}mm ({Math.round(heightFillRatio)}%)
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">Z축 높이 적재율</span>
+              <span className={`font-mono font-bold text-xs flex items-center justify-center gap-1 ${exactHeightRatio > 100 ? 'text-red-600 dark:text-red-400 font-extrabold' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                <PackageCheck className="w-3.5 h-3.5" /> 56.7mm / {boxH}mm ({exactHeightRatio}%)
+              </span>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">3D 부피 적재율</span>
+              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs">
+                {volumeFillRatio}%
               </span>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
               <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">파손 방지 안전 등급</span>
-              <span className={`font-mono font-bold text-sm flex items-center justify-center gap-1 ${colorClass}`}>
-                <ShieldCheck className="w-4 h-4" /> {badge} [{score}점]
+              <span className={`font-mono font-bold text-xs flex items-center justify-center gap-1 ${colorClass}`}>
+                <ShieldCheck className="w-3.5 h-3.5" /> {badge} [{score}점]
               </span>
             </div>
           </div>
