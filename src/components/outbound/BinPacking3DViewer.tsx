@@ -112,51 +112,46 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
       const hw = w / 2;
       const hd = d / 2;
       
+      // 8 Vertices of the 3D Cuboid
       const v = [
-        project(origX - hw, origY, origZ - hd),
-        project(origX + hw, origY, origZ - hd),
-        project(origX + hw, origY, origZ + hd),
-        project(origX - hw, origY, origZ + hd),
-        project(origX - hw, origY + h, origZ - hd),
-        project(origX + hw, origY + h, origZ - hd),
-        project(origX + hw, origY + h, origZ + hd),
-        project(origX - hw, origY + h, origZ + hd),
+        project(origX - hw, origY, origZ - hd),     // 0: Front-Left-Bottom
+        project(origX + hw, origY, origZ - hd),     // 1: Front-Right-Bottom
+        project(origX + hw, origY, origZ + hd),     // 2: Back-Right-Bottom
+        project(origX - hw, origY, origZ + hd),     // 3: Back-Left-Bottom
+        project(origX - hw, origY + h, origZ - hd), // 4: Front-Left-Top
+        project(origX + hw, origY + h, origZ - hd), // 5: Front-Right-Top
+        project(origX + hw, origY + h, origZ + hd), // 6: Back-Right-Top
+        project(origX - hw, origY + h, origZ + hd), // 7: Back-Left-Top
       ];
 
-      // Top Face
-      ctx.beginPath();
-      ctx.moveTo(v[4].px, v[4].py);
-      ctx.lineTo(v[5].px, v[5].py);
-      ctx.lineTo(v[6].px, v[6].py);
-      ctx.lineTo(v[7].px, v[7].py);
-      ctx.closePath();
-      ctx.fillStyle = topColor;
-      ctx.fill();
-      ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      // Helper to draw a single polygon face
+      const drawFace = (indices: number[], style: string) => {
+        ctx.beginPath();
+        ctx.moveTo(v[indices[0]].px, v[indices[0]].py);
+        for (let i = 1; i < indices.length; i++) {
+          ctx.lineTo(v[indices[i]].px, v[indices[i]].py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = style;
+        ctx.fill();
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      };
 
-      // Front Face
-      ctx.beginPath();
-      ctx.moveTo(v[0].px, v[0].py);
-      ctx.lineTo(v[1].px, v[1].py);
-      ctx.lineTo(v[5].px, v[5].py);
-      ctx.lineTo(v[4].px, v[4].py);
-      ctx.closePath();
-      ctx.fillStyle = fillColor;
-      ctx.fill();
-      ctx.stroke();
-
-      // Right Face
-      ctx.beginPath();
-      ctx.moveTo(v[1].px, v[1].py);
-      ctx.lineTo(v[2].px, v[2].py);
-      ctx.lineTo(v[6].px, v[6].py);
-      ctx.lineTo(v[5].px, v[5].py);
-      ctx.closePath();
-      ctx.fillStyle = sideColor;
-      ctx.fill();
-      ctx.stroke();
+      // 6 Faces of complete 3D Cuboid rendered (Painter's order for 360° visibility)
+      // 1. Bottom Face (0, 1, 2, 3)
+      drawFace([0, 1, 2, 3], sideColor);
+      // 2. Back Face (3, 2, 6, 7)
+      drawFace([3, 2, 6, 7], sideColor);
+      // 3. Left Face (0, 3, 7, 4)
+      drawFace([0, 3, 7, 4], sideColor);
+      // 4. Right Face (1, 2, 6, 5)
+      drawFace([1, 2, 6, 5], sideColor);
+      // 5. Front Face (0, 1, 5, 4)
+      drawFace([0, 1, 5, 4], fillColor);
+      // 6. Top Face (4, 5, 6, 7)
+      drawFace([4, 5, 6, 7], topColor);
     };
 
     const hw = boxW / 2;
