@@ -64,7 +64,7 @@ function getMenuGroups(hitlPendingCount: number): MenuGroup[] {
       items: [
         { name: '현장 반품 검수', href: '/inbound', icon: Camera },
         { name: '나의 검수 내역 (작업자)', href: '/worker/inspections', icon: ShieldCheck },
-        { name: '승인 대기 (HITL)', href: '/admin/hitl', icon: ShoppingCart, badge: String(hitlPendingCount) },
+        { name: '승인 대기 (HITL)', href: '/admin/hitl', icon: ShoppingCart, badge: hitlPendingCount > 0 ? String(hitlPendingCount) : undefined },
         { name: '검수 처리 내역 (전체)', href: '/admin/inspections', icon: FileCheck },
       ],
     },
@@ -97,7 +97,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const user = useAtomValue(userAtom);
-  const [hitlCount, setHitlCount] = useState<number>(3);
+  const [hitlCount, setHitlCount] = useState<number>(0);
 
   // 5초 간격으로 백엔드 /api/v1/admin/hitl/pending 실시간 수동 검수 대기열 건수 조회
   useEffect(() => {
@@ -117,12 +117,12 @@ export default function Sidebar() {
             const historyData = await resHistory.json();
             if (isMounted && Array.isArray(historyData)) {
               const pending = historyData.filter((item: any) => item.status === 'PENDING' || item.status === 'HITL_REQUIRED').length;
-              setHitlCount(pending || 3);
+              setHitlCount(pending);
             }
           }
         }
       } catch (e) {
-        // 네트워크 연결 실패 시 3건 유지
+        // 네트워크 연결 실패 시 0건 (뱃지 노출 방지)
       }
     };
 
