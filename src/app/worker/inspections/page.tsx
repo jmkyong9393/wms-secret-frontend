@@ -1,5 +1,6 @@
-import PutawayStepModal from '@/components/worker/PutawayStepModal';
 'use client';
+
+import PutawayStepModal from '@/components/worker/PutawayStepModal';
 import { resolveInspectionImages, resolveDefectCoordinates } from '@/features/inspection/utils/inspectionImageService';
 
 import React, { useState, useEffect, useMemo } from 'react';
