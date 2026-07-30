@@ -29,7 +29,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
   const cushionCatalog = [
     { id: "CUSH-01", name: "에어필로우 슬림 패드", thick: "9.0mm", target: "도서 상부 완충", desc: "도서 상부 유격 충격 흡수 기본 패드", isRec: false, color: "border-amber-500 bg-amber-50 dark:bg-amber-950/40" },
     { id: "CUSH-02", name: "친환경 벌집 종이 (추천)", thick: "12.0mm", target: "양장본 프리미엄", desc: "양장본/고가 도서 래핑 (친환경 도서물류)", isRec: true, color: "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40" },
-    { id: "CUSH-03", name: "PE 폼 4면 모서리 가드", thick: "15.0mm", target: "측면 유동 방지", desc: "중량 도서 4면 측면 충격 방지 가드", isRec: false, color: "border-cyan-500 bg-cyan-50 dark:bg-cyan-950/40" },
+    { id: "CUSH-03", name: "에어캡 뽁뽁이 & PE폼 (25mm 다층 감기)", thick: "15.0mm", target: "측면 유동 방지", desc: "중량 도서 4면 측면 충격 방지 가드", isRec: false, color: "border-cyan-500 bg-cyan-50 dark:bg-cyan-950/40" },
     { id: "CUSH-04", name: "에어 튜브 3D 범퍼", thick: "20.0mm", target: "고위험 낙하 방지", desc: "초고위험 낙하 충격 에어 범퍼", isRec: false, color: "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40" },
   ];
 
@@ -242,7 +242,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     ctx.stroke();
 
     // 2. Draw 4-Side Protective Cushion Guards (Cyan Translucent Border Guards)
-    const sideGuardThick = 6.0;
+    const sideGuardThick = 25.0; // Real Multi-Wrap Air Bubble Wrap & PE Foam Thick Guard (25mm)
     const stackTotalH = book1_H + book2_H + airPad_H;
 
     // Left & Right Side Guards
@@ -515,7 +515,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
           <div className="w-3 h-3 mt-0.5 rounded bg-cyan-500 shrink-0 shadow-xs border border-cyan-600" />
           <div className="min-w-0 flex-1">
             <span className="font-extrabold text-cyan-900 dark:text-cyan-200 block text-[10px] leading-tight">측면: 4면 완충 가드</span>
-            <span className="text-[9px] text-cyan-700 dark:text-cyan-400 font-mono block leading-tight mt-0.5 break-words">PE폼 15mm (측면 완충)</span>
+            <span className="text-[9px] text-cyan-700 dark:text-cyan-400 font-mono block leading-tight mt-0.5 break-words">에어캡 뽁뽁이 25mm (3겹 감기 완충)</span>
           </div>
         </div>
 
