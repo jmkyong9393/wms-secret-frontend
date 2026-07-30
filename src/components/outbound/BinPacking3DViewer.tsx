@@ -252,24 +252,24 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     if (activeCushion.mode === 'side' || activeCushion.mode === 'both') {
       // Left Side Guard
       drawCuboid(
-        -book1_W / 2 - sideGuardThick / 2, 2, 0,
+        -book1_W / 2 - sideGuardThick / 2, 0, 0,
         sideGuardThick, book1_D, stackTotalH,
         'rgba(6, 182, 212, 0.35)', 'rgba(14, 116, 144, 0.75)',
         'rgba(34, 211, 238, 0.45)', 'rgba(8, 145, 178, 0.4)'
       );
       // Right Side Guard
       drawCuboid(
-        book1_W / 2 + sideGuardThick / 2, 2, 0,
+        book1_W / 2 + sideGuardThick / 2, 0, 0,
         sideGuardThick, book1_D, stackTotalH,
         'rgba(6, 182, 212, 0.35)', 'rgba(14, 116, 144, 0.75)',
         'rgba(34, 211, 238, 0.45)', 'rgba(8, 145, 178, 0.4)'
       );
     }
 
-    // 3. Draw Stacked Book Items Inside
+    // 3. Draw Stacked Book Items Inside (Flush Stacking Matching Math 100%)
     // LAYER 1: Python Book (Purple)
     drawCuboid(
-      0, 2, 0,
+      0, 0, 0,
       book1_W, book1_D, book1_H,
       'rgba(147, 51, 234, 0.9)',
       'rgba(107, 33, 168, 0.95)',
@@ -279,7 +279,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
 
     // LAYER 2: SQL Book (Emerald)
     drawCuboid(
-      0, 2 + book1_H + 2, 0,
+      0, book1_H, 0,
       book2_W, book2_D, book2_H,
       'rgba(16, 185, 129, 0.9)',
       'rgba(6, 95, 70, 0.95)',
@@ -290,7 +290,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     // LAYER 3: Top Cushion Layer (If mode is 'top' or 'both')
     if (activeCushion.mode === 'top' || activeCushion.mode === 'both') {
       drawCuboid(
-        0, 2 + book1_H + book2_H + 4, 0,
+        0, book1_H + book2_H, 0,
         Math.min(boxW * 0.95, book1_W * 1.02), Math.min(boxD * 0.95, book1_D * 1.02), airPad_H,
         activeCushion.color,
         activeCushion.stroke,
