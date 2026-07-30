@@ -230,7 +230,25 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     ctx.fill();
     ctx.stroke();
 
-    // 2. Draw Stacked Items Inside
+    // 2. Draw 4-Side Protective Cushion Guards (Cyan Translucent Border Guards)
+    const sideGuardThick = 6.0;
+    const stackTotalH = book1_H + book2_H + airPad_H;
+
+    // Left & Right Side Guards
+    drawCuboid(
+      -book1_W / 2 - sideGuardThick / 2, 2, 0,
+      sideGuardThick, book1_D, stackTotalH,
+      'rgba(6, 182, 212, 0.35)', 'rgba(14, 116, 144, 0.75)',
+      'rgba(34, 211, 238, 0.45)', 'rgba(8, 145, 178, 0.4)'
+    );
+    drawCuboid(
+      book1_W / 2 + sideGuardThick / 2, 2, 0,
+      sideGuardThick, book1_D, stackTotalH,
+      'rgba(6, 182, 212, 0.35)', 'rgba(14, 116, 144, 0.75)',
+      'rgba(34, 211, 238, 0.45)', 'rgba(8, 145, 178, 0.4)'
+    );
+
+    // 3. Draw Stacked Book Items Inside
     // LAYER 1: Python Book (Purple)
     drawCuboid(
       0, 2, 0,
@@ -444,14 +462,23 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </button>
       </div>
 
-      {/* Responsive High-Contrast Layer Item Legend Panel (No Text Clipping!) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-sans">
-        {/* Amber Layer: Cushion Pad */}
-        <div className="flex items-start gap-2 p-2.5 bg-amber-50/80 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/80 min-w-0">
-          <div className="w-3.5 h-3.5 mt-0.5 rounded bg-amber-500 shrink-0 shadow-xs border border-amber-600" />
+      {/* Responsive High-Contrast Layer Item Legend Panel (With Side Cushion Guard!) */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs font-sans">
+        {/* Cyan Layer: Side Cushion Guard */}
+        <div className="flex items-start gap-2 p-2 bg-cyan-50/80 dark:bg-cyan-950/40 rounded-xl border border-cyan-200 dark:border-cyan-800/80 min-w-0">
+          <div className="w-3 h-3 mt-0.5 rounded bg-cyan-500 shrink-0 shadow-xs border border-cyan-600" />
           <div className="min-w-0 flex-1">
-            <span className="font-extrabold text-amber-900 dark:text-amber-200 block text-[11px] leading-tight">상단: 완충재 Pad Layer</span>
-            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono block leading-tight mt-0.5 break-words">에어필로우 9.0mm (유격 완충)</span>
+            <span className="font-extrabold text-cyan-900 dark:text-cyan-200 block text-[10px] leading-tight">측면: 4면 완충 가드</span>
+            <span className="text-[9px] text-cyan-700 dark:text-cyan-400 font-mono block leading-tight mt-0.5 break-words">PE폼 15mm (측면 완충)</span>
+          </div>
+        </div>
+
+        {/* Amber Layer: Cushion Pad */}
+        <div className="flex items-start gap-2 p-2 bg-amber-50/80 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/80 min-w-0">
+          <div className="w-3 h-3 mt-0.5 rounded bg-amber-500 shrink-0 shadow-xs border border-amber-600" />
+          <div className="min-w-0 flex-1">
+            <span className="font-extrabold text-amber-900 dark:text-amber-200 block text-[10px] leading-tight">상단: 완충 패드 Layer</span>
+            <span className="text-[9px] text-amber-700 dark:text-amber-400 font-mono block leading-tight mt-0.5 break-words">에어필로우 9.0mm (상부 완충)</span>
           </div>
         </div>
 
