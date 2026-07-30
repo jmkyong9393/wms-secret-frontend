@@ -1,3 +1,4 @@
+import PutawayStepModal from '@/components/worker/PutawayStepModal';
 'use client';
 import { resolveInspectionImages, resolveDefectCoordinates } from '@/features/inspection/utils/inspectionImageService';
 
