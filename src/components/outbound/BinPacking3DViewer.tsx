@@ -484,13 +484,13 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
 
             {/* Dual Component Cushion Recommendation: Top Cushion vs Side Cushion */}
       <div className="bg-gray-50/80 dark:bg-gray-800/40 p-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5">
-            <Package className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            AI 스마트 도서 물류 이원화 완충재 추천 (상단 유격 & 측면 쏠림 방지)
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <span className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5 leading-tight">
+            <Package className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="break-keep">AI 스마트 도서 완충재 추천 (유격 & 쏠림 방지)</span>
           </span>
-          <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/80 px-2.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
-            현재 선택 완충: [{activeCushion.mode === 'top' ? '상단채움' : activeCushion.mode === 'side' ? '측면둘기' : '전방위래핑'}] {activeCushion.name} ({activeCushion.thick})
+          <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 font-bold bg-emerald-50 dark:bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 shrink-0 w-fit whitespace-nowrap">
+            선택: [{activeCushion.mode === 'top' ? '상단채움' : activeCushion.mode === 'side' ? '측면둘기' : '전방위래핑'}] {activeCushion.name} ({activeCushion.thick})
           </span>
         </div>
 
@@ -528,19 +528,19 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
                   <div
                     key={cush.id}
                     onClick={() => setSelectedCushionId(cush.id)}
-                    className={`p-2.5 rounded-xl border transition-all cursor-pointer space-y-1 ${
+                    className={`p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
                       selectedCushionId === cush.id
                         ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80 ring-2 ring-indigo-500/30'
                         : 'bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-extrabold text-[10px] sm:text-[11px] text-gray-900 dark:text-white block leading-tight break-words">{cush.name}</span>
+                    <div className="flex items-start justify-between gap-0.5 min-w-0">
+                      <span className="font-black text-[10px] sm:text-[11px] text-gray-900 dark:text-white leading-tight break-keep">{cush.name}</span>
                       {isRecommended && (
-                        <span className="text-[9px] font-bold bg-emerald-500 text-white px-1 rounded shrink-0 shadow-xs animate-pulse">추천</span>
+                        <span className="text-[8px] font-bold bg-emerald-500 text-white px-1 rounded shrink-0 shadow-xs animate-pulse whitespace-nowrap ml-0.5">추천</span>
                       )}
                     </div>
-                    <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-bold">
+                    <p className="text-[9px] sm:text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-bold pt-1 whitespace-nowrap overflow-hidden text-ellipsis">
                       [{cush.mode === 'top' ? '상단채움' : cush.mode === 'side' ? '측면둘기' : '전방위래핑'}] ({cush.thick})
                     </p>
                   </div>
