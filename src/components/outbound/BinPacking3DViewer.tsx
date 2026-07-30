@@ -582,13 +582,32 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         const exactHeightRatio = round((stackH / boxH) * 100, 1);
         const voidSpaceMM = Math.max(0, boxH - stackH);
         
-        let score = (Math.min(100, exactHeightRatio) / 100) * 65 + 20 + 15;
-        if (exactHeightRatio > 100) {
-          score -= (exactHeightRatio - 100) * 1.5; // Overflow penalty
-        } else if (exactHeightRatio < 85) {
-          score -= (voidSpaceMM / boxH) * 45; // Void penalty
+        const maxBookW = 188;
+        const maxBookD = 257;
+        const sideGapX = Math.max(0, boxW - maxBookW);
+        const sideGapY = Math.max(0, boxD - maxBookD);
+        const maxSideGap = Math.max(sideGapX, sideGapY);
+        const hasSideCushion = (activeCushion.mode === 'side' || activeCushion.mode === 'both');
+
+        let zScore = (Math.min(100, exactHeightRatio) / 100) * 45;
+        let sideScore = 40;
+        let sidePenalty = 0;
+
+        if (!hasSideCushion) {
+          if (maxSideGap > 60) {
+            sideScore = 10;
+            sidePenalty = 35;
+          } else if (maxSideGap > 40) {
+            sideScore = 18;
+            sidePenalty = 25;
+          } else if (maxSideGap > 20) {
+            sideScore = 25;
+            sidePenalty = 12;
+          }
         }
-        score = Math.max(15, Math.round(score * 10) / 10);
+
+        let zPenalty = exactHeightRatio > 100 ? (exactHeightRatio - 100) * 2.5 : exactHeightRatio < 85 ? (voidSpaceMM / boxH) * 30 : 0;
+        let score = Math.max(15, Math.round((zScore + sideScore + 15 - zPenalty - sidePenalty) * 10) / 10);
 
         let badge = "SAFE (A+)";
         let colorClass = "text-emerald-600 dark:text-emerald-400";
