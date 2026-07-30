@@ -490,7 +490,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
             AI 스마트 도서 물류 이원화 완충재 추천 (상단 유격 & 측면 쏠림 방지)
           </span>
           <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/80 px-2.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
-            상단: 에어필로우 (9mm) + 측면: PE폼/뽁뽁이 (25mm 둘기)
+            현재 선택 완충: [{activeCushion.mode === 'top' ? '상단채움' : activeCushion.mode === 'side' ? '측면둘기' : '전방위래핑'}] {activeCushion.name} ({activeCushion.thick})
           </span>
         </div>
 
