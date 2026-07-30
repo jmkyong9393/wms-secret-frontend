@@ -25,6 +25,17 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     eff: 94.5
   };
 
+  // 4 Real Industrial Cushion Materials Catalog (Interactive AI Recommendation & Selection)
+  const cushionCatalog = [
+    { id: "CUSH-01", name: "에어필로우 슬림 패드", thick: "9.0mm", target: "도서 상부 완충", desc: "도서 상부 유격 충격 흡수 기본 패드", isRec: false, color: "border-amber-500 bg-amber-50 dark:bg-amber-950/40" },
+    { id: "CUSH-02", name: "친환경 벌집 종이 (추천)", thick: "12.0mm", target: "양장본 프리미엄", desc: "양장본/고가 도서 래핑 (친환경 도서물류)", isRec: true, color: "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40" },
+    { id: "CUSH-03", name: "PE 폼 4면 모서리 가드", thick: "15.0mm", target: "측면 유동 방지", desc: "중량 도서 4면 측면 충격 방지 가드", isRec: false, color: "border-cyan-500 bg-cyan-50 dark:bg-cyan-950/40" },
+    { id: "CUSH-04", name: "에어 튜브 3D 범퍼", thick: "20.0mm", target: "고위험 낙하 방지", desc: "초고위험 낙하 충격 에어 범퍼", isRec: false, color: "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40" },
+  ];
+
+  const [selectedCushionId, setSelectedCushionId] = useState<string>("CUSH-02");
+  const activeCushion = cushionCatalog.find(c => c.id === selectedCushionId) || cushionCatalog[1];
+
   // Rotation angles (deg)
   const [rotX, setRotX] = useState<number>(25);
   const [rotY, setRotY] = useState<number>(-35);
@@ -462,8 +473,43 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </button>
       </div>
 
+            {/* Interactive 4-Cushion Catalog & AI Recommendation Selector */}
+      <div className="bg-gray-50/80 dark:bg-gray-800/40 p-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5">
+            <Package className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            실무 완충재 규격 카탈로그 & AI 맞춤 추천
+          </span>
+          <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
+            현재 추천: {activeCushion.name} ({activeCushion.thick})
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {cushionCatalog.map((cush) => (
+            <div
+              key={cush.id}
+              onClick={() => setSelectedCushionId(cush.id)}
+              className={`p-2.5 rounded-xl border transition-all cursor-pointer space-y-1 ${
+                selectedCushionId === cush.id
+                  ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80 ring-2 ring-indigo-500/30'
+                  : 'bg-white dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-[11px] text-gray-900 dark:text-white truncate">{cush.name}</span>
+                {cush.isRec && (
+                  <span className="text-[9px] font-bold bg-emerald-500 text-white px-1 rounded shrink-0">추천</span>
+                )}
+              </div>
+              <p className="text-[10px] font-mono text-gray-500 dark:text-gray-400">{cush.target} ({cush.thick})</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Responsive High-Contrast Layer Item Legend Panel (With Side Cushion Guard!) */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs font-sans">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-sans">
         {/* Cyan Layer: Side Cushion Guard */}
         <div className="flex items-start gap-2 p-2 bg-cyan-50/80 dark:bg-cyan-950/40 rounded-xl border border-cyan-200 dark:border-cyan-800/80 min-w-0">
           <div className="w-3 h-3 mt-0.5 rounded bg-cyan-500 shrink-0 shadow-xs border border-cyan-600" />
