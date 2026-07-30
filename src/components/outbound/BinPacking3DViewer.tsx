@@ -296,7 +296,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
               </span>
             </h4>
             <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-              화이트 테마 3D 공간 & 오픈 박스 시뮬레이션 ({boxW}W × {boxD}D × {boxH}H mm)
+              하이테크 아이스 블루(Ice Blue) 3D 공간 & 오픈 박스 시뮬레이션 ({boxW}W × {boxD}D × {boxH}H mm)
             </p>
           </div>
         </div>
@@ -369,10 +369,10 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        className="h-72 w-full bg-slate-50 dark:bg-slate-900/90 rounded-2xl border border-gray-200 dark:border-gray-800 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-inner"
+        className="h-72 w-full bg-indigo-50/60 dark:bg-slate-900 rounded-2xl border border-indigo-100 dark:border-gray-800 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-inner"
       >
         {/* Subtle Soft Gray Grid Background for White Theme */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(0,0,0,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.05)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(99,102,241,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.08)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
 
         {/* 3D Canvas */}
         <canvas ref={canvasRef} width={600} height={280} className="w-full h-full object-contain" />
@@ -484,9 +484,9 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
-              className="h-96 w-full bg-slate-50 dark:bg-slate-950 rounded-2xl border border-gray-200 dark:border-gray-800 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none"
+              className="h-96 w-full bg-indigo-50/60 dark:bg-slate-950 rounded-2xl border border-indigo-100 dark:border-gray-800 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none"
             >
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(0,0,0,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.05)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:30px_30px]" />
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(99,102,241,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.08)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:30px_30px]" />
               <canvas ref={modalCanvasRef} width={840} height={380} className="w-full h-full object-contain" />
             </div>
 
