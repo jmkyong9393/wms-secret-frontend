@@ -82,7 +82,7 @@ export default function OutboundDashboard() {
   const [boxCategoryTab, setBoxCategoryTab] = useState<'slim' | 'standard'>('slim');
 
   // Real WMS Book Metadata Binding for Dynamic Pricing
-  const MOCK_INVENTORY_BOOKS = [
+  const MOCK_INVENTORY_BOOKS_FALLBACK = [
     {
       id: "BOOK-01",
       title: "Do it! 점프 투 파이썬 (개정 2판)",
@@ -125,8 +125,29 @@ export default function OutboundDashboard() {
     }
   ];
 
-  const [selectedBookId, setSelectedBookId] = useState<string>("BOOK-01");
-  const selectedBook = MOCK_INVENTORY_BOOKS.find(b => b.id === selectedBookId) || MOCK_INVENTORY_BOOKS[0];
+  const [inventoryBooks, setInventoryBooks] = useState<any[]>(MOCK_INVENTORY_BOOKS);
+  const [selectedBookId, setSelectedBookId] = useState<string>("");
+
+  // Fetch real inventory books from PostgreSQL DB via API
+  useEffect(() => {
+    const fetchDbBooks = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/api/v1/orders/available-books");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setInventoryBooks(data);
+            setSelectedBookId(data[0].id);
+          }
+        }
+      } catch (e) {
+        // Fallback to initial seed books
+      }
+    };
+    fetchDbBooks();
+  }, []);
+
+  const selectedBook = inventoryBooks.find(b => b.id === selectedBookId) || inventoryBooks[0] || MOCK_INVENTORY_BOOKS[0];
 
   // Fetch real algorithmic price from backend API based on selected book's DB metadata
   const fetchRealDynamicPrice = async (book: typeof MOCK_INVENTORY_BOOKS[0]) => {
@@ -568,7 +589,7 @@ export default function OutboundDashboard() {
               출고 대상 실재고 도서 선택 (자동 데이터 바인딩)
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              {MOCK_INVENTORY_BOOKS.map((b) => (
+              {inventoryBooks.map((b) => (
                 <button
                   key={b.id}
                   onClick={() => setSelectedBookId(b.id)}
