@@ -154,14 +154,21 @@ export default function OutboundDashboard() {
     try {
       setIsLoading(true);
       setConfirmed(false);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
       // 1. 동적 가격 테스트 (주문 생성)
-      const orderRes = await fetch("http://localhost:8000/api/v1/orders/?customer_name=TEST_B2B&type=WHOLESALE&list_price=35000&category=Novel&ubci_score=78&days_in_inventory=120", {
-        method: "POST"
-      });
-      if (orderRes.ok) {
-        const orderData = await orderRes.json();
-        setMockOrder(orderData);
-      } else {
+      try {
+        const orderRes = await fetch("http://localhost:8000/api/v1/orders/?customer_name=TEST_B2B&type=WHOLESALE&list_price=35000&category=Novel&ubci_score=78&days_in_inventory=120", {
+          method: "POST",
+          signal: controller.signal
+        });
+        if (orderRes.ok) {
+          const orderData = await orderRes.json();
+          setMockOrder(orderData);
+        }
+      } catch (err) {
         setMockOrder({
           order_id: 'ORD-20260727-99',
           customer_name: '교보문고 B2B 지점',
@@ -178,19 +185,24 @@ export default function OutboundDashboard() {
         { category: "Novel", pages: 400, is_color: false, is_hardcover: false }
       ];
       
-      const pickRes = await fetch(`http://localhost:8000/api/v1/orders/outbound/pick?order_id=ORD-20260727-99`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(books)
-      });
-      if (pickRes.ok) {
-        const pickData = await pickRes.json();
-        setMockBoxName(pickData.recommended_box);
-        if (pickData.ai_reasoning_log) {
-          setAiReasoningLog(pickData.ai_reasoning_log);
+      try {
+        const pickRes = await fetch(`http://localhost:8000/api/v1/orders/outbound/pick?order_id=ORD-20260727-99`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(books),
+          signal: controller.signal
+        });
+        if (pickRes.ok) {
+          const pickData = await pickRes.json();
+          setMockBoxName(pickData.recommended_box);
+          if (pickData.ai_reasoning_log) {
+            setAiReasoningLog(pickData.ai_reasoning_log);
+          }
         }
-      } else {
+      } catch (err) {
         setMockBoxName("Standard-Box-B (중형 300x200x150mm)");
+      } finally {
+        clearTimeout(timeoutId);
       }
     } catch (e) {
       setMockOrder({
