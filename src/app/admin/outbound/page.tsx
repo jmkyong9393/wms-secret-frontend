@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import BinPacking3DViewer from '@/components/outbound/BinPacking3DViewer';
 import { 
   Package, 
   Box, 
@@ -454,6 +455,9 @@ export default function OutboundDashboard() {
               </div>
             ))}
           </div>
+
+          {/* Interactive WebGL/CSS 3D Bin Packing Simulator */}
+          <BinPacking3DViewer selectedBox={activeBox} />
 
           <div className="pt-2 flex justify-end">
             <button
