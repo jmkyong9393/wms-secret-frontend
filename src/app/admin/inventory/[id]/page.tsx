@@ -64,7 +64,7 @@ export default function InventoryDetailPage() {
           },
           grade: 'GOOD',
           ubci_score: 75,
-          zone: 'Zone B-12-4',
+          zone: 'Zone B-Rack 01-Shelf 01',
           quantity: 1,
           worker_id: 'WM2607001 (장문경)',
           date: kstNow,
@@ -220,7 +220,7 @@ export default function InventoryDetailPage() {
                   }`}
                 >
                   <img
-                    src={(data?.image_urls && data.image_urls[idx]) || `http://localhost:8000/experiment_data/job-0c2929a0/raw_${idx}.jpg`}
+                    src={(data?.image_urls && data.image_urls[idx]) || "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400"}
                     alt={`Image ${idx}`}
                     className="w-16 h-20 object-cover rounded-lg mb-1 border border-gray-200"
                   />
@@ -290,12 +290,12 @@ export default function InventoryDetailPage() {
               ) : (
                 <div className="space-y-2 text-xs">
                   <div className="p-2.5 bg-red-50 text-red-900 border border-red-200 rounded-lg font-mono">
-                    <p className="font-bold">[DMG_INT_DOODLE] 내지 손글씨/낙서</p>
-                    <p className="text-[11px] text-red-700 mt-1">Multi-BBox 정밀 좌표 포착 완료</p>
+                    <p className="font-bold">[DEFECT_DETECTED] 비전 AI 결함 탐지 완료</p>
+                    <p className="text-[11px] text-red-700 mt-1">Image #{selectedImgIdx} Multi-BBox 정밀 좌표 포착 완료</p>
                   </div>
                   <div className="p-2.5 bg-white border border-gray-200 rounded-lg space-y-1">
-                    <p className="text-gray-500 font-bold text-[11px]">감점 룰 계산</p>
-                    <p className="text-gray-800 font-bold">수험서/문제집 -15점 단일 고정 Cap 적용</p>
+                    <p className="text-gray-500 font-bold text-[11px]">Dynamic Policy Agent 감점 산출</p>
+                    <p className="text-gray-800 font-bold">{data.book.title} (UBCI {data.ubci_score}점 / {data.grade}급 적용)</p>
                   </div>
                 </div>
               )}
