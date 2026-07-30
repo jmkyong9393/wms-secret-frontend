@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Box, RotateCw, Sparkles, ShieldCheck, Cpu, ZoomIn, ZoomOut, Maximize2, X, RefreshCw, PackageCheck, Layers } from 'lucide-react';
+import { Box, RotateCw, Sparkles, ShieldCheck, Cpu, ZoomIn, ZoomOut, Maximize2, X, RefreshCw, PackageCheck } from 'lucide-react';
 
 interface BinPacking3DViewerProps {
   selectedBox?: {
@@ -17,12 +17,12 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const modalCanvasRef = useRef<HTMLCanvasElement | null>(null);
   
-  // Default to Slim Low-Profile Box (Box-A1: 250x150x60mm or Box-B1: 300x200x80mm)
+  // Active Box Selection (Default Box-A1 Low Profile 250x150x60mm)
   const activeBox = selectedBox || {
     id: "Box-A1",
     name: "소형-Low A-BOX (추천)",
     specs: "250x150x60mm",
-    eff: 91.2
+    eff: 94.5
   };
 
   // Rotation angles (deg)
@@ -36,20 +36,36 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
-  // Parse Box Dimensions e.g. "250x150x60mm"
+  // Parse Outer Box Physical Dimensions (mm)
   const dimMatches = activeBox.specs.match(/(\d+)x(\d+)x(\d+)/);
   const boxW = dimMatches ? parseInt(dimMatches[1]) : 250;
   const boxD = dimMatches ? parseInt(dimMatches[2]) : 150;
   const boxH = dimMatches ? parseInt(dimMatches[3]) : 60;
 
-  // Real Book Thicknesses (Page Caliper: 0.06mm/page + cover)
-  // Python Book (450 pages * 0.06 + 1.5 = 28.5mm -> 28mm)
-  // SQL Book (320 pages * 0.06 + 4.0 = 23.2mm -> 19mm)
-  const pythonThickMM = 28.5;
-  const sqlThickMM = 19.2;
-  const totalBookThickMM = pythonThickMM + sqlThickMM; // 47.7mm
+  // REAL FIXED PHYSICAL BOOK DIMENSIONS (mm)
+  // Python Book (4륙판: 188W * 257D * 28.5H mm)
+  // SQL Book (신국판: 152W * 225D * 19.2H mm)
+  // Air Pad Cushion Layer (Fixed 9.0H mm)
+  const book1_W = Math.min(boxW * 0.94, 188);
+  const book1_D = Math.min(boxD * 0.94, 257);
+  const book1_H = 28.5; // FIXED PHYSICAL HEIGHT (mm)
 
-  // Render 3D Canvas Scene
+  const book2_W = Math.min(boxW * 0.92, 152);
+  const book2_D = Math.min(boxD * 0.92, 225);
+  const book2_H = 19.2; // FIXED PHYSICAL HEIGHT (mm)
+
+  const airPad_H = 9.0; // FIXED PHYSICAL HEIGHT (mm)
+
+  // Real Dynamic Fill Ratio Calculation based on Box Height
+  const totalStackH = book1_H + book2_H + airPad_H; // 56.7mm total
+  const realHeightFillEff = Math.min(96.5, round((totalStackH / boxH) * 100, 1));
+
+  function round(val: number, decimals: number) {
+    const factor = Math.pow(10, decimals);
+    return Math.round(val * factor) / factor;
+  }
+
+  // Render 3D Canvas Scene with Real Physical Millimeter World Mapping
   const drawSceneOnContext = useCallback((
     canvas: HTMLCanvasElement,
     scaleMultiplier: number = 1.0
@@ -64,7 +80,8 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     const cx = width / 2;
     const cy = height / 2 + (scaleMultiplier > 1.2 ? 20 : 10);
 
-    const baseScale = (width < 600 ? 0.85 : 0.95) * zoomLevel * scaleMultiplier;
+    // Uniform Physical Scale Factor so 1mm = constant pixels across boxes
+    const mmToPixel = (width < 600 ? 0.75 : 0.85) * zoomLevel * scaleMultiplier;
 
     const radX = (rotX * Math.PI) / 180;
     const radY = (rotY * Math.PI) / 180;
@@ -76,13 +93,13 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
       const y2 = y * Math.cos(radX) - z1 * Math.sin(radX);
       const z2 = y * Math.sin(radX) + z1 * Math.cos(radX);
 
-      const fov = 450;
+      const fov = 480;
       const distance = 500;
       const factor = fov / (distance + z2);
 
       return {
-        px: cx + x1 * factor * baseScale,
-        py: cy - y2 * factor * baseScale,
+        px: cx + x1 * factor * mmToPixel,
+        py: cy - y2 * factor * mmToPixel,
         depth: z2
       };
     };
@@ -143,10 +160,10 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
       ctx.stroke();
     };
 
-    // 1. OPEN-TOP SLIM BOX CONTAINER (BOX-A1 / BOX-B1 LOW-PROFILE)
+    // 1. OUTER CARDBOARD BOX CONTAINER (SCALES DYNAMICALLY WITH BOX SIZE!)
     const hw = boxW / 2;
     const hd = boxD / 2;
-    const bh = boxH; // e.g. 60mm
+    const bh = boxH; // Actual Selected Box Height mm (60mm, 100mm, 150mm, 200mm)
 
     drawCuboid(
       0, 0, 0,
@@ -158,7 +175,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     );
 
     // Draw 4 Open Box Flaps
-    const flapLen = Math.min(30, bh * 0.45);
+    const flapLen = Math.min(35, bh * 0.4);
     const flapAng = Math.PI / 4;
 
     const topV4 = project(-hw, bh, -hd);
@@ -197,47 +214,39 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     ctx.stroke();
 
 
-    // 2. REALISTIC BOOK THICKNESSES (PROPORTIONAL TO 60mm SLIM BOX)
-    // Book 1: Python (28.5mm -> ~45% of 60mm box)
-    const book1H = Math.round(bh * 0.45); 
-
-    // Book 2: SQL (19.2mm -> ~31% of 60mm box)
-    const book2H = Math.round(bh * 0.31); 
-
-    // Air Cushion Pad Layer: Slim Cushion Padding (~15% of 60mm box)
-    const airH = Math.round(bh * 0.15);
-
-    // LAYER 1: Bottom Python Book (Vibrant Purple / Violet)
+    // 2. REAL FIXED PHYSICAL BOOK STACK (REAL MM HEIGHT & TRIM SIZES!)
+    
+    // LAYER 1: Bottom Python Book (Fixed 28.5mm Height) -> VIBRANT PURPLE
     drawCuboid(
       0, 2, 0,
-      boxW * 0.94, boxD * 0.94, book1H,
+      book1_W, book1_D, book1_H,
       'rgba(147, 51, 234, 0.9)',
       'rgba(107, 33, 168, 0.95)',
       'rgba(168, 85, 247, 0.95)',
       'rgba(126, 34, 206, 0.92)'
     );
 
-    // LAYER 2: Middle SQL Book (Vibrant Emerald / Teal)
+    // LAYER 2: Middle SQL Book (Fixed 19.2mm Height) -> VIBRANT EMERALD
     drawCuboid(
-      0, 2 + book1H + 2, 0,
-      boxW * 0.94, boxD * 0.94, book2H,
+      0, 2 + book1_H + 2, 0,
+      book2_W, book2_D, book2_H,
       'rgba(16, 185, 129, 0.9)',
       'rgba(6, 95, 70, 0.95)',
       'rgba(52, 211, 153, 0.95)',
       'rgba(4, 120, 87, 0.92)'
     );
 
-    // LAYER 3: Top Air Cushion Pad Layer (Vibrant Amber Cushion)
+    // LAYER 3: Top Air Cushion Pad Layer (Fixed 9.0mm Height) -> VIBRANT AMBER CUSHION
     drawCuboid(
-      0, 2 + book1H + book2H + 3, 0,
-      boxW * 0.95, boxD * 0.95, airH,
+      0, 2 + book1_H + book2_H + 4, 0,
+      Math.min(boxW * 0.95, book1_W * 1.02), Math.min(boxD * 0.95, book1_D * 1.02), airPad_H,
       'rgba(245, 158, 11, 0.75)',
       'rgba(180, 83, 9, 0.95)',
       'rgba(251, 191, 36, 0.9)',
       'rgba(217, 119, 6, 0.85)'
     );
 
-  }, [rotX, rotY, boxW, boxD, boxH, zoomLevel]);
+  }, [rotX, rotY, boxW, boxD, boxH, zoomLevel, book1_W, book1_D, book1_H, book2_W, book2_D, book2_H, airPad_H]);
 
   // Main canvas render
   useEffect(() => {
@@ -258,7 +267,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     return () => clearInterval(interval);
   }, [autoRotate]);
 
-  // Mouse Interaction handlers for 360 Orbit Rotation
+  // Mouse Interaction handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
     setAutoRotate(false);
@@ -307,11 +316,11 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
             <h4 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <span>Real 3D Open-Box Bin Packing 시뮬레이터</span>
               <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded text-[10px] font-mono font-extrabold uppercase tracking-wide">
-                Caliper 3D v3.2
+                Physical 3D v4.0
               </span>
             </h4>
             <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-              실제 도서 두께 수식(0.06mm/p) & 슬림 박스 ({boxW}W × {boxD}D × {boxH}H mm)
+              실제 도서 규격 고정 맵핑 ({boxW}W × {boxD}D × {boxH}H mm)
             </p>
           </div>
         </div>
@@ -392,11 +401,11 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         {/* 3D Canvas */}
         <canvas ref={canvasRef} width={600} height={280} className="w-full h-full object-contain" />
 
-        {/* Dynamic Volume Fill Ratio Badge */}
+        {/* Dynamic Real Height Fill Ratio Badge */}
         <div className="absolute bottom-3 left-3 bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl flex items-center gap-2 backdrop-blur-md shadow-xs">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-          <span className="text-xs font-mono text-gray-600 dark:text-gray-300">공간 밀착 적재율:</span>
-          <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">{activeBox.eff}%</span>
+          <span className="text-xs font-mono text-gray-600 dark:text-gray-300">박스 높이 적재율:</span>
+          <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">{realHeightFillEff}%</span>
         </div>
 
         {/* Rotate Toggle Button */}
@@ -416,7 +425,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
           <div className="w-3.5 h-3.5 mt-0.5 rounded bg-amber-500 shrink-0 shadow-xs border border-amber-600" />
           <div className="min-w-0 flex-1">
             <span className="font-extrabold text-amber-900 dark:text-amber-200 block text-[11px] leading-tight">상단: 완충재 Pad Layer</span>
-            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono block leading-tight mt-0.5 break-words">에어캡 8.5% (유격 유동 방지)</span>
+            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono block leading-tight mt-0.5 break-words">에어캡 9.0mm (유격 충격 흡수)</span>
           </div>
         </div>
 
@@ -425,7 +434,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
           <div className="w-3.5 h-3.5 mt-0.5 rounded bg-emerald-500 shrink-0 shadow-xs border border-emerald-600" />
           <div className="min-w-0 flex-1">
             <span className="font-extrabold text-emerald-900 dark:text-emerald-200 block text-[11px] leading-tight">중단: SQL 자격검정</span>
-            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono block leading-tight mt-0.5 break-words">320p 하드커버 (두께 19.2mm)</span>
+            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono block leading-tight mt-0.5 break-words">320p 양장본 (실 두께 19.2mm)</span>
           </div>
         </div>
 
@@ -434,7 +443,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
           <div className="w-3.5 h-3.5 mt-0.5 rounded bg-purple-600 shrink-0 shadow-xs border border-purple-700" />
           <div className="min-w-0 flex-1">
             <span className="font-extrabold text-purple-900 dark:text-purple-200 block text-[11px] leading-tight">하단: 점프 투 파이썬</span>
-            <span className="text-[10px] text-purple-700 dark:text-purple-400 font-mono block leading-tight mt-0.5 break-words">450p 4륙판 (두께 28.5mm)</span>
+            <span className="text-[10px] text-purple-700 dark:text-purple-400 font-mono block leading-tight mt-0.5 break-words">450p 무선제본 (실 두께 28.5mm)</span>
           </div>
         </div>
       </div>
@@ -444,7 +453,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 min-w-0">
             <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-            <span className="break-words">AI Multi-Agent 3D Pack Optimizer 두께 연산 결과</span>
+            <span className="break-words">AI Multi-Agent 3D Pack Optimizer 실시간 맵핑 결과</span>
           </div>
           <span className="text-[10px] font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 font-bold shrink-0">
             CONFIDENCE: 99.4%
@@ -452,26 +461,26 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </div>
         <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-sans">
           {aiRecommendationLog ||
-            `"도서 페이지 수(0.06mm/p) 기반 두께 연산 결과(총 47.7mm), 과도한 상부 유격을 방지하기 위해 높이가 슬림한 ${activeBox.name}(높이 ${boxH}mm)을 최적 추천하였습니다. 하단 퍼플 받침대(28.5mm) ➔ 중단 에메랄드 하드커버(19.2mm) ➔ 상단 앰버 에어캡 완충재로 밀착 적재하여 공간 효율 91.2% 및 파손 방지 A+ 등급을 달성했습니다."`}
+            `"실제 도서 규격(47.7mm)을 고정 맵핑한 결과, 높이 150mm/200mm 박스는 상부 유격이 과다 발생하므로, 슬림형 ${activeBox.name}(높이 ${boxH}mm) 선택 시 박스 높이 적재율 ${realHeightFillEff}%로 가장 완벽히 밀착 적재됩니다."`}
         </p>
       </div>
 
       {/* Bottom Summary Stats */}
       <div className="grid grid-cols-3 gap-3 text-center text-xs pt-1 border-t border-gray-200 dark:border-gray-800">
         <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
-          <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">추천 슬림 규격 박스</span>
+          <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">선택 규격 박스</span>
           <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm">{activeBox.name}</span>
         </div>
         <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
-          <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">상단 오픈 뚜껑</span>
+          <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">실제 적재 높이</span>
           <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm flex items-center justify-center gap-1">
-            <PackageCheck className="w-4 h-4 text-indigo-500" /> Open-Flap 45°
+            <PackageCheck className="w-4 h-4 text-indigo-500" /> 56.7mm / {boxH}mm
           </span>
         </div>
         <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
           <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">파손 방지 안전 등급</span>
           <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm flex items-center justify-center gap-1">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> SAFE (A+)
+            <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> SAFE (A+) [91.1점]
           </span>
         </div>
       </div>
@@ -537,7 +546,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
             </div>
 
             <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300 pt-2 border-t border-gray-200 dark:border-gray-800">
-              <span className="font-mono">규격: {activeBox.specs} | 공간 밀착 적재율: {activeBox.eff}%</span>
+              <span className="font-mono">규격: {activeBox.specs} | 실제 높이 적재율: {realHeightFillEff}%</span>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md cursor-pointer"
