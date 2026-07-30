@@ -82,7 +82,7 @@ export default function OutboundDashboard() {
   const [boxCategoryTab, setBoxCategoryTab] = useState<'slim' | 'standard'>('slim');
 
   // Real WMS Book Metadata Binding for Dynamic Pricing
-  const MOCK_INVENTORY_BOOKS_FALLBACK = [
+  const MOCK_INVENTORY_BOOKS = [
     {
       id: "BOOK-01",
       title: "Do it! 점프 투 파이썬 (개정 2판)",
