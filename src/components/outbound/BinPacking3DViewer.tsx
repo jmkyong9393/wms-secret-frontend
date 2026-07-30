@@ -479,18 +479,19 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </button>
       </div>
 
-            {/* Interactive 4-Cushion Catalog & AI Recommendation Selector */}
-      <div className="bg-gray-50/80 dark:bg-gray-800/40 p-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-2.5">
+            {/* Dual Component Cushion Recommendation: Top Cushion vs Side Cushion */}
+      <div className="bg-gray-50/80 dark:bg-gray-800/40 p-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5">
             <Package className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            실무 완충재 규격 카탈로그 & AI 맞춤 추천
+            AI 스마트 도서 물류 이원화 완충재 추천 (상단 유격 & 측면 쏠림 방지)
           </span>
-          <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
-            현재 추천: {activeCushion.name} ({activeCushion.thick})
+          <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/80 px-2.5 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
+            상단: 에어필로우 (9mm) + 측면: PE폼/뽁뽁이 (25mm 둘기)
           </span>
         </div>
 
+        {/* 5 Cushion Materials Interactive Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {cushionCatalog.map((cush) => (
             <div
@@ -508,7 +509,9 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
                   <span className="text-[9px] font-bold bg-emerald-500 text-white px-1 rounded shrink-0">추천</span>
                 )}
               </div>
-              <p className="text-[10px] font-mono text-gray-500 dark:text-gray-400">{cush.target} ({cush.thick})</p>
+              <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-bold">
+                [{cush.mode === 'top' ? '상단채움' : cush.mode === 'side' ? '측면둘기' : '전방위래핑'}] ({cush.thick})
+              </p>
             </div>
           ))}
         </div>
