@@ -65,8 +65,8 @@ export function resolveInspectionImages(itemOrJob: any): string[] {
   return [
     coverUrl,
     coverUrl,
-    `${BASE_IMAGE_HOST}/experiment_data/job-0c2929a0/raw_3.jpg`,
-    `${BASE_IMAGE_HOST}/experiment_data/job-0c2929a0/raw_4.jpg`
+    "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500",
+    "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500"
   ];
 }
 
