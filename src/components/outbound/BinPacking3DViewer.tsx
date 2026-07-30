@@ -63,13 +63,16 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
   const book2_D = Math.min(boxD * 0.92, 225);
   const book2_H = 19.2; // SQL Book Fixed Height (mm)
 
-  const airPad_H = activeCushion.thick_mm; // Dynamic Cushion Height (mm)
+  // Mode-based Cushion Z-Height (Side wrap adds 0 to Z-height, Top fill adds cushion thickness)
+  const cushionZHeight = (activeCushion.mode === 'top' || activeCushion.mode === 'both') ? activeCushion.thick_mm : 0;
+  const airPad_H = activeCushion.thick_mm;
 
   // REAL DYNAMIC METRIC DUAL SEPARATION (PHYSICAL Z-HEIGHT VS 3D VOLUME)
-  const totalStackH = book1_H + book2_H + airPad_H; // 56.7mm
-  const heightFillRatio = round((totalStackH / boxH) * 100, 1); // Exact Z-height ratio (e.g. 113.4% in 50mm box!)
+  const totalStackH = book1_H + book2_H + cushionZHeight; // Exact Z-Height
+  const heightFillRatio = round((totalStackH / boxH) * 100, 1); // Exact Z-height ratio
 
-  const totalStackVol = (book1_W * book1_D * book1_H) + (book2_W * book2_D * book2_H) + (book1_W * book1_D * airPad_H);
+  const sideGuardVol = (activeCushion.mode === 'side' || activeCushion.mode === 'both') ? (boxW * boxD - book1_W * book1_D) * totalStackH * 0.4 : 0;
+  const totalStackVol = (book1_W * book1_D * book1_H) + (book2_W * book2_D * book2_H) + (book1_W * book1_D * cushionZHeight) + sideGuardVol;
   const totalBoxVol = boxW * boxD * boxH;
   const volumeFillRatio = round((totalStackVol / totalBoxVol) * 100, 1); // Exact 3D Volume ratio
 
@@ -575,7 +578,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
 
       {/* Dynamic Height Fill Safety Grade & Dual Metric Calculation */}
       {(() => {
-        const stackH = 56.7;
+        const stackH = totalStackH;
         const exactHeightRatio = round((stackH / boxH) * 100, 1);
         const voidSpaceMM = Math.max(0, boxH - stackH);
         
