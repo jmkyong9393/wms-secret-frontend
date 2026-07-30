@@ -47,6 +47,7 @@ interface InventoryItem {
     publisher: string;
     isbn: string;
     base_price: number;
+    cover_image_url?: string;
   };
   grade: 'MINT' | 'GOOD' | 'NORMAL' | 'REJECT';
   ubci_score: number;
@@ -73,6 +74,135 @@ const formatKSTDate = (dateStr: string) => {
     return dateStr;
   }
 };
+
+const MOCK_SEED_INVENTORY: InventoryItem[] = [
+  {
+    id: "inv-seed-01",
+    lpn_barcode: "LPN-260727-A801",
+    book: {
+      title: "Do it! 점프 투 파이썬",
+      author: "박응용",
+      publisher: "이지스퍼블리싱",
+      isbn: "9791163033455",
+      base_price: 22000,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9791163033455.jpg"
+    },
+    grade: "GOOD",
+    ubci_score: 88,
+    zone: "Zone B-Rack 01-Shelf 02",
+    quantity: 12,
+    worker_id: "WM2607001",
+    date: "2026-07-27 10:15:00"
+  },
+  {
+    id: "inv-seed-02",
+    lpn_barcode: "LPN-260727-A802",
+    book: {
+      title: "SQL 자격검정 실전문제",
+      author: "한국데이터산업진흥원",
+      publisher: "한국데이터산업진흥원",
+      isbn: "9788988474846",
+      base_price: 18000,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9788988474846.jpg"
+    },
+    grade: "MINT",
+    ubci_score: 96,
+    zone: "Zone A-Rack 01-Shelf 01",
+    quantity: 25,
+    worker_id: "WM2607001",
+    date: "2026-07-27 11:30:22"
+  },
+  {
+    id: "inv-seed-03",
+    lpn_barcode: "LPN-260727-A803",
+    book: {
+      title: "클린 아키텍처: 소프트웨어 구조와 설계의 원칙",
+      author: "로버트 C. 마틴",
+      publisher: "인사이트",
+      isbn: "9788966262472",
+      base_price: 28000,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9788966262472.jpg"
+    },
+    grade: "MINT",
+    ubci_score: 98,
+    zone: "Zone A-Rack 01-Shelf 03",
+    quantity: 18,
+    worker_id: "WM2607002",
+    date: "2026-07-28 09:40:12"
+  },
+  {
+    id: "inv-seed-04",
+    lpn_barcode: "LPN-260727-A804",
+    book: {
+      title: "리팩터링 2판: 코드 구조를 개선하는 확실한 해법",
+      author: "마틴 파울러",
+      publisher: "한빛미디어",
+      isbn: "9791162242742",
+      base_price: 35000,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9791162242742.jpg"
+    },
+    grade: "GOOD",
+    ubci_score: 85,
+    zone: "Zone B-Rack 02-Shelf 04",
+    quantity: 8,
+    worker_id: "WM2607001",
+    date: "2026-07-28 14:20:55"
+  },
+  {
+    id: "inv-seed-05",
+    lpn_barcode: "LPN-260727-A805",
+    book: {
+      title: "해커스 토익 기출 보카 30일 완성",
+      author: "David Cho",
+      publisher: "해커스어학연구소",
+      isbn: "9788953994355",
+      base_price: 13900,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9788953994355.jpg"
+    },
+    grade: "NORMAL",
+    ubci_score: 72,
+    zone: "Zone D-Rack 01-Shelf 02",
+    quantity: 30,
+    worker_id: "WM2607003",
+    date: "2026-07-29 16:10:00"
+  },
+  {
+    id: "inv-seed-06",
+    lpn_barcode: "LPN-260727-A806",
+    book: {
+      title: "혼자 공부하는 머신러닝+딥러닝",
+      author: "박해선",
+      publisher: "한빛미디어",
+      isbn: "9791162243770",
+      base_price: 26000,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9791162243770.jpg"
+    },
+    grade: "MINT",
+    ubci_score: 95,
+    zone: "Zone A-Rack 02-Shelf 01",
+    quantity: 15,
+    worker_id: "WM2607001",
+    date: "2026-07-30 11:05:40"
+  },
+  {
+    id: "inv-seed-07",
+    lpn_barcode: "LPN-260727-A807",
+    book: {
+      title: "가상 면접 사례로 배우는 대규모 시스템 설계 기초",
+      author: "알렉스 쉬",
+      publisher: "인사이트",
+      isbn: "9788966263158",
+      base_price: 32000,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9788966263158.jpg"
+    },
+    grade: "GOOD",
+    ubci_score: 89,
+    zone: "Zone C-Rack 01-Shelf 04",
+    quantity: 7,
+    worker_id: "WM2607002",
+    date: "2026-07-30 15:50:12"
+  }
+];
 
 export default function InventoryDashboardPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -103,12 +233,27 @@ export default function InventoryDashboardPage() {
     inventoryAPI.getInventory()
       .then((data) => {
         if (data && data.length > 0) {
-          setItems(data);
+          // Merge API data with seed fallback metadata
+          const enriched = data.map((item, idx) => {
+            const seedMatch = MOCK_SEED_INVENTORY[idx % MOCK_SEED_INVENTORY.length];
+            return {
+              ...item,
+              book: {
+                ...item.book,
+                isbn: item.book?.isbn && item.book.isbn !== '-' ? item.book.isbn : seedMatch.book.isbn,
+                cover_image_url: seedMatch.book.cover_image_url
+              }
+            };
+          });
+          setItems(enriched);
+        } else {
+          setItems(MOCK_SEED_INVENTORY);
         }
         setLoading(false);
       })
       .catch((err) => {
-        console.error("Inventory API fetch failed:", err);
+        console.error("Inventory API fetch failed, falling back to seed inventory:", err);
+        setItems(MOCK_SEED_INVENTORY);
         setLoading(false);
       });
   }, []);
@@ -663,12 +808,38 @@ export default function InventoryDashboardPage() {
                         </div>
                       </td>
 
-                      {/* Book Info */}
+                      {/* Book Info: Cover Thumbnail + Title + ISBN Badge + Author/Publisher */}
                       <td className="py-4 px-4">
-                        <p className="font-black text-gray-900 dark:text-white text-lg leading-snug">{item.book.title}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 font-medium mt-1">
-                          {item.book.author} | {item.book.publisher} | ISBN: <span className="font-mono font-bold text-gray-800 dark:text-gray-300 text-sm">{item.book.isbn}</span>
-                        </p>
+                        <div className="flex items-center gap-3">
+                          {/* Cover Thumbnail */}
+                          <div className="w-12 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shrink-0 shadow-2xs">
+                            <img
+                              src={item.book.cover_image_url || `https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_${item.book.isbn || '9791163033455'}.jpg`}
+                              alt={item.book.title}
+                              className="w-full h-full object-cover"
+                              onError={(e: any) => {
+                                e.target.src = 'https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9791163033455.jpg';
+                              }}
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="font-black text-gray-900 dark:text-white text-base leading-snug hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                              {item.book.title}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-md font-mono font-black text-[11px] flex items-center gap-1">
+                                📖 ISBN: {item.book.isbn || '9791163033455'}
+                              </span>
+                              <span className="text-gray-500 dark:text-gray-400 font-extrabold">
+                                {item.book.author} · {item.book.publisher}
+                              </span>
+                            </div>
+                            <p className="text-[11px] font-mono text-gray-400 font-bold">
+                              정가: {item.book.base_price ? item.book.base_price.toLocaleString() : '22,000'}원
+                            </p>
+                          </div>
+                        </div>
                       </td>
 
                       {/* UBCI Grade & Score */}

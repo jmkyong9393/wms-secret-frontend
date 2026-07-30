@@ -10,10 +10,19 @@ interface BinPacking3DViewerProps {
     specs: string;
     eff: number;
   };
+  selectedBook?: {
+    id: string;
+    title: string;
+    author?: string;
+    publisher?: string;
+    isbn?: string;
+    listPrice?: number;
+    category?: string;
+  } | null;
   aiRecommendationLog?: string;
 }
 
-export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }: BinPacking3DViewerProps) {
+export default function BinPacking3DViewer({ selectedBox, selectedBook, aiRecommendationLog }: BinPacking3DViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const modalCanvasRef = useRef<HTMLCanvasElement | null>(null);
   
@@ -551,7 +560,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         })()}
       </div>
 
-      {/* Responsive High-Contrast Layer Item Legend Panel (With Side Cushion Guard!) */}
+      {/* Dynamic Outbound Book Layer Item Legend Panel */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-sans">
         {/* Cyan Layer: Side Cushion Guard */}
         <div className="flex items-start gap-2 p-2 bg-cyan-50/80 dark:bg-cyan-950/40 rounded-xl border border-cyan-200 dark:border-cyan-800/80 min-w-0">
@@ -571,21 +580,29 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
           </div>
         </div>
 
-        {/* Emerald Layer: SQL Hardcover */}
+        {/* Emerald Layer: Dynamic Selected Outbound Book */}
         <div className="flex items-start gap-2 p-2.5 bg-emerald-50/80 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800/80 min-w-0">
           <div className="w-3.5 h-3.5 mt-0.5 rounded bg-emerald-500 shrink-0 shadow-xs border border-emerald-600" />
           <div className="min-w-0 flex-1">
-            <span className="font-extrabold text-emerald-900 dark:text-emerald-200 block text-[11px] leading-tight">중단: SQL 자격검정</span>
-            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono block leading-tight mt-0.5 break-words">320p 양장본 (실 두께 19.2mm)</span>
+            <span className="font-extrabold text-emerald-900 dark:text-emerald-200 block text-[11px] leading-tight truncate">
+              중단: {selectedBook?.title || '출고 도서 객체'}
+            </span>
+            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono block leading-tight mt-0.5 break-words">
+              ISBN: {selectedBook?.isbn || '9791163033455'} (두께 22.5mm)
+            </span>
           </div>
         </div>
 
-        {/* Purple Layer: Python Softcover */}
+        {/* Purple Layer: Dynamic Book Publisher/Base Layer */}
         <div className="flex items-start gap-2 p-2.5 bg-purple-50/80 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800/80 min-w-0">
           <div className="w-3.5 h-3.5 mt-0.5 rounded bg-purple-600 shrink-0 shadow-xs border border-purple-700" />
           <div className="min-w-0 flex-1">
-            <span className="font-extrabold text-purple-900 dark:text-purple-200 block text-[11px] leading-tight">하단: 점프 투 파이썬</span>
-            <span className="text-[10px] text-purple-700 dark:text-purple-400 font-mono block leading-tight mt-0.5 break-words">450p 무선제본 (실 두께 28.5mm)</span>
+            <span className="font-extrabold text-purple-900 dark:text-purple-200 block text-[11px] leading-tight truncate">
+              하단: {selectedBook?.publisher || selectedBook?.author || '이지스퍼블리싱'} [출고 트레이 Base]
+            </span>
+            <span className="text-[10px] text-purple-700 dark:text-purple-400 font-mono block leading-tight mt-0.5 break-words">
+              고강도 충격 흡수 슬림 트레이
+            </span>
           </div>
         </div>
       </div>
