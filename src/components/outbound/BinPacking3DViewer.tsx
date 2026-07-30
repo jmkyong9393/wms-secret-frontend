@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Box, RotateCw, Sparkles, ShieldCheck, Cpu, ZoomIn, ZoomOut, Maximize2, X, RefreshCw, PackageCheck } from 'lucide-react';
+import { Box, RotateCw, Sparkles, ShieldCheck, Cpu, ZoomIn, ZoomOut, Maximize2, X, RefreshCw, PackageCheck, Eye, Package } from 'lucide-react';
 
 interface BinPacking3DViewerProps {
   selectedBox?: {
@@ -17,10 +17,10 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const modalCanvasRef = useRef<HTMLCanvasElement | null>(null);
   
-  // Active Box Selection (Default Box-A1 Low Profile 250x150x60mm)
+  // Active Box Selection (Default BOOK-S2 250x150x60mm)
   const activeBox = selectedBox || {
-    id: "Box-A1",
-    name: "소형-Low A-BOX (추천)",
+    id: "BOOK-S2",
+    name: "도서슬림 소형 2호 (추천)",
     specs: "250x150x60mm",
     eff: 94.5
   };
@@ -32,6 +32,9 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
   
+  // 3D View Modes: 'xray' (Internal Inspection) vs 'solid' (Complete Sealed Box with Tape & Label)
+  const [viewMode, setViewMode] = useState<'xray' | 'solid'>('xray');
+
   // Zoom & Modal States
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -43,21 +46,18 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
   const boxH = dimMatches ? parseInt(dimMatches[3]) : 60;
 
   // REAL FIXED PHYSICAL BOOK DIMENSIONS (mm)
-  // Python Book (4륙판: 188W * 257D * 28.5H mm)
-  // SQL Book (신국판: 152W * 225D * 19.2H mm)
-  // Air Pad Cushion Layer (Fixed 9.0H mm)
   const book1_W = Math.min(boxW * 0.94, 188);
   const book1_D = Math.min(boxD * 0.94, 257);
-  const book1_H = 28.5; // FIXED PHYSICAL HEIGHT (mm)
+  const book1_H = 28.5; // Python Book Fixed Height (mm)
 
   const book2_W = Math.min(boxW * 0.92, 152);
   const book2_D = Math.min(boxD * 0.92, 225);
-  const book2_H = 19.2; // FIXED PHYSICAL HEIGHT (mm)
+  const book2_H = 19.2; // SQL Book Fixed Height (mm)
 
-  const airPad_H = 9.0; // FIXED PHYSICAL HEIGHT (mm)
+  const airPad_H = 9.0; // Air Pad Cushion Fixed Height (mm)
 
-  // Real Dynamic Fill Ratio Calculation based on Box Height
-  const totalStackH = book1_H + book2_H + airPad_H; // 56.7mm total
+  // Real Dynamic Fill Ratio Calculation
+  const totalStackH = book1_H + book2_H + airPad_H; // 56.7mm
   const realHeightFillEff = Math.min(96.5, round((totalStackH / boxH) * 100, 1));
 
   function round(val: number, decimals: number) {
@@ -65,7 +65,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     return Math.round(val * factor) / factor;
   }
 
-  // Render 3D Canvas Scene with Real Physical Millimeter World Mapping
+  // Render 3D Canvas Scene
   const drawSceneOnContext = useCallback((
     canvas: HTMLCanvasElement,
     scaleMultiplier: number = 1.0
@@ -80,7 +80,6 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     const cx = width / 2;
     const cy = height / 2 + (scaleMultiplier > 1.2 ? 20 : 10);
 
-    // Uniform Physical Scale Factor so 1mm = constant pixels across boxes
     const mmToPixel = (width < 600 ? 0.75 : 0.85) * zoomLevel * scaleMultiplier;
 
     const radX = (rotX * Math.PI) / 180;
@@ -160,93 +159,140 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
       ctx.stroke();
     };
 
-    // 1. OUTER CARDBOARD BOX CONTAINER (SCALES DYNAMICALLY WITH BOX SIZE!)
     const hw = boxW / 2;
     const hd = boxD / 2;
-    const bh = boxH; // Actual Selected Box Height mm (60mm, 100mm, 150mm, 200mm)
+    const bh = boxH;
 
-    drawCuboid(
-      0, 0, 0,
-      boxW, boxD, bh,
-      'rgba(79, 70, 229, 0.04)',
-      'rgba(79, 70, 229, 0.85)',
-      'rgba(99, 102, 241, 0.06)',
-      'rgba(67, 56, 202, 0.06)'
-    );
+    if (viewMode === 'xray') {
+      // MODE 1: X-RAY TRANSPARENT OPEN FLAPS BOX (INTERNAL STACK INSPECTION)
+      
+      // 1. Draw Outer Wireframe
+      drawCuboid(
+        0, 0, 0,
+        boxW, boxD, bh,
+        'rgba(79, 70, 229, 0.04)',
+        'rgba(79, 70, 229, 0.85)',
+        'rgba(99, 102, 241, 0.06)',
+        'rgba(67, 56, 202, 0.06)'
+      );
 
-    // Draw 4 Open Box Flaps
-    const flapLen = Math.min(35, bh * 0.4);
-    const flapAng = Math.PI / 4;
+      // Draw Open Top Flaps
+      const flapLen = Math.min(35, bh * 0.4);
+      const flapAng = Math.PI / 4;
 
-    const topV4 = project(-hw, bh, -hd);
-    const topV5 = project(hw, bh, -hd);
-    const topV6 = project(hw, bh, hd);
-    const topV7 = project(-hw, bh, hd);
+      const topV4 = project(-hw, bh, -hd);
+      const topV5 = project(hw, bh, -hd);
+      const topV6 = project(hw, bh, hd);
+      const topV7 = project(-hw, bh, hd);
 
-    const flapFront1 = project(-hw, bh + flapLen * Math.sin(flapAng), -hd - flapLen * Math.cos(flapAng));
-    const flapFront2 = project(hw, bh + flapLen * Math.sin(flapAng), -hd - flapLen * Math.cos(flapAng));
+      const flapFront1 = project(-hw, bh + flapLen * Math.sin(flapAng), -hd - flapLen * Math.cos(flapAng));
+      const flapFront2 = project(hw, bh + flapLen * Math.sin(flapAng), -hd - flapLen * Math.cos(flapAng));
 
-    const flapRight1 = project(hw + flapLen * Math.cos(flapAng), bh + flapLen * Math.sin(flapAng), -hd);
-    const flapRight2 = project(hw + flapLen * Math.cos(flapAng), bh + flapLen * Math.sin(flapAng), hd);
+      const flapRight1 = project(hw + flapLen * Math.cos(flapAng), bh + flapLen * Math.sin(flapAng), -hd);
+      const flapRight2 = project(hw + flapLen * Math.cos(flapAng), bh + flapLen * Math.sin(flapAng), hd);
 
-    // Front Open Flap
-    ctx.beginPath();
-    ctx.moveTo(topV4.px, topV4.py);
-    ctx.lineTo(topV5.px, topV5.py);
-    ctx.lineTo(flapFront2.px, flapFront2.py);
-    ctx.lineTo(flapFront1.px, flapFront1.py);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(99, 102, 241, 0.12)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+      // Front Flap
+      ctx.beginPath();
+      ctx.moveTo(topV4.px, topV4.py);
+      ctx.lineTo(topV5.px, topV5.py);
+      ctx.lineTo(flapFront2.px, flapFront2.py);
+      ctx.lineTo(flapFront1.px, flapFront1.py);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(99, 102, 241, 0.12)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
 
-    // Right Open Flap
-    ctx.beginPath();
-    ctx.moveTo(topV5.px, topV5.py);
-    ctx.lineTo(topV6.px, topV6.py);
-    ctx.lineTo(flapRight2.px, flapRight2.py);
-    ctx.lineTo(flapRight1.px, flapRight1.py);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(79, 70, 229, 0.1)';
-    ctx.fill();
-    ctx.stroke();
+      // Right Flap
+      ctx.beginPath();
+      ctx.moveTo(topV5.px, topV5.py);
+      ctx.lineTo(topV6.px, topV6.py);
+      ctx.lineTo(flapRight2.px, flapRight2.py);
+      ctx.lineTo(flapRight1.px, flapRight1.py);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(79, 70, 229, 0.1)';
+      ctx.fill();
+      ctx.stroke();
 
+      // 2. Draw Stacked Items Inside
+      // LAYER 1: Python Book (Purple)
+      drawCuboid(
+        0, 2, 0,
+        book1_W, book1_D, book1_H,
+        'rgba(147, 51, 234, 0.9)',
+        'rgba(107, 33, 168, 0.95)',
+        'rgba(168, 85, 247, 0.95)',
+        'rgba(126, 34, 206, 0.92)'
+      );
 
-    // 2. REAL FIXED PHYSICAL BOOK STACK (REAL MM HEIGHT & TRIM SIZES!)
-    
-    // LAYER 1: Bottom Python Book (Fixed 28.5mm Height) -> VIBRANT PURPLE
-    drawCuboid(
-      0, 2, 0,
-      book1_W, book1_D, book1_H,
-      'rgba(147, 51, 234, 0.9)',
-      'rgba(107, 33, 168, 0.95)',
-      'rgba(168, 85, 247, 0.95)',
-      'rgba(126, 34, 206, 0.92)'
-    );
+      // LAYER 2: SQL Book (Emerald)
+      drawCuboid(
+        0, 2 + book1_H + 2, 0,
+        book2_W, book2_D, book2_H,
+        'rgba(16, 185, 129, 0.9)',
+        'rgba(6, 95, 70, 0.95)',
+        'rgba(52, 211, 153, 0.95)',
+        'rgba(4, 120, 87, 0.92)'
+      );
 
-    // LAYER 2: Middle SQL Book (Fixed 19.2mm Height) -> VIBRANT EMERALD
-    drawCuboid(
-      0, 2 + book1_H + 2, 0,
-      book2_W, book2_D, book2_H,
-      'rgba(16, 185, 129, 0.9)',
-      'rgba(6, 95, 70, 0.95)',
-      'rgba(52, 211, 153, 0.95)',
-      'rgba(4, 120, 87, 0.92)'
-    );
+      // LAYER 3: Air Cushion Pad (Amber)
+      drawCuboid(
+        0, 2 + book1_H + book2_H + 4, 0,
+        Math.min(boxW * 0.95, book1_W * 1.02), Math.min(boxD * 0.95, book1_D * 1.02), airPad_H,
+        'rgba(245, 158, 11, 0.75)',
+        'rgba(180, 83, 9, 0.95)',
+        'rgba(251, 191, 36, 0.9)',
+        'rgba(217, 119, 6, 0.85)'
+      );
 
-    // LAYER 3: Top Air Cushion Pad Layer (Fixed 9.0mm Height) -> VIBRANT AMBER CUSHION
-    drawCuboid(
-      0, 2 + book1_H + book2_H + 4, 0,
-      Math.min(boxW * 0.95, book1_W * 1.02), Math.min(boxD * 0.95, book1_D * 1.02), airPad_H,
-      'rgba(245, 158, 11, 0.75)',
-      'rgba(180, 83, 9, 0.95)',
-      'rgba(251, 191, 36, 0.9)',
-      'rgba(217, 119, 6, 0.85)'
-    );
+    } else {
+      // MODE 2: SOLID COMPLETED PACKAGING BOX (WITH TAPE & COURIER SHIPPING LABEL)
+      
+      // Draw Solid Cardboard Box
+      drawCuboid(
+        0, 0, 0,
+        boxW, boxD, bh,
+        'rgba(217, 119, 6, 0.92)',   // Front Kraft Brown
+        'rgba(146, 64, 14, 0.95)',   // Outline
+        'rgba(251, 191, 36, 0.88)',  // Top Kraft Brown
+        'rgba(180, 83, 9, 0.95)'     // Side Kraft Brown
+      );
 
-  }, [rotX, rotY, boxW, boxD, boxH, zoomLevel, book1_W, book1_D, book1_H, book2_W, book2_D, book2_H, airPad_H]);
+      // Draw Top Center Sealing Tape Strip
+      const topTapeP1 = project(-hw * 0.2, bh + 0.5, -hd);
+      const topTapeP2 = project(hw * 0.2, bh + 0.5, -hd);
+      const topTapeP3 = project(hw * 0.2, bh + 0.5, hd);
+      const topTapeP4 = project(-hw * 0.2, bh + 0.5, hd);
+
+      ctx.beginPath();
+      ctx.moveTo(topTapeP1.px, topTapeP1.py);
+      ctx.lineTo(topTapeP2.px, topTapeP2.py);
+      ctx.lineTo(topTapeP3.px, topTapeP3.py);
+      ctx.lineTo(topTapeP4.px, topTapeP4.py);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(120, 53, 15, 0.85)'; // Sealing Tape Color
+      ctx.fill();
+
+      // Draw Front Shipping Label Overlay (택배 운송장 래벨)
+      const lblP1 = project(-hw * 0.4, bh * 0.25, -hd - 0.5);
+      const lblP2 = project(hw * 0.4, bh * 0.25, -hd - 0.5);
+      const lblP3 = project(hw * 0.4, bh * 0.75, -hd - 0.5);
+      const lblP4 = project(-hw * 0.4, bh * 0.75, -hd - 0.5);
+
+      ctx.beginPath();
+      ctx.moveTo(lblP1.px, lblP1.py);
+      ctx.lineTo(lblP2.px, lblP2.py);
+      ctx.lineTo(lblP3.px, lblP3.py);
+      ctx.lineTo(lblP4.px, lblP4.py);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(100, 116, 139, 0.8)';
+      ctx.stroke();
+    }
+
+  }, [rotX, rotY, boxW, boxD, boxH, zoomLevel, viewMode, book1_W, book1_D, book1_H, book2_W, book2_D, book2_H, airPad_H]);
 
   // Main canvas render
   useEffect(() => {
@@ -314,19 +360,41 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
           </div>
           <div>
             <h4 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <span>Real 3D Open-Box Bin Packing 시뮬레이터</span>
+              <span>Real 3D Bin Packing 시뮬레이터</span>
               <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded text-[10px] font-mono font-extrabold uppercase tracking-wide">
-                Physical 3D v4.0
+                Dual-Mode 3D v4.5
               </span>
             </h4>
             <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-              실제 도서 규격 고정 맵핑 ({boxW}W × {boxD}D × {boxH}H mm)
+              투시 모드 vs 완성형 택배 박스 모드 전환 ({boxW}W × {boxD}D × {boxH}H mm)
             </p>
           </div>
         </div>
 
-        {/* View Preset & Zoom Buttons */}
+        {/* View Mode & Zoom Control Group */}
         <div className="flex items-center gap-2">
+          {/* Dual 3D View Mode Toggle */}
+          <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => setViewMode('xray')}
+              className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                viewMode === 'xray' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>X-Ray 투시</span>
+            </button>
+            <button
+              onClick={() => setViewMode('solid')}
+              className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                viewMode === 'solid' ? 'bg-amber-600 text-white shadow-xs' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>완성형 박스</span>
+            </button>
+          </div>
+
           {/* Zoom Control Group */}
           <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
             <button
@@ -352,26 +420,6 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
               className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-white border-l border-gray-300 dark:border-gray-700 ml-1 transition cursor-pointer"
             >
               <RefreshCw className="w-3 h-3" />
-            </button>
-          </div>
-
-          {/* Preset Buttons */}
-          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => { setRotX(25); setRotY(-35); setAutoRotate(false); }}
-              className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                !autoRotate && rotX === 25 && rotY === -35 ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              입체 3D
-            </button>
-            <button
-              onClick={() => { setRotX(90); setRotY(0); setAutoRotate(false); }}
-              className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                !autoRotate && rotX === 90 ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              평면 Top
             </button>
           </div>
 
@@ -425,7 +473,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
           <div className="w-3.5 h-3.5 mt-0.5 rounded bg-amber-500 shrink-0 shadow-xs border border-amber-600" />
           <div className="min-w-0 flex-1">
             <span className="font-extrabold text-amber-900 dark:text-amber-200 block text-[11px] leading-tight">상단: 완충재 Pad Layer</span>
-            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono block leading-tight mt-0.5 break-words">에어캡 9.0mm (유격 충격 흡수)</span>
+            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono block leading-tight mt-0.5 break-words">에어필로우 9.0mm (유격 완충)</span>
           </div>
         </div>
 
@@ -461,7 +509,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </div>
         <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-sans">
           {aiRecommendationLog ||
-            `"실제 도서 규격(47.7mm)을 고정 맵핑한 결과, 높이 150mm/200mm 박스는 상부 유격이 과다 발생하므로, 슬림형 ${activeBox.name}(높이 ${boxH}mm) 선택 시 박스 높이 적재율 ${realHeightFillEff}%로 가장 완벽히 밀착 적재됩니다."`}
+            `"실제 도서 규격(56.7mm)을 고정 맵핑한 결과, 높이 150mm/200mm 박스는 상부 유격을 유발하므로, 도서 슬림 전용 ${activeBox.name}(높이 ${boxH}mm) 선택 시 박스 높이 적재율 ${realHeightFillEff}%로 가장 완벽히 밀착 적재됩니다."`}
         </p>
       </div>
 
@@ -525,8 +573,29 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
                 <h3 className="text-lg font-black">Real 3D Open-Box Bin Packing 시뮬레이터 2.5X 관제</h3>
               </div>
 
-              {/* Modal Zoom Controls */}
+              {/* Modal Mode & Zoom Controls */}
               <div className="flex items-center gap-2">
+                <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={() => setViewMode('xray')}
+                    className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                      viewMode === 'xray' ? 'bg-indigo-600 text-white shadow-xs' : 'text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>X-Ray 투시</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('solid')}
+                    className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                      viewMode === 'solid' ? 'bg-amber-600 text-white shadow-xs' : 'text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    <Package className="w-3.5 h-3.5" />
+                    <span>완성형 박스</span>
+                  </button>
+                </div>
+
                 <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
                   <button
                     onClick={handleZoomOut}
