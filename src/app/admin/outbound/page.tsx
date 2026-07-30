@@ -32,29 +32,21 @@ interface BoxOption {
   eff: number;
 }
 
-const BOX_OPTIONS: BoxOption[] = [
-  {
-    id: "Standard-Box-A",
-    name: "소형 A-BOX",
-    specs: "250x150x100mm",
-    desc: "단권 출고용",
-    eff: 82,
-  },
-  {
-    id: "Standard-Box-B",
-    name: "중형 B-BOX (추천)",
-    specs: "300x200x150mm",
-    desc: "공간 효율 94%",
-    eff: 94,
-  },
-  {
-    id: "Standard-Box-C",
-    name: "대형 C-BOX",
-    specs: "400x300x200mm",
-    desc: "세트/대량용",
-    eff: 68,
-  },
+const BOOK_SLIM_BOX_OPTIONS: BoxOption[] = [
+  { id: "BOOK-S1", name: "도서슬림 소형 1호", specs: "250x150x50mm", desc: "단권 슬림형", eff: 98.2 },
+  { id: "BOOK-S2", name: "도서슬림 소형 2호 (추천)", specs: "250x150x60mm", desc: "도서 2권 밀착 슬림", eff: 94.5 },
+  { id: "BOOK-M1", name: "도서슬림 중형 1호", specs: "300x200x70mm", desc: "중형 도서 묶음", eff: 81.0 },
+  { id: "BOOK-M2", name: "도서슬림 중형 2호", specs: "300x200x90mm", desc: "대형 도서 묶음", eff: 63.0 },
 ];
+
+const STANDARD_COURIER_BOX_OPTIONS: BoxOption[] = [
+  { id: "STD-01", name: "우체국 1호 (표준)", specs: "220x190x90mm", desc: "표준 소형", eff: 63.0 },
+  { id: "STD-02", name: "우체국 2호 (표준)", specs: "270x180x150mm", desc: "표준 중형", eff: 37.8 },
+  { id: "STD-03", name: "우체국 3호 (중형)", specs: "340x250x210mm", desc: "우체국 중형", eff: 27.0 },
+  { id: "STD-04", name: "우체국 4호 (대형)", specs: "410x310x280mm", desc: "우체국 대형", eff: 20.2 },
+];
+
+const BOX_OPTIONS: BoxOption[] = [...BOOK_SLIM_BOX_OPTIONS, ...STANDARD_COURIER_BOX_OPTIONS];
 
 /**
  * LPN 자동 하이픈 생성 포맷터
@@ -87,7 +79,8 @@ function formatLpnBarcode(input: string): string {
 
 export default function OutboundDashboard() {
   const [mockOrder, setMockOrder] = useState<any>(null);
-  const [selectedBoxId, setSelectedBoxId] = useState<string>("Standard-Box-B");
+  const [boxCategoryTab, setBoxCategoryTab] = useState<'slim' | 'standard'>('slim');
+  const [selectedBoxId, setSelectedBoxId] = useState<string>("BOOK-S2");
   const [mockBoxName, setMockBoxName] = useState<string>("Standard-Box-B (중형)");
   const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -466,23 +459,48 @@ export default function OutboundDashboard() {
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400">도서 사양(신국판/하드커버 등)을 3D 시뮬레이션하여 완충재 비용 및 적재 효율을 최적화합니다.</p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {BOX_OPTIONS.map((box) => (
+          {/* Category Tab Switcher: Book Slim vs Standard Courier */}
+          <div className="flex items-center justify-between gap-2 bg-gray-100 dark:bg-gray-800/80 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs">
+            <button
+              onClick={() => setBoxCategoryTab('slim')}
+              className={`flex-1 py-1.5 font-bold rounded-lg transition-all cursor-pointer ${
+                boxCategoryTab === 'slim'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              📖 도서 전용 슬림 박스 (4종)
+            </button>
+            <button
+              onClick={() => setBoxCategoryTab('standard')}
+              className={`flex-1 py-1.5 font-bold rounded-lg transition-all cursor-pointer ${
+                boxCategoryTab === 'standard'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              📦 일반 택배 표준 박스 (4종)
+            </button>
+          </div>
+
+          {/* 8-Box Tabbed Grid (4 Cards per Tab) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(boxCategoryTab === 'slim' ? BOOK_SLIM_BOX_OPTIONS : STANDARD_COURIER_BOX_OPTIONS).map((box) => (
               <div 
                 key={box.id}
                 onClick={() => handleSelectBox(box)}
-                className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-1 ${
+                className={`p-3 rounded-xl border transition-all cursor-pointer space-y-1 ${
                   selectedBoxId === box.id 
                     ? 'bg-indigo-50/70 dark:bg-indigo-950/70 border-indigo-500 ring-2 ring-indigo-500/30' 
                     : 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-gray-900 dark:text-white">{box.name}</span>
-                  {selectedBoxId === box.id && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />}
+                  <span className="font-bold text-[11px] text-gray-900 dark:text-white truncate">{box.name}</span>
+                  {selectedBoxId === box.id && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />}
                 </div>
                 <p className="text-[10px] font-mono text-gray-500 dark:text-gray-400">{box.specs}</p>
-                <p className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400">효율 {box.eff}%</p>
+                <p className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400">적재율 {box.eff}%</p>
               </div>
             ))}
           </div>
