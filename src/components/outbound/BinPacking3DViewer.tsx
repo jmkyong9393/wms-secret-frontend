@@ -546,12 +546,6 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
             </div>
           );
         })()}
-              <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-bold">
-                [{cush.mode === 'top' ? '상단채움' : cush.mode === 'side' ? '측면둘기' : '전방위래핑'}] ({cush.thick})
-              </p>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* Responsive High-Contrast Layer Item Legend Panel (With Side Cushion Guard!) */}
