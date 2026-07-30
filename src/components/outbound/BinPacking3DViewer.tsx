@@ -465,25 +465,55 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </p>
       </div>
 
-      {/* Bottom Summary Stats */}
-      <div className="grid grid-cols-3 gap-3 text-center text-xs pt-1 border-t border-gray-200 dark:border-gray-800">
-        <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
-          <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">선택 규격 박스</span>
-          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm">{activeBox.name}</span>
-        </div>
-        <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
-          <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">실제 적재 높이</span>
-          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm flex items-center justify-center gap-1">
-            <PackageCheck className="w-4 h-4 text-indigo-500" /> 56.7mm / {boxH}mm
-          </span>
-        </div>
-        <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
-          <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">파손 방지 안전 등급</span>
-          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm flex items-center justify-center gap-1">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> SAFE (A+) [91.1점]
-          </span>
-        </div>
-      </div>
+      {/* Dynamic Height Fill Safety Grade Calculation */}
+      {(() => {
+        const stackH = 56.7;
+        const heightFillRatio = Math.min(100, (stackH / boxH) * 100);
+        const voidSpaceMM = Math.max(0, boxH - stackH);
+        
+        let score = (heightFillRatio / 100) * 65 + 20 + 15;
+        if (heightFillRatio < 85) {
+          score -= (voidSpaceMM / boxH) * 45;
+        }
+        score = Math.max(15, Math.round(score * 10) / 10);
+
+        let badge = "SAFE (A+)";
+        let colorClass = "text-emerald-600 dark:text-emerald-400";
+        if (score < 45) {
+          badge = "HAZARD (D)";
+          colorClass = "text-red-600 dark:text-red-400";
+        } else if (score < 60) {
+          badge = "WARNING (C)";
+          colorClass = "text-amber-600 dark:text-amber-400";
+        } else if (score < 75) {
+          badge = "CAUTION (B)";
+          colorClass = "text-blue-600 dark:text-blue-400";
+        } else if (score < 88) {
+          badge = "SAFE (A)";
+          colorClass = "text-emerald-600 dark:text-emerald-400";
+        }
+
+        return (
+          <div className="grid grid-cols-3 gap-3 text-center text-xs pt-1 border-t border-gray-200 dark:border-gray-800">
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">선택 규격 박스</span>
+              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm">{activeBox.name}</span>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">실제 적재 높이</span>
+              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-sm flex items-center justify-center gap-1">
+                <PackageCheck className="w-4 h-4 text-indigo-500" /> 56.7mm / {boxH}mm ({Math.round(heightFillRatio)}%)
+              </span>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700/80">
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">파손 방지 안전 등급</span>
+              <span className={`font-mono font-bold text-sm flex items-center justify-center gap-1 ${colorClass}`}>
+                <ShieldCheck className="w-4 h-4" /> {badge} [{score}점]
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Fullscreen 2.5X Enlargement Modal */}
       {isModalOpen && (
