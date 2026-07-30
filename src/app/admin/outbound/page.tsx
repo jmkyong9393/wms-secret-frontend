@@ -81,31 +81,77 @@ export default function OutboundDashboard() {
   const [mockOrder, setMockOrder] = useState<any>(null);
   const [boxCategoryTab, setBoxCategoryTab] = useState<'slim' | 'standard'>('slim');
 
-  // Interactive Real-Time Dynamic Pricing Simulator Controls
-  const [dpListPrice, setDpListPrice] = useState<number>(35000);
-  const [dpUbciScore, setDpUbciScore] = useState<number>(78);
-  const [dpDaysInInventory, setDpDaysInInventory] = useState<number>(120);
-  const [dpCategory, setDpCategory] = useState<string>("Novel");
+  // Real WMS Book Metadata Binding for Dynamic Pricing
+  const MOCK_INVENTORY_BOOKS = [
+    {
+      id: "BOOK-01",
+      title: "Do it! 점프 투 파이썬 (개정 2판)",
+      isbn: "9791163033455",
+      category: "IT",
+      listPrice: 35000,
+      ubciScore: 78,
+      daysInInventory: 120,
+      customer: "교보문고 B2B 지점"
+    },
+    {
+      id: "BOOK-02",
+      title: "SQL 자격검정 실전문제",
+      isbn: "9788988647639",
+      category: "Textbook",
+      listPrice: 22000,
+      ubciScore: 95,
+      daysInInventory: 45,
+      customer: "영풍문고 강남점"
+    },
+    {
+      id: "BOOK-03",
+      title: "클린 아키텍처 (Clean Architecture)",
+      isbn: "9788966262472",
+      category: "IT",
+      listPrice: 32000,
+      ubciScore: 62,
+      daysInInventory: 210,
+      customer: "알라딘 B2B 물류센타"
+    },
+    {
+      id: "BOOK-04",
+      title: "트렌드 코리아 2026",
+      isbn: "9791192805123",
+      category: "Economy",
+      listPrice: 19000,
+      ubciScore: 88,
+      daysInInventory: 15,
+      customer: "예스24 총판"
+    }
+  ];
 
-  // Real-time calculation effect
-  const fetchRealDynamicPrice = async (price: number, ubci: number, days: number, cat: string) => {
+  const [selectedBookId, setSelectedBookId] = useState<string>("BOOK-01");
+  const selectedBook = MOCK_INVENTORY_BOOKS.find(b => b.id === selectedBookId) || MOCK_INVENTORY_BOOKS[0];
+
+  // Fetch real algorithmic price from backend API based on selected book's DB metadata
+  const fetchRealDynamicPrice = async (book: typeof MOCK_INVENTORY_BOOKS[0]) => {
     try {
       const res = await fetch("http://localhost:8000/api/v1/orders/calculate-dynamic-price", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          list_price: price,
-          ubci_score: ubci,
-          days_in_inventory: days,
-          category: cat
+          list_price: book.listPrice,
+          ubci_score: book.ubciScore,
+          days_in_inventory: book.daysInInventory,
+          category: book.category
         })
       });
       if (res.ok) {
         const data = await res.json();
         setMockOrder({
-          order_id: "ORD-20260727-99",
-          customer_name: "교보문고 B2B 지점",
-          type: "WHOLESALE",
+          order_id: `ORD-20260727-0${book.id.slice(-1)}`,
+          customer_name: book.customer,
+          title: book.title,
+          isbn: book.isbn,
+          list_price: book.listPrice,
+          ubci_score: book.ubciScore,
+          days_in_inventory: book.daysInInventory,
+          category: book.category,
           final_price: data.final_price,
           discount_rate: data.discount_percent,
           predicted_purchase_probability: data.predicted_purchase_probability,
@@ -116,15 +162,15 @@ export default function OutboundDashboard() {
       }
     } catch (e) {
       // Fallback local algorithmic calculation
-      const basePrice = price * (cat === 'IT' ? 0.55 : cat === 'Textbook' ? 0.55 : 0.40);
-      const dwellDecay = Math.min(days, 365) / 365.0 * 0.10;
+      const basePrice = book.listPrice * (book.category === 'IT' ? 0.55 : book.category === 'Textbook' ? 0.55 : 0.40);
+      const dwellDecay = Math.min(book.daysInInventory, 365) / 365.0 * 0.10;
       let bestDiscount = 0.05;
       let maxRev = 0;
       let bestP = 0.824;
 
       for (let step = 5; step < 90; step += 5) {
         const delta = step / 100.0;
-        let pSold = 0.30 + (delta * 0.80) - (((100 - ubci) / 100) * 0.60) - dwellDecay;
+        let pSold = 0.30 + (delta * 0.80) - (((100 - book.ubciScore) / 100) * 0.60) - dwellDecay;
         pSold = Math.max(0.05, Math.min(0.98, pSold));
         const rev = pSold * (basePrice * (1 - delta));
         if (rev > maxRev) {
@@ -134,22 +180,27 @@ export default function OutboundDashboard() {
         }
       }
       setMockOrder({
-        order_id: "ORD-20260727-99",
-        customer_name: "교보문고 B2B 지점",
-        type: "WHOLESALE",
+        order_id: `ORD-20260727-0${book.id.slice(-1)}`,
+        customer_name: book.customer,
+        title: book.title,
+        isbn: book.isbn,
+        list_price: book.listPrice,
+        ubci_score: book.ubciScore,
+        days_in_inventory: book.daysInInventory,
+        category: book.category,
         final_price: Math.round(basePrice * (1 - bestDiscount) / 10) * 10,
         discount_rate: `${Math.round(bestDiscount * 100)}%`,
         predicted_purchase_probability: Math.round(bestP * 1000) / 10,
         max_expected_revenue: Math.round(maxRev / 10) * 10,
-        trend_badge_text: `비부패성 보관료 방어: -${(dwellDecay * 100).toFixed(1)}% (${days}일 체류)`,
+        trend_badge_text: `비부패성 보관료 방어: -${(dwellDecay * 100).toFixed(1)}% (${book.daysInInventory}일 체류)`,
         optimization_model: "XGBoost 2-Step Price Elasticity Revenue Optimization"
       });
     }
   };
 
   React.useEffect(() => {
-    fetchRealDynamicPrice(dpListPrice, dpUbciScore, dpDaysInInventory, dpCategory);
-  }, [dpListPrice, dpUbciScore, dpDaysInInventory, dpCategory]);
+    fetchRealDynamicPrice(selectedBook);
+  }, [selectedBookId]);
   const [selectedBoxId, setSelectedBoxId] = useState<string>("BOOK-S2");
   const [mockBoxName, setMockBoxName] = useState<string>("Standard-Box-B (중형)");
   const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
@@ -496,98 +547,67 @@ export default function OutboundDashboard() {
       {/* Main Content: 3D Bin Packing & Dynamic Pricing Detail Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Dynamic Pricing Interactive Algorithmic Simulation Card */}
+        {/* Dynamic Pricing Real Book Metadata Automatic Calculation Card */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" /> 동적 가격 산정 엔진 (Dynamic Pricing)
             </h3>
-            <span className="text-[10px] font-mono bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 px-2 py-0.5 rounded font-bold">
-              실시간 산출 파이프라인
+            <span className="text-[10px] font-mono bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 rounded font-bold border border-emerald-200">
+              도서 DB 데이터 실시간 바인딩
             </span>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            UBCI 등급, 카테고리, 보관 일수(Days in Inventory) 변수를 슬라이더로 조절하면 실시간으로 예측 구매 확률($P_{sold}$) 및 기대 수익 극대화 도매가($P_{final}$)가 재산출됩니다.
+            LPN/ISBN으로 입고된 도서의 실제 메타데이터(정가, AI UBCI 품질점수, 보관일수, 카테고리)를 백엔드 2-Step 최적화 모델로 전달하여 최종 B2B 도매가를 자동 수식 연산합니다.
           </p>
 
-          {/* Interactive Input Parameters Panel */}
-          <div className="grid grid-cols-2 gap-3 p-3 bg-gray-100/80 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700 text-xs">
-            <div>
-              <label className="block text-[11px] font-extrabold text-gray-700 dark:text-gray-300 mb-1">
-                정가 (List Price): <span className="text-indigo-600 dark:text-indigo-400 font-mono">{dpListPrice.toLocaleString()}원</span>
-              </label>
-              <input
-                type="range"
-                min={10000}
-                max={100000}
-                step={1000}
-                value={dpListPrice}
-                onChange={(e) => setDpListPrice(Number(e.target.value))}
-                className="w-full accent-indigo-600 cursor-pointer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-extrabold text-gray-700 dark:text-gray-300 mb-1">
-                UBCI 품질점수: <span className="text-emerald-600 dark:text-emerald-400 font-mono">{dpUbciScore}점</span>
-              </label>
-              <input
-                type="range"
-                min={50}
-                max={100}
-                step={1}
-                value={dpUbciScore}
-                onChange={(e) => setDpUbciScore(Number(e.target.value))}
-                className="w-full accent-emerald-600 cursor-pointer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-extrabold text-gray-700 dark:text-gray-300 mb-1">
-                보관 일수 (Dwell): <span className="text-amber-600 dark:text-amber-400 font-mono">{dpDaysInInventory}일</span>
-              </label>
-              <input
-                type="range"
-                min={10}
-                max={365}
-                step={5}
-                value={dpDaysInInventory}
-                onChange={(e) => setDpDaysInInventory(Number(e.target.value))}
-                className="w-full accent-amber-600 cursor-pointer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-extrabold text-gray-700 dark:text-gray-300 mb-1">
-                카테고리
-              </label>
-              <select
-                value={dpCategory}
-                onChange={(e) => setDpCategory(e.target.value)}
-                className="w-full px-2 py-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded font-bold text-xs"
-              >
-                <option value="Novel">Novel (소설)</option>
-                <option value="IT">IT / 컴퓨터</option>
-                <option value="Textbook">Textbook (수험서)</option>
-                <option value="Economy">Economy (경제)</option>
-                <option value="Comic">Comic (만화)</option>
-              </select>
+          {/* Real Inventory Book Switcher */}
+          <div className="space-y-1.5 bg-gray-50 dark:bg-gray-800/40 p-3 rounded-xl border border-gray-200 dark:border-gray-700">
+            <label className="text-[11px] font-black text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              <Package className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              출고 대상 실재고 도서 선택 (자동 데이터 바인딩)
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              {MOCK_INVENTORY_BOOKS.map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => setSelectedBookId(b.id)}
+                  className={`p-2 rounded-lg border text-left transition-all cursor-pointer space-y-0.5 ${
+                    selectedBookId === b.id
+                      ? 'bg-indigo-50 dark:bg-indigo-950/80 border-indigo-500 ring-2 ring-indigo-500/20'
+                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-[11px] text-gray-900 dark:text-white truncate">{b.title}</span>
+                    {selectedBookId === b.id && <Check className="w-3 h-3 text-indigo-600 shrink-0" />}
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 font-mono">
+                    <span>정가: {b.listPrice.toLocaleString()}원 | UBCI: {b.ubciScore}점</span>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">{b.daysInInventory}일 체류</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
 
           {/* Real-time Dynamic Pricing Engine Output Card */}
           <div className="bg-gray-50 dark:bg-gray-800/60 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-2 text-xs">
             <div className="flex justify-between items-center">
-              <span className="text-gray-500 dark:text-gray-400">주문 ID</span>
-              <span className="font-mono font-bold text-gray-900 dark:text-white">{mockOrder?.order_id || 'ORD-20260727-99'}</span>
+              <span className="text-gray-500 dark:text-gray-400">주문 ID / B2B 거래처</span>
+              <span className="font-mono font-bold text-gray-900 dark:text-white">{mockOrder?.order_id || 'ORD-20260727-01'} [{mockOrder?.customer_name || '교보문고 B2B 지점'}]</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-500 dark:text-gray-400">B2B 거래처</span>
-              <span className="font-bold text-gray-900 dark:text-white">{mockOrder?.customer_name || '교보문고 B2B 지점'}</span>
+              <span className="text-gray-500 dark:text-gray-400">도서명 / ISBN</span>
+              <span className="font-extrabold text-gray-900 dark:text-white">{selectedBook.title} <span className="font-mono text-gray-400 font-normal">({selectedBook.isbn})</span></span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-500 dark:text-gray-400">정가 (List Price)</span>
-              <span className="font-mono text-gray-700 dark:text-gray-300">{dpListPrice.toLocaleString()} 원</span>
+              <span className="text-gray-500 dark:text-gray-400">도서 DB 정가 (List Price)</span>
+              <span className="font-mono font-bold text-gray-800 dark:text-gray-200">{selectedBook.listPrice.toLocaleString()} 원</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 dark:text-gray-400">AI UBCI 점수 / 보관일수</span>
+              <span className="font-mono font-bold text-gray-800 dark:text-gray-200">{selectedBook.ubciScore}점 ({selectedBook.ubciScore >= 80 ? 'MINT S급' : selectedBook.ubciScore >= 70 ? 'A급' : 'B급'}) | {selectedBook.daysInInventory}일 체류</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 dark:text-gray-400">최적 동적 할인율 (δ*)</span>
