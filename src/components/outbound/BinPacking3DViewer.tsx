@@ -409,44 +409,44 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </button>
       </div>
 
-      {/* High-Contrast Distinct Stacking Layer Item Legend Panel */}
+      {/* Responsive High-Contrast Layer Item Legend Panel (No Text Clipping!) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-sans">
         {/* Amber Layer: Cushion Pad */}
-        <div className="flex items-center gap-2.5 p-2.5 bg-amber-50/80 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/80">
-          <div className="w-4 h-3 rounded bg-amber-500 shrink-0 shadow-xs border border-amber-600" />
-          <div className="truncate">
-            <span className="font-extrabold text-amber-900 dark:text-amber-200 block text-[11px]">상단: 완충재 Pad Layer</span>
-            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono block">에어캡 8.5% (유격 유동 방지 완충)</span>
+        <div className="flex items-start gap-2 p-2.5 bg-amber-50/80 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/80 min-w-0">
+          <div className="w-3.5 h-3.5 mt-0.5 rounded bg-amber-500 shrink-0 shadow-xs border border-amber-600" />
+          <div className="min-w-0 flex-1">
+            <span className="font-extrabold text-amber-900 dark:text-amber-200 block text-[11px] leading-tight">상단: 완충재 Pad Layer</span>
+            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono block leading-tight mt-0.5 break-words">에어캡 8.5% (유격 유동 방지)</span>
           </div>
         </div>
 
         {/* Emerald Layer: SQL Hardcover */}
-        <div className="flex items-center gap-2.5 p-2.5 bg-emerald-50/80 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800/80">
-          <div className="w-4 h-4 rounded bg-emerald-500 shrink-0 shadow-xs border border-emerald-600" />
-          <div className="truncate">
-            <span className="font-extrabold text-emerald-900 dark:text-emerald-200 block text-[11px]">중단: SQL 자격검정</span>
-            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono block">320p 하드커버 (실 두께 19.2mm)</span>
+        <div className="flex items-start gap-2 p-2.5 bg-emerald-50/80 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800/80 min-w-0">
+          <div className="w-3.5 h-3.5 mt-0.5 rounded bg-emerald-500 shrink-0 shadow-xs border border-emerald-600" />
+          <div className="min-w-0 flex-1">
+            <span className="font-extrabold text-emerald-900 dark:text-emerald-200 block text-[11px] leading-tight">중단: SQL 자격검정</span>
+            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono block leading-tight mt-0.5 break-words">320p 하드커버 (두께 19.2mm)</span>
           </div>
         </div>
 
         {/* Purple Layer: Python Softcover */}
-        <div className="flex items-center gap-2.5 p-2.5 bg-purple-50/80 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800/80">
-          <div className="w-4 h-4 rounded bg-purple-600 shrink-0 shadow-xs border border-purple-700" />
-          <div className="truncate">
-            <span className="font-extrabold text-purple-900 dark:text-purple-200 block text-[11px]">하단: 점프 투 파이썬</span>
-            <span className="text-[10px] text-purple-700 dark:text-purple-400 font-mono block">450p 4륙판 (실 두께 28.5mm)</span>
+        <div className="flex items-start gap-2 p-2.5 bg-purple-50/80 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800/80 min-w-0">
+          <div className="w-3.5 h-3.5 mt-0.5 rounded bg-purple-600 shrink-0 shadow-xs border border-purple-700" />
+          <div className="min-w-0 flex-1">
+            <span className="font-extrabold text-purple-900 dark:text-purple-200 block text-[11px] leading-tight">하단: 점프 투 파이썬</span>
+            <span className="text-[10px] text-purple-700 dark:text-purple-400 font-mono block leading-tight mt-0.5 break-words">450p 4륙판 (두께 28.5mm)</span>
           </div>
         </div>
       </div>
 
       {/* AI Recommendation Agent Log Rationale Card */}
       <div className="bg-indigo-50/70 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/80 p-4 rounded-xl space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-300">
-            <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span>AI Multi-Agent 3D Pack Optimizer 두께 연산 결과</span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 min-w-0">
+            <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="break-words">AI Multi-Agent 3D Pack Optimizer 두께 연산 결과</span>
           </div>
-          <span className="text-[10px] font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 font-bold">
+          <span className="text-[10px] font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 font-bold shrink-0">
             CONFIDENCE: 99.4%
           </span>
         </div>
