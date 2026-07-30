@@ -480,17 +480,48 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 w-full max-w-4xl rounded-2xl p-6 space-y-4 shadow-2xl relative">
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 dark:border-gray-800 pb-3">
               <div className="flex items-center gap-2 text-gray-900 dark:text-white">
                 <Cpu className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
                 <h3 className="text-lg font-black">Real 3D Open-Box Bin Packing 시뮬레이터 2.5X 관제</h3>
               </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-xl bg-gray-100 dark:bg-gray-800 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Modal Zoom Controls */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={handleZoomOut}
+                    title="축소"
+                    className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer"
+                  >
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-[10px] font-mono font-bold px-1.5 text-gray-700 dark:text-gray-300 min-w-[36px] text-center">
+                    {Math.round(zoomLevel * 100)}%
+                  </span>
+                  <button
+                    onClick={handleZoomIn}
+                    title="확대"
+                    className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={handleZoomReset}
+                    title="초기화"
+                    className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-white border-l border-gray-300 dark:border-gray-700 ml-1 transition cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-xl bg-gray-100 dark:bg-gray-800 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Clean Ice Blue Modal Viewport */}
