@@ -81,57 +81,17 @@ export default function OutboundDashboard() {
   const [mockOrder, setMockOrder] = useState<any>(null);
   const [boxCategoryTab, setBoxCategoryTab] = useState<'slim' | 'standard'>('slim');
 
-  // Real WMS Book Metadata Binding for Dynamic Pricing
-  const MOCK_INVENTORY_BOOKS = [
-    {
-      id: "BOOK-01",
-      title: "Do it! 점프 투 파이썬 (개정 2판)",
-      isbn: "9791163033455",
-      category: "IT",
-      listPrice: 35000,
-      ubciScore: 78,
-      daysInInventory: 120,
-      customer: "교보문고 B2B 지점"
-    },
-    {
-      id: "BOOK-02",
-      title: "SQL 자격검정 실전문제",
-      isbn: "9788988647639",
-      category: "Textbook",
-      listPrice: 22000,
-      ubciScore: 95,
-      daysInInventory: 45,
-      customer: "영풍문고 강남점"
-    },
-    {
-      id: "BOOK-03",
-      title: "클린 아키텍처 (Clean Architecture)",
-      isbn: "9788966262472",
-      category: "IT",
-      listPrice: 32000,
-      ubciScore: 62,
-      daysInInventory: 210,
-      customer: "알라딘 B2B 물류센타"
-    },
-    {
-      id: "BOOK-04",
-      title: "트렌드 코리아 2026",
-      isbn: "9791192805123",
-      category: "Economy",
-      listPrice: 19000,
-      ubciScore: 88,
-      daysInInventory: 15,
-      customer: "예스24 총판"
-    }
-  ];
+  // 100% Real PostgreSQL DB REST API Data Binding (No Mock Objects)
 
-  const [inventoryBooks, setInventoryBooks] = useState<any[]>(MOCK_INVENTORY_BOOKS);
+  const [inventoryBooks, setInventoryBooks] = useState<any[]>([]);
   const [selectedBookId, setSelectedBookId] = useState<string>("");
+  const [isBooksLoading, setIsBooksLoading] = useState<boolean>(true);
 
-  // Fetch real inventory books from PostgreSQL DB via API
+  // Fetch real inventory books from PostgreSQL DB via REST API
   useEffect(() => {
     const fetchDbBooks = async () => {
       try {
+        setIsBooksLoading(true);
         const res = await fetch("http://localhost:8000/api/v1/orders/available-books");
         if (res.ok) {
           const data = await res.json();
@@ -141,13 +101,15 @@ export default function OutboundDashboard() {
           }
         }
       } catch (e) {
-        // Fallback to initial seed books
+        console.error("Failed to fetch DB books:", e);
+      } finally {
+        setIsBooksLoading(false);
       }
     };
     fetchDbBooks();
   }, []);
 
-  const selectedBook = inventoryBooks.find(b => b.id === selectedBookId) || inventoryBooks[0] || MOCK_INVENTORY_BOOKS[0];
+  const selectedBook = inventoryBooks.find(b => b.id === selectedBookId) || inventoryBooks[0] || null;
 
   // Fetch real algorithmic price from backend API based on selected book's DB metadata
   const fetchRealDynamicPrice = async (book: typeof MOCK_INVENTORY_BOOKS[0]) => {
@@ -620,15 +582,15 @@ export default function OutboundDashboard() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 dark:text-gray-400">도서명 / ISBN</span>
-              <span className="font-extrabold text-gray-900 dark:text-white">{selectedBook.title} <span className="font-mono text-gray-400 font-normal">({selectedBook.isbn})</span></span>
+              <span className="font-extrabold text-gray-900 dark:text-white">{selectedBook?.title || 'DB 도서 조회 중...'} <span className="font-mono text-gray-400 font-normal">({selectedBook?.isbn || '-'})</span></span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 dark:text-gray-400">도서 DB 정가 (List Price)</span>
-              <span className="font-mono font-bold text-gray-800 dark:text-gray-200">{selectedBook.listPrice.toLocaleString()} 원</span>
+              <span className="font-mono font-bold text-gray-800 dark:text-gray-200">{selectedBook?.listPrice ? selectedBook.listPrice.toLocaleString() : '0'} 원</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 dark:text-gray-400">AI UBCI 점수 / 보관일수</span>
-              <span className="font-mono font-bold text-gray-800 dark:text-gray-200">{selectedBook.ubciScore}점 ({selectedBook.ubciScore >= 80 ? 'MINT S급' : selectedBook.ubciScore >= 70 ? 'A급' : 'B급'}) | {selectedBook.daysInInventory}일 체류</span>
+              <span className="font-mono font-bold text-gray-800 dark:text-gray-200">{selectedBook?.ubciScore || 0}점 ({selectedBook?.ubciScore || 0 >= 80 ? 'MINT S급' : selectedBook?.ubciScore || 0 >= 70 ? 'A급' : 'B급'}) | {selectedBook?.daysInInventory || 0}일 체류</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 dark:text-gray-400">최적 동적 할인율 (δ*)</span>
