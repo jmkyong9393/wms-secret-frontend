@@ -437,10 +437,25 @@ export default function OutboundDashboard() {
               <span className="text-gray-500 dark:text-gray-400">정가 (List Price)</span>
               <span className="font-mono text-gray-700 dark:text-gray-300">35,000 원</span>
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 dark:text-gray-400">예측 구매 확률 (P_sold)</span>
+              <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                {mockOrder?.predicted_purchase_probability ? `${mockOrder.predicted_purchase_probability}%` : '82.4%'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 dark:text-gray-400">최대 기대 수익 E(δ*)</span>
+              <span className="font-mono font-extrabold text-indigo-600 dark:text-indigo-400">
+                {mockOrder?.max_expected_revenue ? `${mockOrder.max_expected_revenue.toLocaleString()} 원` : '21,630 원'}
+              </span>
+            </div>
             <div className="flex justify-between items-center pt-2 border-t dark:border-gray-700 font-bold">
-              <span className="text-blue-700 dark:text-blue-400">최종 동적 도매가</span>
+              <span className="text-blue-700 dark:text-blue-400">최종 동적 도매가 (P_final)</span>
               <span className="text-base font-mono text-blue-700 dark:text-blue-400">{mockOrder?.final_price?.toLocaleString() || '26,250'} 원</span>
             </div>
+            <p className="text-[10px] text-slate-400 font-mono pt-1 text-right">
+              {mockOrder?.optimization_model || 'XGBoost 2-Step Price Elasticity Revenue Optimization'}
+            </p>
           </div>
         </div>
 
