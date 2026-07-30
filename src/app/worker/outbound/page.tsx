@@ -36,11 +36,21 @@ interface BoxOption {
   eff: number;
 }
 
-const MOBILE_BOX_OPTIONS: BoxOption[] = [
-  { id: "Standard-Box-A", name: "소형 A-BOX", specs: "250x150x100mm", desc: "단권 소형", eff: 82 },
-  { id: "Standard-Box-B", name: "중형 B-BOX (추천)", specs: "300x200x150mm", desc: "공간 효율 94%", eff: 94 },
-  { id: "Standard-Box-C", name: "대형 C-BOX", specs: "400x300x200mm", desc: "세트/대량용", eff: 68 },
+const BOOK_SLIM_BOX_OPTIONS: BoxOption[] = [
+  { id: "BOOK-S1", name: "도서슬림 소형 1호", specs: "250x150x50mm", desc: "단권 슬림형", eff: 98.2 },
+  { id: "BOOK-S2", name: "도서슬림 소형 2호 (추천)", specs: "250x150x60mm", desc: "도서 2권 밀착 슬림", eff: 94.5 },
+  { id: "BOOK-M1", name: "도서슬림 중형 1호", specs: "300x200x70mm", desc: "중형 도서 묶음", eff: 81.0 },
+  { id: "BOOK-M2", name: "도서슬림 중형 2호", specs: "300x200x90mm", desc: "대형 도서 묶음", eff: 63.0 },
 ];
+
+const STANDARD_COURIER_BOX_OPTIONS: BoxOption[] = [
+  { id: "STD-01", name: "우체국 1호 (표준)", specs: "220x190x90mm", desc: "표준 소형", eff: 63.0 },
+  { id: "STD-02", name: "우체국 2호 (표준)", specs: "270x180x150mm", desc: "표준 중형", eff: 37.8 },
+  { id: "STD-03", name: "우체국 3호 (중형)", specs: "340x250x210mm", desc: "우체국 중형", eff: 27.0 },
+  { id: "STD-04", name: "우체국 4호 (대형)", specs: "410x310x280mm", desc: "우체국 대형", eff: 20.2 },
+];
+
+const MOBILE_BOX_OPTIONS: BoxOption[] = [...BOOK_SLIM_BOX_OPTIONS, ...STANDARD_COURIER_BOX_OPTIONS];
 
 /**
  * LPN 자동 하이픈 생성 포맷터 (모바일 터치 특화)
@@ -68,7 +78,7 @@ function formatLpnBarcode(input: string): string {
 
 export default function WorkerOutboundPage() {
   const currentWorkerId = 'WM2607001';
-  const [selectedBoxId, setSelectedBoxId] = useState<string>("Standard-Box-B");
+  const [selectedBoxId, setSelectedBoxId] = useState<string>("BOOK-S2");
   const [showScanner, setShowScanner] = useState<boolean>(true);
   const [confirmed, setConfirmed] = useState<boolean>(false);
 
