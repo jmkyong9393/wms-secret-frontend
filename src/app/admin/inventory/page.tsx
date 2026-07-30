@@ -229,20 +229,33 @@ export default function InventoryDashboardPage() {
 
   const [activePrintData, setActivePrintData] = useState<LpnLabelData | null>(null);
 
-  useEffect(() => {
+    useEffect(() => {
     inventoryAPI.getInventory()
       .then((data) => {
-        if (data && data.length > 0) {
-          // Merge API data with seed fallback metadata
+        if (data && Array.isArray(data) && data.length > 0) {
+          // Merge API data with seed fallback metadata safely
           const enriched = data.map((item, idx) => {
             const seedMatch = MOCK_SEED_INVENTORY[idx % MOCK_SEED_INVENTORY.length];
+            const safeScore = typeof item.ubci_score === 'number' ? item.ubci_score : (seedMatch.ubci_score || 85);
+            const safeGrade = item.grade || (safeScore >= 95 ? 'MINT' : safeScore >= 85 ? 'GOOD' : safeScore >= 65 ? 'NORMAL' : 'REJECT');
+            
             return {
-              ...item,
+              id: item.id || `inv-real-${idx}`,
+              lpn_barcode: item.lpn_barcode || seedMatch.lpn_barcode,
+              grade: safeGrade,
+              ubci_score: safeScore,
               book: {
-                ...item.book,
+                title: item.book?.title && item.book.title !== '도서 정보 없음' ? item.book.title : seedMatch.book.title,
+                author: item.book?.author && item.book.author !== '-' ? item.book.author : seedMatch.book.author,
+                publisher: item.book?.publisher && item.book.publisher !== '-' ? item.book.publisher : seedMatch.book.publisher,
                 isbn: item.book?.isbn && item.book.isbn !== '-' ? item.book.isbn : seedMatch.book.isbn,
+                base_price: item.book?.base_price || seedMatch.book.base_price,
                 cover_image_url: seedMatch.book.cover_image_url
-              }
+              },
+              zone: item.zone || seedMatch.zone,
+              quantity: item.quantity || 1,
+              worker_id: item.worker_id || "WM2607001",
+              date: item.date || seedMatch.date
             };
           });
           setItems(enriched);
