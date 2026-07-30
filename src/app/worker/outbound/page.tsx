@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import BinPacking3DViewer from '@/components/outbound/BinPacking3DViewer';
 import { 
   Package, 
   Box, 
@@ -243,18 +244,23 @@ export default function WorkerOutboundPage() {
               }}
               className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer space-y-0.5 ${
                 selectedBoxId === box.id
-                  ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-500 ring-2 ring-indigo-500/30'
-                  : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+                  ? 'bg-indigo-50/80 dark:bg-indigo-950/80 border-indigo-500 ring-2 ring-indigo-500/30'
+                  : 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="font-bold text-[11px] text-gray-900 dark:text-white truncate">{box.name.split(' ')[0]}</span>
                 {selectedBoxId === box.id && <Check className="w-3 h-3 text-indigo-600 dark:text-indigo-400 shrink-0" />}
               </div>
-              <p className="text-[9px] font-mono text-gray-400 truncate">{box.specs}</p>
-              <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400">{box.eff}%</p>
+              <p className="text-[9px] font-mono text-gray-500 dark:text-gray-400">{box.specs.split('mm')[0]}</p>
+              <p className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400">{box.eff}%</p>
             </button>
           ))}
+        </div>
+
+        {/* Real 3D Bin Packing Visualizer Canvas Viewport */}
+        <div className="pt-2">
+          <BinPacking3DViewer selectedBox={activeBox} />
         </div>
 
         <button
