@@ -197,17 +197,18 @@ export default function InventoryDetailPage() {
           <div className="flex items-center justify-between border-b border-gray-100 pb-3">
             <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
               <ImageIcon className="w-5 h-5 text-indigo-600" />
-              스캔 이미지 및 Multi-BBox 결함 정밀 검증 뷰어
+              검수 촬영 이미지 및 Multi-BBox 결함 정밀 검증 뷰어
             </h3>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-              이미지 7장 개별 BBox 바인딩 완료
+              검수 촬영 이미지 N장 BBox 바인딩 완료
             </span>
           </div>
 
           {/* Thumbnail Bar */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
-            {[0, 1, 2, 3, 4, 5, 6].map((idx) => {
-              const labels = ["0. 앞표지 (Clean)", "1. 뒷표지 (Clean)", "2. 속지 #1", "3. 속지 #2 (Q42필기)", "4. 속지 #3 (SQL쿼리)", "5. 속지 #4 (WHERE!)", "6. 속지 #5 (체크)"];
+            {resolveInspectionImages(data).map((imgUrl, idx) => {
+              const defaultLabels = ["0. 앞표지", "1. 뒷표지", "2. 훼손 내지 #1", "3. 훼손 내지 #2", "4. 훼손 측면"];
+              const labelText = defaultLabels[idx] || `이미지 #${idx + 1}`;
               const isSelected = selectedImgIdx === idx;
               return (
                 <button
@@ -220,11 +221,11 @@ export default function InventoryDetailPage() {
                   }`}
                 >
                   <img
-                    src={(data?.image_urls && data.image_urls[idx]) || "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400"}
+                    src={imgUrl}
                     alt={`Image ${idx}`}
                     className="w-16 h-20 object-cover rounded-lg mb-1 border border-gray-200"
                   />
-                  <span className="truncate max-w-[90px]">{labels[idx]}</span>
+                  <span className="truncate max-w-[90px]">{labelText}</span>
                 </button>
               );
             })}
