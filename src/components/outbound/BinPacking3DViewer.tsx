@@ -27,10 +27,10 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
 
   // 4 Real Industrial Cushion Materials Catalog (Interactive AI Recommendation & Selection)
   const cushionCatalog = [
-    { id: "CUSH-01", name: "에어필로우 슬림 패드", thick: "9.0mm", target: "도서 상부 완충", desc: "도서 상부 유격 충격 흡수 기본 패드", isRec: false, color: "border-amber-500 bg-amber-50 dark:bg-amber-950/40" },
-    { id: "CUSH-02", name: "친환경 벌집 종이 (추천)", thick: "12.0mm", target: "양장본 프리미엄", desc: "양장본/고가 도서 래핑 (친환경 도서물류)", isRec: true, color: "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40" },
-    { id: "CUSH-03", name: "에어캡 뽁뽁이 & PE폼 (25mm 다층 감기)", thick: "15.0mm", target: "측면 유동 방지", desc: "중량 도서 4면 측면 충격 방지 가드", isRec: false, color: "border-cyan-500 bg-cyan-50 dark:bg-cyan-950/40" },
-    { id: "CUSH-04", name: "에어 튜브 3D 범퍼", thick: "20.0mm", target: "고위험 낙하 방지", desc: "초고위험 낙하 충격 에어 범퍼", isRec: false, color: "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40" },
+    { id: "CUSH-01", name: "에어필로우 슬림 패드", thick_mm: 9.0, thick: "9.0mm", target: "도서 상부 완충", desc: "도서 상부 유격 충격 흡수 기본 패드", isRec: false, color: "rgba(245, 158, 11, 0.8)", stroke: "rgba(180, 83, 9, 0.95)" },
+    { id: "CUSH-02", name: "친환경 벌집 종이 (추천)", thick_mm: 12.0, thick: "12.0mm", target: "양장본 프리미엄", desc: "양장본/고가 도서 래핑 (친환경 도서물류)", isRec: true, color: "rgba(16, 185, 129, 0.85)", stroke: "rgba(4, 120, 87, 0.95)" },
+    { id: "CUSH-03", name: "에어캡 뽁뽁이 & PE폼 (25mm)", thick_mm: 25.0, thick: "25.0mm", target: "측면 유동 방지", desc: "중량 도서 4면 측면 충격 방지 가드", isRec: false, color: "rgba(6, 182, 212, 0.85)", stroke: "rgba(14, 116, 144, 0.95)" },
+    { id: "CUSH-04", name: "에어 튜브 3D 범퍼", thick_mm: 20.0, thick: "20.0mm", target: "고위험 낙하 방지", desc: "초고위험 낙하 충격 에어 범퍼", isRec: false, color: "rgba(99, 102, 241, 0.85)", stroke: "rgba(67, 56, 202, 0.95)" },
   ];
 
   const [selectedCushionId, setSelectedCushionId] = useState<string>("CUSH-02");
@@ -62,7 +62,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
   const book2_D = Math.min(boxD * 0.92, 225);
   const book2_H = 19.2; // SQL Book Fixed Height (mm)
 
-  const airPad_H = 9.0; // Air Pad Cushion Fixed Height (mm)
+  const airPad_H = activeCushion.thick_mm; // Dynamic Cushion Height (mm)
 
   // REAL DYNAMIC METRIC DUAL SEPARATION (PHYSICAL Z-HEIGHT VS 3D VOLUME)
   const totalStackH = book1_H + book2_H + airPad_H; // 56.7mm
@@ -280,17 +280,17 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
       'rgba(4, 120, 87, 0.92)'
     );
 
-    // LAYER 3: Air Cushion Pad (Amber)
+    // LAYER 3: Dynamic Selected Cushion Layer (Real-time Color & Height mm!)
     drawCuboid(
       0, 2 + book1_H + book2_H + 4, 0,
       Math.min(boxW * 0.95, book1_W * 1.02), Math.min(boxD * 0.95, book1_D * 1.02), airPad_H,
-      'rgba(245, 158, 11, 0.75)',
-      'rgba(180, 83, 9, 0.95)',
-      'rgba(251, 191, 36, 0.9)',
-      'rgba(217, 119, 6, 0.85)'
+      activeCushion.color,
+      activeCushion.stroke,
+      activeCushion.color,
+      activeCushion.stroke
     );
 
-  }, [rotX, rotY, boxW, boxD, boxH, zoomLevel, book1_W, book1_D, book1_H, book2_W, book2_D, book2_H, airPad_H]);
+  }, [rotX, rotY, boxW, boxD, boxH, zoomLevel, selectedCushionId, activeCushion, book1_W, book1_D, book1_H, book2_W, book2_D, book2_H, airPad_H]);
 
   // Main canvas render
   useEffect(() => {
