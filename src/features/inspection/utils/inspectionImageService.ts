@@ -72,7 +72,7 @@ export function resolveDefectCoordinates(itemOrJob: any): PerImageDefectCoordina
     ];
   }
 
-  # Score < 90 (GOOD / NORMAL): Dynamic page defect coordinates
+  // Score < 90 (GOOD / NORMAL): Dynamic page defect coordinates
   return [
     {
       image_index: 0,

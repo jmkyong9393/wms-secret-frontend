@@ -463,7 +463,7 @@ export default function WorkerInspectionsPage() {
                           className="px-3.5 py-2 bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-extrabold rounded-xl transition-all text-sm flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
                         >
                           <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                          <span>다각도 AI 리포트</span>
+                          <span>AI 검수 리포트</span>
                         </button>
 
                         <button
@@ -527,7 +527,7 @@ export default function WorkerInspectionsPage() {
           <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-3xl w-full p-6 space-y-5 shadow-2xl relative border border-gray-200 dark:border-gray-800 animate-in fade-in zoom-in duration-200 text-gray-900 dark:text-white max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b dark:border-gray-800 pb-3">
               <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" /> AI 5-Agent 다각도 스캔 검수 상세 리포트
+                <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" /> AI 5-Agent 검수 촬영 이미지 검수 상세 리포트
               </h3>
               <button
                 onClick={() => setSelectedReportItem(null)}

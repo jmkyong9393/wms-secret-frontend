@@ -121,7 +121,7 @@ export default function AdminHitlDashboard() {
       step: 1,
       logs: [
         `[${new Date().toLocaleTimeString()}] 🚀 Multi-Agent AI 비전 재검수 파이프라인 트리거 시작...`,
-        `[${new Date().toLocaleTimeString()}] 👁️ [Vision Agent] 7개 다각도 스캔 이미지 텐서 로딩 및 YOLOv8 3-Model Ensemble 디텍션 추론 중...`
+        `[${new Date().toLocaleTimeString()}] 👁️ [Vision Agent] 7개 검수 촬영 이미지 이미지 텐서 로딩 및 YOLOv8 3-Model Ensemble 디텍션 추론 중...`
       ],
       isDone: false,
     });
