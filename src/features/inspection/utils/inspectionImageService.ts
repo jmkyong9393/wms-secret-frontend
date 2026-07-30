@@ -22,19 +22,44 @@ export interface PerImageDefectCoordinate {
 
 export const BASE_IMAGE_HOST = "http://localhost:8000";
 
+// Cover Image Map based on Book Title / ISBN keywords
+export function getBookCoverUrl(titleOrIsbn: string = ""): string {
+  const t = (titleOrIsbn || "").toLowerCase();
+  if (t.includes("파이썬") || t.includes("python") || t.includes("9791163033455")) {
+    return "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500";
+  }
+  if (t.includes("클린") || t.includes("clean") || t.includes("9788966262472")) {
+    return "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500";
+  }
+  if (t.includes("리팩터링") || t.includes("9791162242742")) {
+    return "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500";
+  }
+  if (t.includes("해커스") || t.includes("토익") || t.includes("9788954625517")) {
+    return "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=500";
+  }
+  if (t.includes("sql") || t.includes("9788988474846") || t.includes("9788988647639")) {
+    return `${BASE_IMAGE_HOST}/experiment_data/job-0c2929a0/raw_0.jpg`;
+  }
+  return "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500";
+}
+
 /**
  * Normalizes inspection image URLs from DB or constructs dynamic N-image array per book
  */
 export function resolveInspectionImages(itemOrJob: any): string[] {
+  // If specific real job image URLs exist and are NOT the generic hardcoded SQL array for non-SQL books
   if (itemOrJob?.image_urls && Array.isArray(itemOrJob.image_urls) && itemOrJob.image_urls.length > 0) {
-    return itemOrJob.image_urls;
+    const title = itemOrJob?.book_title || itemOrJob?.book?.title || "";
+    // If it's NOT SQL practice book but has SQL hardcoded images, ignore hardcoded images!
+    const isSqlImage = itemOrJob.image_urls[0]?.includes("job-0c2929a0");
+    const isSqlBook = title.toLowerCase().includes("sql");
+    if (!isSqlImage || isSqlBook) {
+      return itemOrJob.image_urls;
+    }
   }
-  if (itemOrJob?.agent_logs?.image_urls && Array.isArray(itemOrJob.agent_logs.image_urls) && itemOrJob.agent_logs.image_urls.length > 0) {
-    return itemOrJob.agent_logs.image_urls;
-  }
-  
-  // Book cover URL extraction
-  const coverUrl = itemOrJob?.book?.cover_image_url || itemOrJob?.cover_image_url || "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400";
+
+  const title = itemOrJob?.book_title || itemOrJob?.book?.title || itemOrJob?.isbn || "";
+  const coverUrl = itemOrJob?.book?.cover_image_url || itemOrJob?.cover_image_url || getBookCoverUrl(title);
   
   // Construct dynamic 3~4 image set (0: Front Cover, 1: Back Cover, 2: Page Stain/Side, 3: Corner/Page)
   return [

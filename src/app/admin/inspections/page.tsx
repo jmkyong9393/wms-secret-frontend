@@ -116,15 +116,7 @@ export default function InspectionsPage() {
               processed_at: it.date || new Date().toISOString().substring(0, 19).replace('T', ' '),
               agent_logs: it.agent_logs || { defect_coordinates: resolveDefectCoordinates(it) },
               status: 'COMPLETED',
-              image_urls: [
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_0.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_1.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_2.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_3.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_4.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_5.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_6.jpg',
-              ],
+              image_urls: [], // Dynamically resolved per book title/ISBN
               bbox_coords: [
                 { x_pct: 29, y_pct: 27, w_pct: 37, h_pct: 7.5, label: 'DMG_INT_DOODLE (Q42 10:10:00 연필 필기)' },
                 { x_pct: 31, y_pct: 47, w_pct: 45, h_pct: 6, label: 'DMG_INT_DOODLE (outer join ① 필기)' }
@@ -188,15 +180,7 @@ export default function InspectionsPage() {
               processed_at: it.date || new Date().toISOString().substring(0, 19).replace('T', ' '),
               agent_logs: it.agent_logs || { defect_coordinates: resolveDefectCoordinates(it) },
               status: 'COMPLETED',
-              image_urls: [
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_0.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_1.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_2.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_3.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_4.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_5.jpg',
-                'http://localhost:8000/experiment_data/job-0c2929a0/raw_6.jpg',
-              ],
+              image_urls: [], // Dynamically resolved per book title/ISBN
               bbox_coords: [
                 { x_pct: 29, y_pct: 27, w_pct: 37, h_pct: 7.5, label: 'DMG_INT_DOODLE (Q42 10:10:00 연필 필기)' },
                 { x_pct: 31, y_pct: 47, w_pct: 45, h_pct: 6, label: 'DMG_INT_DOODLE (outer join ① 필기)' }
