@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import BinPacking3DViewer from '@/components/outbound/BinPacking3DViewer';
 import { 
   Package, 
