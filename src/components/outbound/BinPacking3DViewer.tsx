@@ -487,7 +487,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
         </div>
         <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-sans">
           {aiRecommendationLog ||
-            `"실제 도서 규격(56.7mm)을 고정 맵핑한 결과, 높이 150mm/200mm 박스는 상부 유격을 유발하므로, 도서 슬림 전용 ${activeBox.name}(높이 ${boxH}mm) 선택 시 박스 높이 적재율 ${realHeightFillEff}%로 가장 완벽히 밀착 적재됩니다."`}
+            `"실제 도서 규격(56.7mm)을 고정 맵핑한 결과, 높이 150mm/200mm 박스는 상부 유격을 유발하므로, 도서 슬림 전용 ${activeBox.name}(높이 ${boxH}mm) 선택 시 박스 높이 적재율 ${heightFillRatio}%로 가장 완벽히 밀착 적재됩니다."`}
         </p>
       </div>
 
@@ -613,7 +613,7 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
             </div>
 
             <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300 pt-2 border-t border-gray-200 dark:border-gray-800">
-              <span className="font-mono">규격: {activeBox.specs} | 실제 높이 적재율: {realHeightFillEff}%</span>
+              <span className="font-mono">규격: {activeBox.specs} | 실제 높이 적재율: {heightFillRatio}%</span>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md cursor-pointer"
