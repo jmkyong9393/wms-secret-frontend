@@ -59,21 +59,16 @@ interface InventoryItem {
 const formatKSTDate = (dateStr: string) => {
   if (!dateStr) return '-';
   try {
-    const isoStr = (dateStr.includes('Z') || dateStr.includes('+'))
-      ? dateStr
-      : `${dateStr.replace(' ', 'T')}Z`;
-    const date = new Date(isoStr);
+    const rawDateStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
+    const date = new Date(rawDateStr);
     if (isNaN(date.getTime())) return dateStr;
-    return new Intl.DateTimeFormat('ko-KR', {
-      timeZone: 'Asia/Seoul',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).format(date).replace(/\. /g, '-').replace('.', '');
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   } catch (e) {
     return dateStr;
   }
@@ -124,15 +119,20 @@ export default function InventoryDashboardPage() {
       // 1. Grade filter
       if (gradeFilter !== 'ALL' && item.grade !== gradeFilter) return false;
 
-      // 2. UBCI Score Range filter
-      if (ubciScoreFilter === '90_PLUS' && item.ubci_score < 90) return false;
-      if (ubciScoreFilter === '80_PLUS' && (item.ubci_score < 80 || item.ubci_score >= 90)) return false;
-      if (ubciScoreFilter === '60_PLUS' && (item.ubci_score < 60 || item.ubci_score >= 80)) return false;
-      if (ubciScoreFilter === 'UNDER_60' && item.ubci_score >= 60) return false;
+      // 2. UBCI Score Range filter (Latest UBCI Mapping: MINT 95-100, GOOD 85-94, NORMAL 65-84, REJECT 0-64)
+      if (ubciScoreFilter === '90_PLUS' && item.ubci_score < 95) return false;
+      if (ubciScoreFilter === '80_PLUS' && (item.ubci_score < 85 || item.ubci_score >= 95)) return false;
+      if (ubciScoreFilter === '60_PLUS' && (item.ubci_score < 65 || item.ubci_score >= 85)) return false;
+      if (ubciScoreFilter === 'UNDER_60' && item.ubci_score >= 65) return false;
 
-      // 3. Date Inbound filter (2026-07-27 base)
-      if (dateFilter === 'TODAY' && !item.date.startsWith('2026-07-27')) return false;
-      if (dateFilter === 'WEEK' && !item.date.startsWith('2026-07-27') && !item.date.startsWith('2026-07-26') && !item.date.startsWith('2026-07-25')) return false;
+      // 3. Dynamic Date Inbound filter (KST Asia/Seoul)
+      const kstToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+      if (dateFilter === 'TODAY' && !item.date.includes(kstToday)) return false;
+      if (dateFilter === 'WEEK') {
+        const itemTime = new Date(item.date.replace(' ', 'T')).getTime();
+        const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
+        if (isNaN(itemTime) || itemTime < weekAgo) return false;
+      }
 
       // 4. Query Search Logic
       if (!searchQuery.trim()) return true;
@@ -427,10 +427,10 @@ export default function InventoryDashboardPage() {
               className="bg-transparent text-sm font-extrabold text-gray-800 dark:text-gray-200 outline-none w-full cursor-pointer"
             >
               <option value="ALL" className="dark:bg-gray-800">전체 점수대 (0 ~ 100점)</option>
-              <option value="90_PLUS" className="dark:bg-gray-800">MINT급 (90점 이상)</option>
-              <option value="80_PLUS" className="dark:bg-gray-800">GOOD급 (80점 ~ 89점)</option>
-              <option value="60_PLUS" className="dark:bg-gray-800">NORMAL급 (60점 ~ 79점)</option>
-              <option value="UNDER_60" className="dark:bg-gray-800">REJECT (60점 미만)</option>
+              <option value="90_PLUS" className="dark:bg-gray-800">S급 / MINT (95점 ~ 100점)</option>
+              <option value="80_PLUS" className="dark:bg-gray-800">A급 / GOOD (85점 ~ 94점)</option>
+              <option value="60_PLUS" className="dark:bg-gray-800">B급 / NORMAL (65점 ~ 84점)</option>
+              <option value="UNDER_60" className="dark:bg-gray-800">C급 / REJECT (0점 ~ 64점)</option>
             </select>
           </div>
 
@@ -673,21 +673,32 @@ export default function InventoryDashboardPage() {
 
                       {/* UBCI Grade & Score */}
                       <td className="py-4 px-4 text-center whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-black border shadow-2xs ${
-                            item.grade === 'MINT'
-                              ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
-                              : item.grade === 'GOOD'
-                              ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800'
-                              : item.grade === 'NORMAL'
-                              ? 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800'
-                              : item.grade === 'REJECT'
-                              ? 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-700'
-                          }`}
-                        >
-                          {item.grade ? `${item.grade} (${item.ubci_score ?? '-'}점)` : '미정 (검수 대기)'}
-                        </span>
+                        {(() => {
+                          const scoreVal = item.ubci_score !== undefined && item.ubci_score !== null ? item.ubci_score : 85;
+                          const rawGrade = (item.grade || '').toUpperCase();
+                          let displayGrade = 'GOOD';
+                          let badgeBg = 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800';
+
+                          if (scoreVal >= 95 || rawGrade.includes('MINT') || rawGrade === 'S') {
+                            displayGrade = 'MINT';
+                            badgeBg = 'bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800';
+                          } else if (scoreVal >= 85 || rawGrade.includes('GOOD') || rawGrade.includes('A')) {
+                            displayGrade = 'GOOD';
+                            badgeBg = 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800';
+                          } else if (scoreVal >= 65 || rawGrade.includes('NORMAL') || rawGrade.includes('B')) {
+                            displayGrade = 'NORMAL';
+                            badgeBg = 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800';
+                          } else {
+                            displayGrade = 'REJECT';
+                            badgeBg = 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800';
+                          }
+
+                          return (
+                            <span className={`inline-flex items-center px-4 py-2 rounded-full text-xs font-black border shadow-2xs ${badgeBg}`}>
+                              {displayGrade} (UBCI: {scoreVal}점)
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* Zone */}

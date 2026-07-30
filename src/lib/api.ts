@@ -78,6 +78,11 @@ export const adminAPI = {
       method: "POST",
       body: JSON.stringify({ items }),
     });
+  },
+  triggerAiReinspection: async (jobId: string) => {
+    return fetchClient<any>(`/admin/hitl/${jobId}/re-inspect`, {
+      method: "POST",
+    });
   }
 };
 

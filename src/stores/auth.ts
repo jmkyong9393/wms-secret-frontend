@@ -2,7 +2,7 @@ import { atom } from 'jotai';
 import { atomWithStorage, createJSONStorage } from 'jotai/utils';
 
 // 사용자 권한 타입 정의
-export type Role = 'MASTER' | 'WORKER' | 'GUEST' | 'PENDING';
+export type Role = 'MASTER' | 'ADMIN' | 'WORKER' | 'GUEST' | 'PENDING';
 
 export interface User {
   id: string;
