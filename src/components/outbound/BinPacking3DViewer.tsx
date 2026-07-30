@@ -343,11 +343,11 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
   };
 
   const handleZoomIn = () => {
-    setZoomLevel((prev) => Math.min(2.2, prev + 0.2));
+    setZoomLevel((prev) => Math.min(3.0, prev + 0.1));
   };
 
   const handleZoomOut = () => {
-    setZoomLevel((prev) => Math.max(0.6, prev - 0.2));
+    setZoomLevel((prev) => Math.max(0.2, prev - 0.1));
   };
 
   const handleZoomReset = () => {
