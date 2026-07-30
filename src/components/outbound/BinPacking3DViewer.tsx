@@ -143,10 +143,10 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     drawCuboid(
       0, 4, 0,
       boxW * 0.86, boxD * 0.86, book1H,
-      'rgba(147, 51, 234, 0.85)',   # Front Face
-      'rgba(233, 213, 255, 0.95)',  # Wireframe Stroke
-      'rgba(168, 85, 247, 0.95)',   # Top Face
-      'rgba(126, 34, 206, 0.9)'     # Side Face
+      'rgba(147, 51, 234, 0.85)',   // Front Face
+      'rgba(233, 213, 255, 0.95)',  // Wireframe Stroke
+      'rgba(168, 85, 247, 0.95)',   // Top Face
+      'rgba(126, 34, 206, 0.9)'     // Side Face
     );
 
     // LAYER 2 (Middle: Hardcover Novel "SQL 자격검정 실전문제") -> VIBRANT EMERALD / TEAL
@@ -154,10 +154,10 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     drawCuboid(
       0, 4 + book1H + 4, 0,
       boxW * 0.86, boxD * 0.86, book2H,
-      'rgba(16, 185, 129, 0.85)',   # Front Face
-      'rgba(167, 243, 208, 0.95)',  # Wireframe Stroke
-      'rgba(52, 211, 153, 0.95)',   # Top Face
-      'rgba(4, 120, 87, 0.9)'       # Side Face
+      'rgba(16, 185, 129, 0.85)',   // Front Face
+      'rgba(167, 243, 208, 0.95)',  // Wireframe Stroke
+      'rgba(52, 211, 153, 0.95)',   // Top Face
+      'rgba(4, 120, 87, 0.9)'       // Side Face
     );
 
     // LAYER 3 (Top: Air Cushion Pad Layer) -> TRANSLUCENT AMBER / GOLD
@@ -165,10 +165,10 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
     drawCuboid(
       0, 4 + book1H + book2H + 8, 0,
       boxW * 0.88, boxD * 0.88, airH,
-      'rgba(245, 158, 11, 0.45)',   # Front Face
-      'rgba(254, 243, 199, 0.95)',  # Wireframe Stroke
-      'rgba(251, 191, 36, 0.65)',   # Top Face
-      'rgba(180, 83, 9, 0.5)'       # Side Face
+      'rgba(245, 158, 11, 0.45)',   // Front Face
+      'rgba(254, 243, 199, 0.95)',  // Wireframe Stroke
+      'rgba(251, 191, 36, 0.65)',   // Top Face
+      'rgba(180, 83, 9, 0.5)'       // Side Face
     );
 
   }, [rotX, rotY, boxW, boxD, boxH]);
