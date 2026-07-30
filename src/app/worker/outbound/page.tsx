@@ -38,7 +38,7 @@ interface BoxOption {
 
 const BOOK_SLIM_BOX_OPTIONS: BoxOption[] = [
   { id: "BOOK-S1", name: "도서슬림 소형 1호", specs: "250x150x50mm", desc: "단권 슬림형", eff: 98.2 },
-  { id: "BOOK-S2", name: "도서슬림 소형 2호 (추천)", specs: "250x150x60mm", desc: "도서 2권 밀착 슬림", eff: 94.5 },
+  { id: "BOOK-S2", name: "도서슬림 소형 2호", specs: "250x150x60mm", desc: "도서 2권 밀착 슬림", eff: 94.5 },
   { id: "BOOK-M1", name: "도서슬림 중형 1호", specs: "300x200x70mm", desc: "중형 도서 묶음", eff: 81.0 },
   { id: "BOOK-M2", name: "도서슬림 중형 2호", specs: "300x200x90mm", desc: "대형 도서 묶음", eff: 63.0 },
 ];
@@ -232,44 +232,77 @@ export default function WorkerOutboundPage() {
         )}
       </div>
 
-      {/* Mobile 3D Bin Packing Box Selection Card */}
-      <div className="bg-white dark:bg-gray-900 p-4.5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-3">
+      {/* Mobile AI 1st Best Recommended Pack KPI Card (Default Selected) */}
+      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border-2 border-indigo-500 shadow-sm space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-wider flex items-center gap-1">
+            <Sparkles className="w-3.5 h-3.5" /> AI 1위 추천 박스 & 완충재 팩
+          </span>
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded">
+            SAFE (A+) 등급
+          </span>
+        </div>
+        <div className="flex items-end justify-between">
+          <div className="min-w-0 flex-1">
+            <span className="text-sm font-black text-indigo-900 dark:text-indigo-200 font-mono block truncate">
+              BOOK-S2 + 벌집종이 (12mm)
+            </span>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold block truncate">
+              도서슬림 소형 2호 (250x150x60mm)
+            </span>
+          </div>
+          <span className="text-xs text-indigo-600 dark:text-indigo-400 font-black font-mono shrink-0 ml-2">
+            공간효율 94.5%
+          </span>
+        </div>
+      </div>
+
+      {/* Mobile 3D Bin Packing Box Selection & Verification Simulator */}
+      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5">
             <Box className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            3D Bin Packing 추천 박스
+            3D Bin Packing 규격 검수 시뮬레이터
           </h3>
-          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold font-mono">
-            공간 효율 {activeBox.eff}%
+          <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">
+            작업자 수동 검증
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          {MOBILE_BOX_OPTIONS.map((box) => (
-            <button
-              key={box.id}
-              onClick={() => {
-                setSelectedBoxId(box.id);
-                setConfirmed(false);
-              }}
-              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer space-y-0.5 ${
-                selectedBoxId === box.id
-                  ? 'bg-indigo-50/80 dark:bg-indigo-950/80 border-indigo-500 ring-2 ring-indigo-500/30'
-                  : 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-[11px] text-gray-900 dark:text-white truncate">{box.name.split(' ')[0]}</span>
-                {selectedBoxId === box.id && <Check className="w-3 h-3 text-indigo-600 dark:text-indigo-400 shrink-0" />}
-              </div>
-              <p className="text-[9px] font-mono text-gray-500 dark:text-gray-400">{box.specs.split('mm')[0]}</p>
-              <p className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400">{box.eff}%</p>
-            </button>
-          ))}
+        {/* Responsive Mobile Touch Grid (8 Boxes with Dynamic AI Recommendation Badges) */}
+        <div className="grid grid-cols-2 gap-2">
+          {MOBILE_BOX_OPTIONS.map((box) => {
+            const isRec = (box.id === 'BOOK-S2');
+            return (
+              <button
+                key={box.id}
+                onClick={() => {
+                  setSelectedBoxId(box.id);
+                  setConfirmed(false);
+                }}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer space-y-1 min-w-0 ${
+                  selectedBoxId === box.id
+                    ? 'bg-indigo-50/80 dark:bg-indigo-950/80 border-indigo-500 ring-2 ring-indigo-500/30'
+                    : 'bg-gray-50 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-extrabold text-[11px] text-gray-900 dark:text-white truncate min-w-0">{box.name}</span>
+                  {isRec && (
+                    <span className="text-[8px] font-black bg-emerald-500 text-white px-1 py-0.5 rounded shrink-0 animate-pulse">추천</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="font-mono text-gray-400 truncate">{box.specs}</span>
+                  <span className="font-extrabold text-indigo-600 dark:text-indigo-400 shrink-0">{box.eff}%</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Real 3D Bin Packing Visualizer Canvas Viewport */}
-        <div className="pt-2">
+        {/* Real 3D Bin Packing Visualizer Canvas Viewport (Touch Responsive) */}
+        <div className="pt-1 overflow-hidden">
           <BinPacking3DViewer selectedBox={activeBox} />
         </div>
 
