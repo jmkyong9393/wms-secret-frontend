@@ -157,40 +157,70 @@ export default function BinPacking3DViewer({ selectedBox, aiRecommendationLog }:
       'rgba(67, 56, 202, 0.06)'
     );
 
-    // Draw Open Top Flaps
-    const flapLen = Math.min(35, bh * 0.4);
-    const flapAng = Math.PI / 4;
+    // Draw 4 Real Physical Cardboard Open Flaps (FEFCO 0201 Standard: Flap Length = boxD/2 & boxW/2)
+    // When folded closed, Front + Back flaps meet precisely at center (boxD/2 + boxD/2 = boxD)!
+    const frontBackFlapLen = hd; // boxD / 2
+    const leftRightFlapLen = hw;  // boxW / 2
+    const flapAng = Math.PI / 4;  // 45 degrees open
 
     const topV4 = project(-hw, bh, -hd);
     const topV5 = project(hw, bh, -hd);
     const topV6 = project(hw, bh, hd);
     const topV7 = project(-hw, bh, hd);
 
-    const flapFront1 = project(-hw, bh + flapLen * Math.sin(flapAng), -hd - flapLen * Math.cos(flapAng));
-    const flapFront2 = project(hw, bh + flapLen * Math.sin(flapAng), -hd - flapLen * Math.cos(flapAng));
+    // 1. Front Open Flap (Length = boxD/2)
+    const flapFront1 = project(-hw, bh + frontBackFlapLen * Math.sin(flapAng), -hd - frontBackFlapLen * Math.cos(flapAng));
+    const flapFront2 = project(hw, bh + frontBackFlapLen * Math.sin(flapAng), -hd - frontBackFlapLen * Math.cos(flapAng));
 
-    const flapRight1 = project(hw + flapLen * Math.cos(flapAng), bh + flapLen * Math.sin(flapAng), -hd);
-    const flapRight2 = project(hw + flapLen * Math.cos(flapAng), bh + flapLen * Math.sin(flapAng), hd);
-
-    // Front Flap
     ctx.beginPath();
     ctx.moveTo(topV4.px, topV4.py);
     ctx.lineTo(topV5.px, topV5.py);
     ctx.lineTo(flapFront2.px, flapFront2.py);
     ctx.lineTo(flapFront1.px, flapFront1.py);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(99, 102, 241, 0.12)';
+    ctx.fillStyle = 'rgba(99, 102, 241, 0.14)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(79, 70, 229, 0.9)';
+    ctx.strokeStyle = 'rgba(79, 70, 229, 0.95)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Right Flap
+    // 2. Right Open Flap (Length = boxW/2)
+    const flapRight1 = project(hw + leftRightFlapLen * Math.cos(flapAng), bh + leftRightFlapLen * Math.sin(flapAng), -hd);
+    const flapRight2 = project(hw + leftRightFlapLen * Math.cos(flapAng), bh + leftRightFlapLen * Math.sin(flapAng), hd);
+
     ctx.beginPath();
     ctx.moveTo(topV5.px, topV5.py);
     ctx.lineTo(topV6.px, topV6.py);
     ctx.lineTo(flapRight2.px, flapRight2.py);
     ctx.lineTo(flapRight1.px, flapRight1.py);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(79, 70, 229, 0.12)';
+    ctx.fill();
+    ctx.stroke();
+
+    // 3. Back Open Flap (Length = boxD/2)
+    const flapBack1 = project(hw, bh + frontBackFlapLen * Math.sin(flapAng), hd + frontBackFlapLen * Math.cos(flapAng));
+    const flapBack2 = project(-hw, bh + frontBackFlapLen * Math.sin(flapAng), hd + frontBackFlapLen * Math.cos(flapAng));
+
+    ctx.beginPath();
+    ctx.moveTo(topV6.px, topV6.py);
+    ctx.lineTo(topV7.px, topV7.py);
+    ctx.lineTo(flapBack2.px, flapBack2.py);
+    ctx.lineTo(flapBack1.px, flapBack1.py);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(99, 102, 241, 0.1)';
+    ctx.fill();
+    ctx.stroke();
+
+    // 4. Left Open Flap (Length = boxW/2)
+    const flapLeft1 = project(-hw - leftRightFlapLen * Math.cos(flapAng), bh + leftRightFlapLen * Math.sin(flapAng), hd);
+    const flapLeft2 = project(-hw - leftRightFlapLen * Math.cos(flapAng), bh + leftRightFlapLen * Math.sin(flapAng), -hd);
+
+    ctx.beginPath();
+    ctx.moveTo(topV7.px, topV7.py);
+    ctx.lineTo(topV4.px, topV4.py);
+    ctx.lineTo(flapLeft2.px, flapLeft2.py);
+    ctx.lineTo(flapLeft1.px, flapLeft1.py);
     ctx.closePath();
     ctx.fillStyle = 'rgba(79, 70, 229, 0.1)';
     ctx.fill();
