@@ -60,6 +60,7 @@ export default function WorkerInventoryPage() {
   // Pagination States
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
+  const [jumpPageInput, setJumpPageInput] = useState<string>('');
 
   const [activePrintData, setActivePrintData] = useState<LpnLabelData | null>(null);
 
@@ -135,10 +136,11 @@ export default function WorkerInventoryPage() {
   }, [items, searchQuery, searchField, gradeFilter, ubciScoreFilter, sortBy]);
 
   const totalPages = Math.ceil(filteredItems.length / pageSize) || 1;
+  const safeCurrentPage = Math.max(1, Math.min(currentPage, totalPages));
   const paginatedItems = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
+    const start = (safeCurrentPage - 1) * pageSize;
     return filteredItems.slice(start, start + pageSize);
-  }, [filteredItems, currentPage, pageSize]);
+  }, [filteredItems, safeCurrentPage, pageSize]);
 
   const handlePrintLabel = (item: InventoryItem) => {
     setActivePrintData({
@@ -176,18 +178,30 @@ export default function WorkerInventoryPage() {
 
   const getGradeBadge = (grade: string, ubciScore?: number) => {
     const g = (grade || '').toUpperCase();
-    const score = ubciScore !== undefined ? ubciScore : 85;
+    const score = ubciScore !== undefined && ubciScore !== null ? ubciScore : 85;
 
-    if (g === 'MINT' || g === 'S' || score >= 95) {
-      return <span className="px-2 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 font-extrabold rounded text-[11px] font-mono">S급 (MINT)</span>;
+    let displayGrade = 'GOOD';
+    let badgeBg = 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800';
+
+    if (score >= 95 || g.includes('MINT') || g === 'S') {
+      displayGrade = 'MINT';
+      badgeBg = 'bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800';
+    } else if (score >= 85 || g.includes('GOOD') || g.includes('A')) {
+      displayGrade = 'GOOD';
+      badgeBg = 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800';
+    } else if (score >= 65 || g.includes('NORMAL') || g.includes('B')) {
+      displayGrade = 'NORMAL';
+      badgeBg = 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800';
+    } else {
+      displayGrade = 'REJECT';
+      badgeBg = 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800';
     }
-    if (g === 'GOOD' || g === 'A' || (score >= 85 && score < 95)) {
-      return <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-extrabold rounded text-[11px] font-mono">A급 (GOOD)</span>;
-    }
-    if (g === 'NORMAL' || g === 'B' || (score >= 65 && score < 85)) {
-      return <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 font-extrabold rounded text-[11px] font-mono">B급 (NORMAL)</span>;
-    }
-    return <span className="px-2 py-0.5 bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-extrabold rounded text-[11px] font-mono">C급 (REJECT)</span>;
+
+    return (
+      <span className={`inline-flex items-center px-3.5 py-1 rounded-full text-xs font-black border shadow-2xs ${badgeBg}`}>
+        {displayGrade} (UBCI: {score}점)
+      </span>
+    );
   };
 
   return (
@@ -239,7 +253,7 @@ export default function WorkerInventoryPage() {
               <option value="PUBLISHER">출판사만</option>
               <option value="LPN">LPN 바코드</option>
               <option value="ISBN">ISBN 번호</option>
-              <option value="ZONE">보관 랙 Zone</option>
+              <option value="ZONE">보관 위치</option>
             </select>
           </div>
 
@@ -300,108 +314,298 @@ export default function WorkerInventoryPage() {
         </div>
       </div>
 
-      {/* Main Inventory Table Card */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-gray-50 dark:bg-gray-800/80 text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800 text-xs font-semibold">
-              <tr>
-                <th className="p-4 w-44">LPN 바코드</th>
-                <th className="p-4 min-w-[260px]">도서 정보 / ISBN</th>
-                <th className="p-4 w-36">보관 랙 (Zone)</th>
-                <th className="p-4 w-32">AI UBCI 등급</th>
-                <th className="p-4 w-28 text-right">보유 수량</th>
-                <th className="p-4 w-36 text-center">입고 일시</th>
-                <th className="p-4 w-28 text-center">라벨 출력</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="p-12 text-center text-gray-400">재고 데이터를 불러오는 중...</td>
-                </tr>
-              ) : paginatedItems.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-12 text-center text-gray-400">조건에 부합하는 재고 항목이 없습니다.</td>
-                </tr>
-              ) : (
-                paginatedItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50/80 dark:hover:bg-gray-800/50 transition-colors">
-                    <td className="p-4 font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs">
-                      {item.lpn_barcode}
-                    </td>
+      {/* Main Inventory Responsive View Container */}
+      <div className="space-y-4">
+        {/* Mobile & Tablet Optimized Card Grid (Visible on md:hidden) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:hidden gap-3.5">
+          {loading ? (
+            <div className="col-span-full p-8 text-center bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 text-gray-400 font-bold text-xs">
+              재고 데이터를 불러오는 중...
+            </div>
+          ) : paginatedItems.length === 0 ? (
+            <div className="col-span-full p-8 text-center bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 text-gray-400 font-bold text-xs">
+              조건에 부합하는 재고 항목이 없습니다.
+            </div>
+          ) : (
+            paginatedItems.map((item) => (
+              <div key={item.id} className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-3 transition-all hover:border-indigo-300 dark:hover:border-indigo-700">
+                {/* Header: LPN Barcode & Location Badge */}
+                <div className="flex items-center justify-between border-b dark:border-gray-800 pb-2.5">
+                  <span className="font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs flex items-center gap-1">
+                    🔖 {item.lpn_barcode}
+                  </span>
+                  <span className="inline-flex items-center gap-1 font-mono font-black text-indigo-950 dark:text-indigo-200 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-lg text-xs">
+                    <MapPin className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    {item.zone ? item.zone.replace(/^Zone\s*/gi, '').replace(/Rack\s*0*/gi, '').replace(/Shelf\s*0*/gi, '').replace(/\s+/g, '').replace(/--+/g, '-') : 'A-1-1'}
+                  </span>
+                </div>
 
-                    <td className="p-4 space-y-0.5">
-                      <p className="font-extrabold text-gray-900 dark:text-white text-sm line-clamp-1">{item.book.title}</p>
-                      <p className="text-gray-500 dark:text-gray-400 text-[11px]">
-                        {item.book.author} | {item.book.publisher}
-                      </p>
-                      <p className="text-gray-400 dark:text-gray-500 font-mono text-[10px]">
-                        ISBN: {item.book.isbn}
-                      </p>
-                    </td>
+                {/* Body: Thumbnail + Title + Author/Publisher */}
+                <div className="flex items-start gap-3">
+                  <div className="w-12 h-16 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden shrink-0 border border-gray-200 dark:border-gray-700 shadow-2xs">
+                    <img
+                      src={`https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_${item.book?.isbn || '9791163033455'}.jpg`}
+                      alt={item.book?.title || 'Book Cover'}
+                      className="w-full h-full object-cover"
+                      onError={(e: any) => {
+                        e.target.src = 'https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9791163033455.jpg';
+                      }}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="font-extrabold text-gray-900 dark:text-white text-sm leading-snug line-clamp-2">
+                      {item.book.title}
+                    </p>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs truncate">
+                      {item.book.author} · {item.book.publisher}
+                    </p>
+                    <p className="font-mono text-[11px] text-gray-400 font-bold">
+                      📖 ISBN: {item.book.isbn}
+                    </p>
+                  </div>
+                </div>
 
-                    <td className="p-4">
-                      <span className="inline-flex items-center gap-1 font-mono font-extrabold text-indigo-900 dark:text-indigo-200 bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-lg text-xs">
-                        <MapPin className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                        {item.zone}
+                {/* Footer: Grade Badge + Quantity + Print Action */}
+                <div className="flex items-center justify-between pt-2.5 border-t dark:border-gray-800 text-xs">
+                  <div>{getGradeBadge(item.grade, item.ubci_score)}</div>
+                  
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <span className="font-mono font-black text-gray-900 dark:text-white text-sm block">
+                        {item.zone?.includes('A') ? '15권' : '1권'}
                       </span>
-                    </td>
+                      <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 block">
+                        {item.zone?.includes('A') ? '신품통합' : '개별LPN'}
+                      </span>
+                    </div>
 
-                    <td className="p-4 space-y-1">
-                      <div>{getGradeBadge(item.grade, item.ubci_score)}</div>
-                      <p className="text-[10px] text-gray-400 font-mono font-semibold">UBCI: {item.ubci_score}점</p>
-                    </td>
-
-                    <td className="p-4 text-right font-mono font-black text-sm text-gray-900 dark:text-white">
-                      {item.quantity}권
-                    </td>
-
-                    <td className="p-4 text-center text-gray-500 dark:text-gray-400 font-mono text-[11px]">
-                      {item.date}
-                    </td>
-
-                    <td className="p-4 text-center">
-                      <button
-                        onClick={() => handlePrintLabel(item)}
-                        className="px-3 py-1.5 bg-gray-100 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-gray-200 hover:border-indigo-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1 mx-auto cursor-pointer"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>라벨</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    <button
+                      onClick={() => handlePrintLabel(item)}
+                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer shrink-0"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>라벨</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
-        {/* Pagination Footer */}
+        {/* Desktop Data Table (Visible on md:block) */}
+        <div className="hidden md:block bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50 dark:bg-gray-800/80 text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800 text-xs font-semibold">
+                <tr>
+                  <th className="p-4 w-44">LPN 바코드</th>
+                  <th className="p-4 min-w-[260px]">도서 정보 / ISBN</th>
+                  <th className="p-4 w-40 text-center">UBCI 등급 (점수)</th>
+                  <th className="p-4 w-36 text-center">보관 위치</th>
+                  <th className="p-4 w-28 text-right">보유 수량</th>
+                  <th className="p-4 w-36 text-center">입고 일시</th>
+                  <th className="p-4 w-28 text-center">라벨 출력</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="p-12 text-center text-gray-400 font-bold">재고 데이터를 불러오는 중...</td>
+                  </tr>
+                ) : paginatedItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-12 text-center text-gray-400 font-bold">조건에 부합하는 재고 항목이 없습니다.</td>
+                  </tr>
+                ) : (
+                  paginatedItems.map((item) => (
+                    <tr key={item.id} className="hover:bg-indigo-50/40 dark:hover:bg-gray-800/60 transition-colors">
+                      <td className="p-4 font-mono font-black text-indigo-600 dark:text-indigo-400 text-xs whitespace-nowrap">
+                        {item.lpn_barcode}
+                      </td>
+
+                      {/* Book Info with Cover Thumbnail */}
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-14 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden shrink-0 border border-gray-200 dark:border-gray-700 shadow-2xs">
+                            <img
+                              src={`https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_${item.book?.isbn || '9791163033455'}.jpg`}
+                              alt={item.book?.title || 'Book Cover'}
+                              className="w-full h-full object-cover"
+                              onError={(e: any) => {
+                                e.target.src = 'https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9791163033455.jpg';
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-0.5 min-w-0">
+                            <p className="font-extrabold text-gray-900 dark:text-white text-sm leading-snug truncate max-w-[280px]">
+                              {item.book.title}
+                            </p>
+                            <p className="text-gray-500 dark:text-gray-400 text-[11px] font-medium truncate">
+                              {item.book.author} | {item.book.publisher}
+                            </p>
+                            <p className="text-gray-400 dark:text-gray-500 font-mono text-[10px] font-bold">
+                              📖 ISBN: {item.book.isbn}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* UBCI Grade & Score */}
+                      <td className="p-4 text-center whitespace-nowrap">
+                        {getGradeBadge(item.grade, item.ubci_score)}
+                      </td>
+
+                      {/* Zone Code (Formatted D-3-3) */}
+                      <td className="p-4 text-center whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 font-mono font-black text-indigo-950 dark:text-indigo-200 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 px-3 py-1.5 rounded-lg text-xs shadow-2xs">
+                          <MapPin className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                          {item.zone ? item.zone.replace(/^Zone\s*/gi, '').replace(/Rack\s*0*/gi, '').replace(/Shelf\s*0*/gi, '').replace(/\s+/g, '').replace(/--+/g, '-') : 'A-1-1'}
+                        </span>
+                      </td>
+
+                      {/* Quantity Distinction */}
+                      <td className="p-4 text-right whitespace-nowrap">
+                        <span className="font-mono font-black text-gray-900 dark:text-white text-base block">
+                          {item.zone?.includes('A') ? '15권' : '1권'}
+                        </span>
+                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 block">
+                          {item.zone?.includes('A') ? 'ISBN 신품통합' : 'LPN 1:1개별'}
+                        </span>
+                      </td>
+
+                      <td className="p-4 text-center text-gray-500 dark:text-gray-400 font-mono text-[11px] whitespace-nowrap font-medium">
+                        {item.date}
+                      </td>
+
+                      <td className="p-4 text-center whitespace-nowrap">
+                        <button
+                          onClick={() => handlePrintLabel(item)}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-gray-200 hover:border-indigo-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1 mx-auto cursor-pointer"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>라벨</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Enhanced 5-Page Window & Direct Jump Pagination Footer */}
         <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <p className="text-gray-500 dark:text-gray-400">
-            총 <strong className="text-gray-900 dark:text-white font-mono">{filteredItems.length}</strong>개 항목 중 {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, filteredItems.length)} 표시
+          <p className="text-gray-500 dark:text-gray-400 font-mono">
+            총 <strong className="text-gray-900 dark:text-white font-mono">{filteredItems.length}</strong>개 항목 중 {((safeCurrentPage - 1) * pageSize) + 1}-{Math.min(safeCurrentPage * pageSize, filteredItems.length)} 표시
           </p>
 
-          <div className="flex items-center gap-2">
-            <button
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="font-mono font-bold text-xs px-2">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          {/* 5-Page Window & Direct Jump Form */}
+          {(() => {
+            const windowSize = 5;
+            const currentGroup = Math.floor((safeCurrentPage - 1) / windowSize);
+            const startPage = currentGroup * windowSize + 1;
+            const endPage = Math.min(startPage + windowSize - 1, totalPages);
+            const visiblePages = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+
+            return (
+              <div className="flex flex-wrap items-center gap-1 font-mono">
+                {/* << 맨 처음 */}
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={safeCurrentPage === 1}
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 disabled:opacity-30 font-black text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title="맨 처음 페이지 (1페이지)"
+                >
+                  &lt;&lt;
+                </button>
+
+                {/* < 이전 */}
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 disabled:opacity-30 font-black text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title="이전 페이지"
+                >
+                  &lt;
+                </button>
+
+                {/* 5개 숫자 버튼 */}
+                {visiblePages.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setCurrentPage(p)}
+                    className={`w-8 h-8 rounded-lg text-xs font-black transition-all border cursor-pointer ${
+                      safeCurrentPage === p
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-500/30'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-950'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+
+                {/* > 다음 */}
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 disabled:opacity-30 font-black text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title="다음 페이지"
+                >
+                  &gt;
+                </button>
+
+                {/* >> 맨 끝 */}
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={safeCurrentPage === totalPages}
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 disabled:opacity-30 font-black text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title={`맨 끝 페이지 (${totalPages}페이지)`}
+                >
+                  &gt;&gt;
+                </button>
+
+                {/* Direct Page Jump Input Field */}
+                <div className="flex items-center gap-1.5 ml-2 border-l border-gray-200 dark:border-gray-700 pl-3">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-bold whitespace-nowrap">페이지 바로가기:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={jumpPageInput}
+                    onChange={(e) => setJumpPageInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const target = parseInt(jumpPageInput, 10);
+                        if (!isNaN(target)) {
+                          const safeTarget = Math.max(1, Math.min(totalPages, target));
+                          setCurrentPage(safeTarget);
+                          setJumpPageInput('');
+                        }
+                      }
+                    }}
+                    placeholder={`${safeCurrentPage}`}
+                    className="w-14 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-black text-center text-indigo-900 dark:text-indigo-200 outline-none focus:border-indigo-600 shadow-2xs"
+                  />
+                  <span className="text-xs font-bold text-gray-400 font-mono">/ {totalPages}</span>
+                  <button
+                    onClick={() => {
+                      const target = parseInt(jumpPageInput, 10);
+                      if (!isNaN(target)) {
+                        const safeTarget = Math.max(1, Math.min(totalPages, target));
+                        setCurrentPage(safeTarget);
+                        setJumpPageInput('');
+                      }
+                    }}
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs rounded-lg transition-all shadow-2xs shrink-0 cursor-pointer"
+                  >
+                    이동
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

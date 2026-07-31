@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { uploadQueueAtom } from '@/stores/atoms';
@@ -73,7 +74,7 @@ export default function Header() {
       case '/inventory':
         return '재고 현황';
       case '/admin/outbound':
-        return '출고 최적화 (3D/송장)';
+        return '출고 최적화 및 송장 발급';
       case '/admin/po':
       case '/po':
         return '발주 관리 (AI)';
@@ -100,23 +101,30 @@ export default function Header() {
 
   return (
     <header className="h-[clamp(3.75rem,6.5vh,5.5rem)] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-3 sm:px-6 lg:px-8 transition-colors duration-200">
-      <div className="flex items-center gap-[clamp(0.5rem,1vw,1.25rem)]">
-        <div className="flex items-center gap-[clamp(0.4rem,0.8vw,0.85rem)] ml-10 lg:ml-0">
-          {/* Light Mode Logo Emblem (Fluid Viewport Adaptive Scaling) */}
-          <img 
-            src="/nexus_header_logo_light.jpg" 
-            alt="Nexus WMS Logo Light" 
-            className="h-[clamp(2.25rem,4.2vh,3.5rem)] max-w-[18vw] w-auto rounded-xl border-2 border-blue-200/80 shadow-sm object-cover hover:scale-105 transition-all duration-200 dark:hidden"
-          />
-          {/* Dark Mode Logo Emblem (Fluid Viewport Adaptive Scaling) */}
-          <img 
-            src="/nexus_header_logo_dark.jpg" 
-            alt="Nexus WMS Logo Dark" 
-            className="h-[clamp(2.25rem,4.2vh,3.5rem)] max-w-[18vw] w-auto rounded-xl border-2 border-blue-500/50 shadow-sm object-cover hover:scale-105 transition-all duration-200 hidden dark:block"
-          />
-          <div className="h-[clamp(1.25rem,2.5vh,2.2rem)] w-px bg-gray-300 dark:bg-gray-700 hidden sm:block"></div>
+      {/* Left / Center Brand Emblem & Page Title Container */}
+      <div className="flex items-center gap-3 min-w-0">
+        
+        {/* Original Signature Logo Emblem (Light / Dark Mode Adaptive) */}
+        <div className="flex items-center gap-[clamp(0.4rem,0.8vw,0.85rem)]">
+          <Link href="/admin/dashboard" className="flex items-center gap-2 group shrink-0">
+            {/* Light Mode Original Signature Emblem */}
+            <img 
+              src="/nexus_header_logo_light.jpg" 
+              alt="Nexus WMS Logo Light" 
+              className="h-[clamp(2.25rem,4.2vh,3.5rem)] max-w-[18vw] w-auto rounded-xl border-2 border-blue-200/80 shadow-sm object-cover hover:scale-105 transition-all duration-200 dark:hidden"
+            />
+            {/* Dark Mode Original Signature Emblem */}
+            <img 
+              src="/nexus_header_logo_dark.jpg" 
+              alt="Nexus WMS Logo Dark" 
+              className="h-[clamp(2.25rem,4.2vh,3.5rem)] max-w-[18vw] w-auto rounded-xl border-2 border-blue-500/50 shadow-sm object-cover hover:scale-105 transition-all duration-200 hidden dark:block"
+            />
+          </Link>
+          <div className="h-[clamp(1.25rem,2.5vh,2.2rem)] w-px bg-gray-300 dark:bg-gray-700 hidden sm:block mx-1"></div>
         </div>
-        <h1 className="text-[clamp(1.15rem,1.2vw+0.4rem,1.85rem)] font-black text-gray-900 dark:text-white tracking-tight leading-none">
+
+        {/* Page Title */}
+        <h1 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-white tracking-tight leading-none truncate ml-1 sm:ml-0">
           {pageTitle}
         </h1>
       </div>

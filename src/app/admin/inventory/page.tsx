@@ -77,10 +77,46 @@ const formatKSTDate = (dateStr: string) => {
 
 const MOCK_SEED_INVENTORY: InventoryItem[] = [
   {
-    id: "inv-seed-01",
+    id: "inv-seed-new-01",
+    lpn_barcode: "ISBN-9791158392238",
+    book: {
+      title: "모던 자바스크립트 Deep Dive",
+      author: "이웅모",
+      publisher: "위키북스",
+      isbn: "9791158392238",
+      base_price: 45000,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9791158392238.jpg"
+    },
+    grade: "MINT",
+    ubci_score: 100,
+    zone: "Zone A-Rack 04-Shelf 02",
+    quantity: 45,
+    worker_id: "WM2607001",
+    date: "2026-07-31 13:38:32"
+  },
+  {
+    id: "inv-seed-new-02",
+    lpn_barcode: "ISBN-9788966262472",
+    book: {
+      title: "클린 아키텍처 (Clean Architecture)",
+      author: "로버트 C. 마틴",
+      publisher: "인사이트",
+      isbn: "9788966262472",
+      base_price: 32000,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9788966262472.jpg"
+    },
+    grade: "MINT",
+    ubci_score: 99,
+    zone: "Zone A-Rack 02-Shelf 01",
+    quantity: 30,
+    worker_id: "WM2607001",
+    date: "2026-07-31 14:10:00"
+  },
+  {
+    id: "inv-seed-used-01",
     lpn_barcode: "LPN-260727-A801",
     book: {
-      title: "Do it! 점프 투 파이썬",
+      title: "Do it! 점프 투 파이썬 (중고 개체)",
       author: "박응용",
       publisher: "이지스퍼블리싱",
       isbn: "9791163033455",
@@ -90,15 +126,33 @@ const MOCK_SEED_INVENTORY: InventoryItem[] = [
     grade: "GOOD",
     ubci_score: 88,
     zone: "Zone B-Rack 01-Shelf 02",
-    quantity: 12,
+    quantity: 1,
     worker_id: "WM2607001",
     date: "2026-07-27 10:15:00"
   },
   {
-    id: "inv-seed-02",
+    id: "inv-seed-new-03",
+    lpn_barcode: "ISBN-9791163032588",
+    book: {
+      title: "가상 면접 사례로 배우는 대규모 시스템 설계 기초",
+      author: "알렉스 쉬",
+      publisher: "인사이트",
+      isbn: "9791163032588",
+      base_price: 35000,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9791163032588.jpg"
+    },
+    grade: "MINT",
+    ubci_score: 98,
+    zone: "Zone A-Rack 03-Shelf 03",
+    quantity: 50,
+    worker_id: "WM2607001",
+    date: "2026-07-31 11:20:00"
+  },
+  {
+    id: "inv-seed-used-02",
     lpn_barcode: "LPN-260727-A802",
     book: {
-      title: "SQL 자격검정 실전문제",
+      title: "SQL 자격검정 실전문제 (중고 개체)",
       author: "한국데이터산업진흥원",
       publisher: "한국데이터산업진흥원",
       isbn: "9788988474846",
@@ -107,10 +161,28 @@ const MOCK_SEED_INVENTORY: InventoryItem[] = [
     },
     grade: "MINT",
     ubci_score: 96,
-    zone: "Zone A-Rack 01-Shelf 01",
-    quantity: 25,
+    zone: "Zone B-Rack 02-Shelf 01",
+    quantity: 1,
     worker_id: "WM2607001",
     date: "2026-07-27 11:30:22"
+  },
+  {
+    id: "inv-seed-new-04",
+    lpn_barcode: "ISBN-9791158391409",
+    book: {
+      title: "오브젝트: 코드로 이해하는 객체지향 설계",
+      author: "조영호",
+      publisher: "위키북스",
+      isbn: "9791158391409",
+      base_price: 38000,
+      cover_image_url: "https://contents.kyobobook.co.kr/s3mh/BJCMD/B000000000000_9791158391409.jpg"
+    },
+    grade: "MINT",
+    ubci_score: 99,
+    zone: "Zone A-Rack 01-Shelf 04",
+    quantity: 40,
+    worker_id: "WM2607001",
+    date: "2026-07-31 09:45:00"
   },
   {
     id: "inv-seed-03",
@@ -214,6 +286,7 @@ export default function InventoryDashboardPage() {
   const [targetBatchGrade, setTargetBatchGrade] = useState<'MINT' | 'GOOD' | 'NORMAL' | 'REJECT'>('MINT');
 
   // Search & Filter States
+  const [bookTypeFilter, setBookTypeFilter] = useState<'ALL' | 'NEW' | 'USED'>('ALL'); // ALL, NEW, USED
   const [searchField, setSearchField] = useState<'ALL' | 'BOOK_INFO' | 'AUTHOR' | 'PUBLISHER' | 'LPN' | 'ISBN' | 'TITLE' | 'ZONE'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [gradeFilter, setGradeFilter] = useState<string>('ALL');
@@ -226,14 +299,20 @@ export default function InventoryDashboardPage() {
   // Pagination States
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
+  const [jumpPageInput, setJumpPageInput] = useState<string>('');
 
   const [activePrintData, setActivePrintData] = useState<LpnLabelData | null>(null);
 
     useEffect(() => {
     inventoryAPI.getInventory()
       .then((data) => {
+        // Prepend NEW Fast-Track books with latest timestamp so they always appear on page 1 top
+        const newSeedBooks = MOCK_SEED_INVENTORY.filter(b => b.lpn_barcode?.startsWith('ISBN')).map((b, i) => ({
+          ...b,
+          date: `2026-07-31 23:59:5${9 - i}`
+        }));
+
         if (data && Array.isArray(data) && data.length > 0) {
-          // Merge API data with seed fallback metadata safely
           const enriched = data.map((item, idx) => {
             const seedMatch = MOCK_SEED_INVENTORY[idx % MOCK_SEED_INVENTORY.length];
             const safeScore = typeof item.ubci_score === 'number' ? item.ubci_score : (seedMatch.ubci_score || 85);
@@ -255,18 +334,22 @@ export default function InventoryDashboardPage() {
               zone: item.zone || seedMatch.zone,
               quantity: item.quantity || 1,
               worker_id: item.worker_id || "WM2607001",
-              date: item.date || seedMatch.date
+              date: item.date || "2026-07-31 13:38:32"
             };
           });
-          setItems(enriched);
+          setItems([...newSeedBooks, ...enriched]);
         } else {
-          setItems(MOCK_SEED_INVENTORY);
+          setItems([...newSeedBooks, ...MOCK_SEED_INVENTORY]);
         }
         setLoading(false);
       })
       .catch((err) => {
         console.error("Inventory API fetch failed, falling back to seed inventory:", err);
-        setItems(MOCK_SEED_INVENTORY);
+        const newSeedBooks = MOCK_SEED_INVENTORY.filter(b => b.lpn_barcode?.startsWith('ISBN')).map((b, i) => ({
+          ...b,
+          date: `2026-07-31 23:59:5${9 - i}`
+        }));
+        setItems([...newSeedBooks, ...MOCK_SEED_INVENTORY]);
         setLoading(false);
       });
   }, []);
@@ -274,6 +357,11 @@ export default function InventoryDashboardPage() {
   // Filter & Search Logic
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
+      // 0. Book Type Filter (NEW vs USED)
+      const isNew = !item.lpn_barcode || item.lpn_barcode.startsWith('ISBN') || item.lpn_barcode.startsWith('NEW');
+      if (bookTypeFilter === 'NEW' && !isNew) return false;
+      if (bookTypeFilter === 'USED' && isNew) return false;
+
       // 1. Grade filter
       if (gradeFilter !== 'ALL' && item.grade !== gradeFilter) return false;
 
@@ -323,7 +411,7 @@ export default function InventoryDashboardPage() {
         item.date.toLowerCase().includes(q)
       );
     });
-  }, [items, searchQuery, searchField, gradeFilter, ubciScoreFilter, dateFilter]);
+  }, [items, searchQuery, searchField, gradeFilter, ubciScoreFilter, dateFilter, bookTypeFilter]);
 
   // Sort Logic (Default: LATEST)
   const sortedItems = useMemo(() => {
@@ -523,7 +611,7 @@ export default function InventoryDashboardPage() {
               <option value="LPN" className="dark:bg-gray-800">🔖 LPN 바코드 검색</option>
               <option value="ISBN" className="dark:bg-gray-800">🔢 ISBN 코드 검색</option>
               <option value="TITLE" className="dark:bg-gray-800">📖 도서명 검색</option>
-              <option value="ZONE" className="dark:bg-gray-800">📍 보관 Zone 검색</option>
+              <option value="ZONE" className="dark:bg-gray-800">📍 보관 위치 검색</option>
             </select>
           </div>
 
@@ -570,12 +658,55 @@ export default function InventoryDashboardPage() {
           </div>
         </div>
 
-        {/* Row 2: UBCI Score Filter + Date Inbound Filter + Grade Chips */}
+        {/* Row 2: Book Type Tabs + UBCI Score Range Filter + Date Inbound Filter */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 pt-3.5 border-t border-gray-100 dark:border-gray-800 text-sm">
+          {/* New vs Used Book Type Filter Chips */}
+          <div className="md:col-span-5 flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800/90 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => {
+                setBookTypeFilter('ALL');
+                setCurrentPage(1);
+              }}
+              className={`flex-1 py-1.5 px-3 rounded-lg font-black text-xs transition-all ${
+                bookTypeFilter === 'ALL'
+                  ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-2xs'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+              }`}
+            >
+              📚 전체 재고
+            </button>
+            <button
+              onClick={() => {
+                setBookTypeFilter('NEW');
+                setCurrentPage(1);
+              }}
+              className={`flex-1 py-1.5 px-3 rounded-lg font-black text-xs transition-all border ${
+                bookTypeFilter === 'NEW'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  : 'bg-blue-50/60 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100'
+              }`}
+            >
+              ✨ 신품도서만 보기
+            </button>
+            <button
+              onClick={() => {
+                setBookTypeFilter('USED');
+                setCurrentPage(1);
+              }}
+              className={`flex-1 py-1.5 px-3 rounded-lg font-black text-xs transition-all border ${
+                bookTypeFilter === 'USED'
+                  ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                  : 'bg-purple-50/60 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100'
+              }`}
+            >
+              📦 중고도서만 보기
+            </button>
+          </div>
+
           {/* UBCI Score Range Filter */}
           <div className="md:col-span-4 flex items-center gap-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-3.5 py-2">
             <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-            <span className="font-extrabold text-gray-700 dark:text-gray-300 shrink-0">UBCI 점수대:</span>
+            <span className="font-extrabold text-gray-700 dark:text-gray-300 shrink-0">UBCI 점수:</span>
             <select
               value={ubciScoreFilter}
               onChange={(e) => {
@@ -584,18 +715,18 @@ export default function InventoryDashboardPage() {
               }}
               className="bg-transparent text-sm font-extrabold text-gray-800 dark:text-gray-200 outline-none w-full cursor-pointer"
             >
-              <option value="ALL" className="dark:bg-gray-800">전체 점수대 (0 ~ 100점)</option>
-              <option value="90_PLUS" className="dark:bg-gray-800">S급 / MINT (95점 ~ 100점)</option>
-              <option value="80_PLUS" className="dark:bg-gray-800">A급 / GOOD (85점 ~ 94점)</option>
-              <option value="60_PLUS" className="dark:bg-gray-800">B급 / NORMAL (65점 ~ 84점)</option>
-              <option value="UNDER_60" className="dark:bg-gray-800">C급 / REJECT (0점 ~ 64점)</option>
+              <option value="ALL" className="dark:bg-gray-800">전체 점수대 (0~100점)</option>
+              <option value="90_PLUS" className="dark:bg-gray-800">S급 / MINT (95점~100점)</option>
+              <option value="80_PLUS" className="dark:bg-gray-800">A급 / GOOD (85점~94점)</option>
+              <option value="60_PLUS" className="dark:bg-gray-800">B급 / NORMAL (65점~84점)</option>
+              <option value="UNDER_60" className="dark:bg-gray-800">C급 / REJECT (0점~64점)</option>
             </select>
           </div>
 
           {/* Date Inbound Filter */}
-          <div className="md:col-span-4 flex items-center gap-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-3.5 py-2">
+          <div className="md:col-span-3 flex items-center gap-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-3.5 py-2">
             <Calendar className="w-4 h-4 text-indigo-500 shrink-0" />
-            <span className="font-extrabold text-gray-700 dark:text-gray-300 shrink-0">입고 일시:</span>
+            <span className="font-extrabold text-gray-700 dark:text-gray-300 shrink-0">입고일시:</span>
             <select
               value={dateFilter}
               onChange={(e) => {
@@ -604,31 +735,10 @@ export default function InventoryDashboardPage() {
               }}
               className="bg-transparent text-sm font-extrabold text-gray-800 dark:text-gray-200 outline-none w-full cursor-pointer"
             >
-              <option value="ALL" className="dark:bg-gray-800">전체 기간 입고건</option>
-              <option value="TODAY" className="dark:bg-gray-800">오늘 입고 (2026-07-27)</option>
-              <option value="WEEK" className="dark:bg-gray-800">최근 7일 이내 입고</option>
+              <option value="ALL" className="dark:bg-gray-800">전체 기간</option>
+              <option value="TODAY" className="dark:bg-gray-800">오늘 입고</option>
+              <option value="WEEK" className="dark:bg-gray-800">최근 7일</option>
             </select>
-          </div>
-
-          {/* Grade Quick Filter Chips */}
-          <div className="md:col-span-4 flex items-center justify-end gap-2">
-            <span className="text-gray-400 dark:text-gray-500 font-extrabold text-xs mr-1">등급:</span>
-            {['ALL', 'MINT', 'GOOD', 'NORMAL', 'REJECT'].map((g) => (
-              <button
-                key={g}
-                onClick={() => {
-                  setGradeFilter(g);
-                  setCurrentPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-lg font-black text-xs transition-all border ${
-                  gradeFilter === g
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
-              >
-                {g === 'ALL' ? '전체' : g}
-              </button>
-            ))}
           </div>
         </div>
       </div>
@@ -772,7 +882,8 @@ export default function InventoryDashboardPage() {
                   />
                 </th>
                 <th className="py-4 px-4 whitespace-nowrap">LPN 바코드</th>
-                <th className="py-4 px-4 min-w-[280px]">도서 정보 (ISBN / 저자 / 출판사)</th>
+                <th className="py-4 px-4 whitespace-nowrap">ISBN-13 바코드</th>
+                <th className="py-4 px-4 min-w-[280px]">도서 정보 (제목 / 저자 / 출판사 / 정가)</th>
                 <th className="py-4 px-4 text-center whitespace-nowrap">UBCI 등급 (점수)</th>
                 <th className="py-4 px-4 text-center whitespace-nowrap">보관 위치</th>
                 <th className="py-4 px-4 text-center whitespace-nowrap">재고 수량</th>
@@ -783,7 +894,7 @@ export default function InventoryDashboardPage() {
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-sans">
               {paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center text-gray-400 dark:text-gray-500">
+                  <td colSpan={9} className="py-16 text-center text-gray-400 dark:text-gray-500">
                     <p className="text-sm font-bold">조회 조건에 해당하는 재고 데이터가 없습니다.</p>
                     <p className="text-xs mt-1 text-gray-400 dark:text-gray-500">검색 키워드나 UBCI 점수대 필터를 초기화해 보세요.</p>
                   </td>
@@ -811,17 +922,32 @@ export default function InventoryDashboardPage() {
                         />
                       </td>
 
-                      {/* LPN */}
+                      {/* LPN Barcode Column */}
                       <td className="py-4 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2.5">
-                          <div className="bg-gray-100 dark:bg-gray-800 p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 shrink-0 shadow-2xs">
-                            <QRCodeSVG value={`http://localhost:3000/certificate/${item.lpn_barcode}`} size={42} />
+                        {item.lpn_barcode && !item.lpn_barcode.startsWith('NEW') && !item.lpn_barcode.startsWith('ISBN') ? (
+                          <div className="flex items-center gap-2.5">
+                            <div className="bg-gray-100 dark:bg-gray-800 p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 shrink-0 shadow-2xs">
+                              <QRCodeSVG value={`http://localhost:3000/certificate/${item.lpn_barcode}`} size={42} />
+                            </div>
+                            <span className="font-mono font-black text-purple-700 dark:text-purple-400 text-lg">{item.lpn_barcode}</span>
                           </div>
-                          <span className="font-mono font-black text-blue-700 dark:text-blue-400 text-lg">{item.lpn_barcode}</span>
-                        </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-1 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-mono font-bold">
+                              LPN 미발급 (신품)
+                            </span>
+                          </div>
+                        )}
                       </td>
 
-                      {/* Book Info: Cover Thumbnail + Title + ISBN Badge + Author/Publisher */}
+                      {/* Independent ISBN-13 Column */}
+                      <td className="py-4 px-4 whitespace-nowrap">
+                        <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-mono font-black">
+                          {item.book.isbn || '9791163033455'}
+                        </span>
+                      </td>
+
+                      {/* Book Info: Cover Thumbnail + Title + Author/Publisher */}
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
                           {/* Cover Thumbnail */}
@@ -840,14 +966,9 @@ export default function InventoryDashboardPage() {
                             <p className="font-black text-gray-900 dark:text-white text-base leading-snug hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                               {item.book.title}
                             </p>
-                            <div className="flex flex-wrap items-center gap-2 text-xs">
-                              <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-md font-mono font-black text-[11px] flex items-center gap-1">
-                                📖 ISBN: {item.book.isbn || '9791163033455'}
-                              </span>
-                              <span className="text-gray-500 dark:text-gray-400 font-extrabold">
-                                {item.book.author} · {item.book.publisher}
-                              </span>
-                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 font-extrabold">
+                              {item.book.author} · {item.book.publisher}
+                            </p>
                             <p className="text-[11px] font-mono text-gray-400 font-bold">
                               정가: {item.book.base_price ? item.book.base_price.toLocaleString() : '22,000'}원
                             </p>
@@ -855,9 +976,18 @@ export default function InventoryDashboardPage() {
                         </div>
                       </td>
 
-                      {/* UBCI Grade & Score */}
+                      {/* UBCI Grade & Score (NEW books skip AI vision inspection -> Unmeasured) */}
                       <td className="py-4 px-4 text-center whitespace-nowrap">
                         {(() => {
+                          const isNewBook = !item.lpn_barcode || item.lpn_barcode.startsWith('ISBN') || item.lpn_barcode.startsWith('NEW');
+                          if (isNewBook) {
+                            return (
+                              <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                                미표기 (신품 Fast-Track)
+                              </span>
+                            );
+                          }
+
                           const scoreVal = item.ubci_score !== undefined && item.ubci_score !== null ? item.ubci_score : 85;
                           const rawGrade = (item.grade || '').toUpperCase();
                           let displayGrade = 'GOOD';
@@ -887,15 +1017,26 @@ export default function InventoryDashboardPage() {
 
                       {/* Zone */}
                       <td className="py-4 px-4 text-center whitespace-nowrap">
-                        <span className="inline-flex items-center font-mono font-black text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 px-3.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm">
-                          <MapPin className="w-4 h-4 mr-1 text-gray-500 dark:text-gray-400" />
-                          {item.zone}
+                        <span className="inline-flex items-center font-mono font-black text-indigo-950 dark:text-indigo-200 bg-indigo-50/80 dark:bg-indigo-950/80 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 text-xs sm:text-sm shadow-2xs">
+                          <MapPin className="w-4 h-4 mr-1 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                          {item.zone ? item.zone.replace(/^Zone\s*/gi, '').replace(/Rack\s*0*/gi, '').replace(/Shelf\s*0*/gi, '').replace(/\s+/g, '').replace(/--+/g, '-') : 'A-1-1'}
                         </span>
                       </td>
 
                       {/* Quantity */}
-                      <td className="py-4 px-4 text-center font-mono font-black text-gray-900 dark:text-white text-lg whitespace-nowrap">
-                        {item.quantity}권
+                      <td className="py-4 px-4 text-center whitespace-nowrap">
+                        <span className="font-mono font-black text-gray-900 dark:text-white text-base block">
+                          {item.quantity ? `${item.quantity}권` : '1권'}
+                        </span>
+                        {(!item.lpn_barcode || item.lpn_barcode.startsWith('ISBN') || item.lpn_barcode.startsWith('NEW')) ? (
+                          <span className="text-[11px] font-extrabold text-blue-700 dark:text-blue-300 block bg-blue-100 dark:bg-blue-950 px-2 py-0.5 rounded-md border border-blue-300 dark:border-blue-800 mt-1">
+                            ✨ 신품도서
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-extrabold text-purple-700 dark:text-purple-300 block bg-purple-100 dark:bg-purple-950 px-2 py-0.5 rounded-md border border-purple-300 dark:border-purple-800 mt-1">
+                            📦 중고도서
+                          </span>
+                        )}
                       </td>
 
                       {/* Worker & Date */}
@@ -990,38 +1131,111 @@ export default function InventoryDashboardPage() {
             )}
           </p>
 
-          {/* Page Buttons */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={safeCurrentPage === 1}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 font-bold text-xs transition-colors flex items-center gap-1"
-            >
-              <ChevronLeft className="w-4 h-4" /> 이전
-            </button>
+          {/* Page Buttons with 5-Page Window & << < > >> Nav Controls */}
+          {(() => {
+            const windowSize = 5;
+            const currentGroup = Math.floor((safeCurrentPage - 1) / windowSize);
+            const startPage = currentGroup * windowSize + 1;
+            const endPage = Math.min(startPage + windowSize - 1, totalPages);
+            const visiblePages = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
 
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <button
-                key={p}
-                onClick={() => setCurrentPage(p)}
-                className={`w-8 h-8 rounded-lg text-xs font-bold font-mono transition-all border ${
-                  safeCurrentPage === p
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
+            return (
+              <div className="flex flex-wrap items-center gap-1 font-mono">
+                {/* << 맨 처음으로 */}
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={safeCurrentPage === 1}
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 disabled:opacity-30 font-black text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title="맨 처음 페이지로 이동 (1페이지)"
+                >
+                  &lt;&lt;
+                </button>
 
-            <button
-              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-              disabled={safeCurrentPage === totalPages}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 font-bold text-xs transition-colors flex items-center gap-1"
-            >
-              다음 <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+                {/* < 이전으로 */}
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 disabled:opacity-30 font-black text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title="이전 페이지"
+                >
+                  &lt;
+                </button>
+
+                {/* 5개 단위 숫자 버튼 */}
+                {visiblePages.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setCurrentPage(p)}
+                    className={`w-8 h-8 rounded-lg text-xs font-black transition-all border cursor-pointer ${
+                      safeCurrentPage === p
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-500/30'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-950'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+
+                {/* > 다음으로 */}
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 disabled:opacity-30 font-black text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title="다음 페이지"
+                >
+                  &gt;
+                </button>
+
+                {/* >> 맨 끝으로 */}
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={safeCurrentPage === totalPages}
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 disabled:opacity-30 font-black text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title={`맨 끝 페이지로 이동 (${totalPages}페이지)`}
+                >
+                  &gt;&gt;
+                </button>
+
+                {/* Direct Page Jump Input Field */}
+                <div className="flex items-center gap-1.5 ml-2 border-l border-gray-200 dark:border-gray-700 pl-3">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-bold whitespace-nowrap">페이지 바로가기:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={jumpPageInput}
+                    onChange={(e) => setJumpPageInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const target = parseInt(jumpPageInput, 10);
+                        if (!isNaN(target)) {
+                          const safeTarget = Math.max(1, Math.min(totalPages, target));
+                          setCurrentPage(safeTarget);
+                          setJumpPageInput('');
+                        }
+                      }
+                    }}
+                    placeholder={`${safeCurrentPage}`}
+                    className="w-14 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-black text-center text-indigo-900 dark:text-indigo-200 outline-none focus:border-indigo-600 dark:focus:border-indigo-400 shadow-2xs"
+                  />
+                  <span className="text-xs font-bold text-gray-400 font-mono">/ {totalPages}</span>
+                  <button
+                    onClick={() => {
+                      const target = parseInt(jumpPageInput, 10);
+                      if (!isNaN(target)) {
+                        const safeTarget = Math.max(1, Math.min(totalPages, target));
+                        setCurrentPage(safeTarget);
+                        setJumpPageInput('');
+                      }
+                    }}
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs rounded-lg transition-all shadow-2xs shrink-0 cursor-pointer"
+                  >
+                    이동
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
