@@ -78,17 +78,18 @@ describe("EmployeeManagementView", () => {
     vi.clearAllMocks();
   });
 
-  it("MASTER 로그인 시 '직원 일괄 생성' 버튼이 노출된다", async () => {
+  it("MASTER 로그인 시 '엑셀 일괄 등록' 버튼이 노출된다", async () => {
     await renderAs("MASTER");
 
-    expect(screen.getByRole("button", { name: /직원 일괄 생성/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /엑셀 일괄 등록/ })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("박민우")).toBeInTheDocument());
   });
 
-  it("ADMIN 로그인 시 '직원 일괄 생성' 버튼이 노출되지 않는다 (조회 전용)", async () => {
+  // 현행 정책: ADMIN도 직원 관리(등록·역할 변경) 가능 — permissions.ts 참조
+  it("ADMIN 로그인 시에도 '엑셀 일괄 등록' 버튼이 노출된다", async () => {
     await renderAs("ADMIN");
 
     await waitFor(() => expect(screen.getByText("박민우")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: /직원 일괄 생성/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /엑셀 일괄 등록/ })).toBeInTheDocument();
   });
 });
