@@ -1,20 +1,23 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import BookCover from '@/components/BookCover';
 import { useMutation } from '@tanstack/react-query';
-import { Camera, Flashlight, RefreshCcw, Keyboard, Package, CheckCircle2, ScanLine, Printer, ArrowRight, BookOpen, ChevronLeft, User } from 'lucide-react';
+import { Camera, Flashlight, RefreshCcw, Keyboard, Package, CheckCircle2, ScanLine, Printer, ArrowRight, BookOpen, ChevronLeft, User, Zap } from 'lucide-react';
 import { PrinterHelper } from '@/lib/printerHelper';
 import { useCamera } from '@/features/inbound/hooks/useCamera';
 import { processImage } from '@/lib/image-processor';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { uploadQueueAtom } from '@/stores/atoms';
-import { userAtom } from '@/stores/auth';
+import { currentUserAtom } from '@/features/auth/store/authAtoms';
+import Header from '@/components/layout/Header';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { BrowserMultiFormatReader as ZXingBrowserReader } from '@zxing/browser';
 import { QRCodeSVG } from 'qrcode.react';
 import { LpnPrintLabel } from '@/features/inbound/components/LpnPrintLabel';
 
-type Step = 'SCAN_BARCODE' | 'PRINT_STICKER' | 'VISION_EVALUATION' | 'RESULT';
+type Step = 'SELECT_TYPE' | 'SCAN_BARCODE' | 'PRINT_STICKER' | 'VISION_EVALUATION' | 'RESULT';
+type InboundType = 'NEW_FASTTRACK' | 'USED_RETURN_INSPECTION';
 
 type QueueItem = {
   id: string; // job_id
@@ -28,14 +31,33 @@ type QueueItem = {
 };
 
 export default function InboundScannerPage() {
-  const [step, setStep] = useState<Step>('SCAN_BARCODE');
+  const [step, setStep] = useState<Step>('SELECT_TYPE');
+  const [inboundType, setInboundType] = useState<InboundType>('NEW_FASTTRACK');
   const [isbn, setIsbn] = useState('');
   const [isPrinting, setIsPrinting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [currentLpn, setCurrentLpn] = useState('');
-  const [bookInfo, setBookInfo] = useState<any>(null);
+  const [bookInfo, setBookInfo] = useState<any | null>(null);
+  const [selectedBook, setSelectedBook] = useState<any | null>(null);
   const [isLoadingBook, setIsLoadingBook] = useState(false);
+  const [fasttrackQty, setFasttrackQty] = useState<number>(1);
+  const [activeStation, setActiveStation] = useState<string>('A');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('active_workstation_line') || 'A';
+      setActiveStation(saved);
+      localStorage.setItem('active_workstation_line', saved);
+    }
+  }, []);
+
+  const handleStationChange = (line: string) => {
+    setActiveStation(line);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('active_workstation_line', line);
+    }
+  };
 
   // Multi-Capture State
   const [capturedImages, setCapturedImages] = useState<{ url: string, blob: Blob }[]>([]);
@@ -44,7 +66,7 @@ export default function InboundScannerPage() {
   const { videoRef, startCamera, stopCamera } = useCamera();
   const guideBoxRef = useRef<HTMLDivElement>(null);
   const setUploadQueue = useSetAtom(uploadQueueAtom);
-  const user = useAtomValue(userAtom);
+  const user = useAtomValue(currentUserAtom);
 
   const generateLPN = () => {
     const today = new Date();
@@ -52,11 +74,15 @@ export default function InboundScannerPage() {
                     ('0' + (today.getMonth() + 1)).slice(-2) + 
                     ('0' + today.getDate()).slice(-2);
     
-    let seq = parseInt(localStorage.getItem(`lpn_seq_${dateStr}`) || '1', 10);
-    const seqStr = String(seq).padStart(3, '0');
-    localStorage.setItem(`lpn_seq_${dateStr}`, String(seq + 1));
+    // MVP 시연용 Workstation Station Line A 기본 고정
+    const activeStationLine = (typeof window !== 'undefined' && localStorage.getItem('active_workstation_line')) || 'A';
     
-    return `LPN-${dateStr}-A${seqStr}`;
+    // Line A 기준 순차 시퀀스 관리 (A001, A002, A003 ...)
+    let seq = parseInt(localStorage.getItem(`lpn_seq_${activeStationLine}_${dateStr}`) || '1', 10);
+    const seqStr = String(seq).padStart(3, '0');
+    localStorage.setItem(`lpn_seq_${activeStationLine}_${dateStr}`, String(seq + 1));
+    
+    return `LPN-${dateStr}-${activeStationLine}${seqStr}`;
   };
 
   // ---------------------------------------------------------------------------
@@ -262,14 +288,24 @@ export default function InboundScannerPage() {
 
           // --- 신규 ISBN 입고 워크플로우 ---
           setIsbn(text);
-          setCurrentLpn(generateLPN());
-          setBookInfo(null);
-          setIsLoadingBook(true);
-          setStep('PRINT_STICKER');
+          if (inboundType === 'NEW_FASTTRACK') {
+            // [조장님 기획 지침] 신품 도서는 개별 LPN 라벨 스티커 출력 100% 스킵!
+            setCurrentLpn('');
+            setBookInfo(null);
+            setIsLoadingBook(true);
+            setFasttrackQty(1);
+            setStep('PRINT_STICKER'); // 하단 패스트트랙 수량 카드 렌더링
+          } else {
+            // 중고/반품 도서만 개별 LPN 채번 및 스티커 출력
+            setCurrentLpn(generateLPN());
+            setBookInfo(null);
+            setIsLoadingBook(true);
+            setStep('PRINT_STICKER');
+          }
 
           // 백그라운드에서 알라딘 API 연동 도서 정보 조회
           try {
-            const res = await fetch(`/api/book?isbn=${text}`);
+            const res = await fetch(`http://localhost:8000/api/v1/inbound/book-lookup?isbn=${text}`);
             if (res.ok) {
               const data = await res.json();
               setBookInfo(data);
@@ -344,9 +380,22 @@ export default function InboundScannerPage() {
     }
   }, [step]);
 
-  // 뒤로가기 핸들러
+  // 뒤로가기 핸들러 (부착 미완료 시 LPN 채번 롤백 및 데이터 초기화)
   const handleBack = () => {
-    if (step === 'PRINT_STICKER') setStep('SCAN_BARCODE');
+    if (step === 'PRINT_STICKER') {
+      const today = new Date();
+      const dateStr = today.getFullYear().toString().slice(-2) + 
+                      ('0' + (today.getMonth() + 1)).slice(-2) + 
+                      ('0' + today.getDate()).slice(-2);
+      let seq = parseInt(localStorage.getItem(`lpn_seq_${dateStr}`) || '1', 10);
+      if (seq > 1) {
+        localStorage.setItem(`lpn_seq_${dateStr}`, String(seq - 1));
+      }
+      setCurrentLpn('');
+      setIsbn('');
+      setBookInfo(null);
+      setStep('SCAN_BARCODE');
+    }
     if (step === 'VISION_EVALUATION') {
       if (capturedImages.length > 0) {
         setCapturedImages([]);
@@ -358,6 +407,7 @@ export default function InboundScannerPage() {
     if (step === 'RESULT') {
       setStep('SCAN_BARCODE');
       setIsbn('');
+      setCurrentLpn('');
       setCapturedImages([]);
       setCapturePhase('FRONT');
     }
@@ -385,47 +435,159 @@ export default function InboundScannerPage() {
   };
 
   return (
-    <div className="max-w-lg mx-auto space-y-4 pb-8">
-      {/* Main Scanner App Container */}
-      <div className="bg-slate-900 h-[75vh] min-h-[600px] rounded-3xl overflow-hidden relative flex flex-col shadow-2xl border-4 border-slate-800">
-      
-      {/* CSS for Scanner Laser Animation */}
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes scan {
-          0% { top: 0; opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { top: 100%; opacity: 0; }
-        }
-        .animate-scan-laser { animation: scan 2.5s infinite linear; }
-        
-        @keyframes print {
-          0% { transform: translateY(-100%); opacity: 0; }
-          50% { transform: translateY(0); opacity: 1; }
-          100% { transform: translateY(0); opacity: 1; }
-        }
-        .animate-print { animation: print 1.5s ease-out forwards; }
-      `}} />
+    <div className="space-y-6 pb-10 max-w-5xl mx-auto font-sans">
+      <Header />
+      {/* 1. Top Luxury Executive Dashboard Banner (Matching Admin Dashboard Standard) */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 p-6 sm:p-8 shadow-2xl text-white">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="space-y-4 relative z-10">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-black tracking-widest uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                INBOUND CONTROL CENTER v2.10.0.0
+              </span>
+              <span className="text-xs text-slate-400 font-mono">Real-time Vision AI & Fast-track Pipeline</span>
+            </div>
+            <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
+              <Camera className="w-7 h-7 text-indigo-400" />
+              현장 입고 & AI 훼손 정밀 검수 관제
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-4xl leading-relaxed">
+              신품 도서는 사진 촬영 없이 <strong className="text-indigo-300 font-black">ISBN 바코드 스캔만으로 0초 만에 재고 입고</strong>되며, 중고/반품 도서는 <strong className="text-amber-300 font-black">4-Agent AI 비전 파이프라인</strong>을 통해 훼손 등급과 매입가를 정밀 평가합니다.
+            </p>
+          </div>
 
-      {/* Header */}
-      <div className="bg-slate-900/80 backdrop-blur-md p-4 flex items-center justify-between z-20 absolute top-0 w-full text-white">
-        <div className="flex items-center">
-          {step !== 'SCAN_BARCODE' && (
-            <button onClick={handleBack} className="mr-2 p-1 hover:bg-slate-800 rounded-full transition-colors">
-              <ChevronLeft className="w-6 h-6" />
+          {/* 파이프라인 설명 텍스트 종료 후 하단 컨트롤 배치 구역 */}
+          <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-indigo-500/40 text-xs font-bold text-slate-200 shadow-xl backdrop-blur-md">
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                📍 배정 라인:
+              </span>
+              <select
+                value={activeStation}
+                onChange={(e) => handleStationChange(e.target.value)}
+                className="bg-indigo-950 text-emerald-300 font-black px-2.5 py-1 rounded-lg border border-emerald-500/40 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-400 text-xs"
+              >
+                <option value="A">Line A (Workstation A - 메인 입고 라인)</option>
+                <option value="B">Line B (Workstation B)</option>
+                <option value="C">Line C (Workstation C)</option>
+                <option value="D">Line D (Workstation D)</option>
+                <option value="E">Line E (Workstation E)</option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => setStep('SELECT_TYPE')}
+              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 cursor-pointer shrink-0"
+            >
+              <RefreshCcw className="w-4 h-4" />
+              검수 유형 재선택
             </button>
-          )}
-          <h1 className="text-lg font-bold flex items-center">
-            {step === 'SCAN_BARCODE' && <><ScanLine className="w-5 h-5 mr-2 text-emerald-400" /> 도서 식별 (바코드)</>}
-            {step === 'PRINT_STICKER' && <><Printer className="w-5 h-5 mr-2 text-blue-400" /> 검열지 출력 및 부착</>}
-            {step === 'VISION_EVALUATION' && <><Camera className="w-5 h-5 mr-2 text-purple-400" /> 외관 촬영 및 평가</>}
-            {step === 'RESULT' && <><CheckCircle2 className="w-5 h-5 mr-2 text-emerald-400" /> 평가 완료</>}
-          </h1>
+          </div>
         </div>
       </div>
 
-      {/* Simulated Viewport / Content Area */}
-      <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden pt-16">
+      {/* 2. Main Scanner App Container (Expanded PC/Mobile Responsive Viewport) */}
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-slate-900 min-h-[640px] rounded-3xl overflow-hidden relative flex flex-col shadow-2xl border-4 border-slate-800 transition-all duration-300">
+        
+        {/* CSS for Scanner Laser Animation */}
+        <style dangerouslySetInnerHTML={{__html: `
+          @keyframes scan {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+          }
+          .animate-scan-laser { animation: scan 2.5s infinite linear; }
+          
+          @keyframes print {
+            0% { transform: translateY(-100%); opacity: 0; }
+            50% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(0); opacity: 1; }
+          }
+          .animate-print { animation: print 1.5s ease-out forwards; }
+        `}} />
+
+        {/* Header */}
+        <div className="bg-slate-900/90 backdrop-blur-md p-4 flex items-center justify-between z-20 absolute top-0 w-full text-white border-b border-slate-800">
+          <div className="flex items-center">
+            {step !== 'SELECT_TYPE' && (
+              <button onClick={() => setStep('SELECT_TYPE')} className="mr-2 p-1 hover:bg-slate-800 rounded-full transition-colors cursor-pointer">
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            )}
+            <h1 className="text-base sm:text-lg font-extrabold flex items-center tracking-tight">
+              {step === 'SELECT_TYPE' && <><Package className="w-5 h-5 mr-2 text-indigo-400" /> 입고 검수 유형 선택</>}
+              {step === 'SCAN_BARCODE' && <><ScanLine className="w-5 h-5 mr-2 text-emerald-400" /> {inboundType === 'NEW_FASTTRACK' ? '신품 도서 ISBN 스캔 (0초 입고)' : '도서 바코드 식별'}</>}
+              {step === 'PRINT_STICKER' && <><Printer className="w-5 h-5 mr-2 text-blue-400" /> 검열지 출력 및 부착</>}
+              {step === 'VISION_EVALUATION' && <><Camera className="w-5 h-5 mr-2 text-purple-400" /> 외관 촬영 및 평가</>}
+              {step === 'RESULT' && <><CheckCircle2 className="w-5 h-5 mr-2 text-emerald-400" /> 입고 처리 완료</>}
+            </h1>
+          </div>
+        </div>
+
+        {/* Simulated Viewport / Content Area (Light/Dark Glassmorphism Compatible) */}
+        <div className="flex-1 relative bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/80 border-b border-slate-800 flex items-center justify-center overflow-hidden pt-16 min-h-[480px]">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-400 via-slate-700 to-black z-0"></div>
+
+          {step === 'SELECT_TYPE' && (
+            <div className="z-10 p-6 space-y-6 w-full max-w-lg animate-in fade-in zoom-in-95 duration-200">
+              <div className="text-center space-y-1">
+                <h2 className="text-2xl font-black text-white tracking-tight">📋 입고 검수 유형 선택</h2>
+                <p className="text-xs text-slate-400">현장 상황 및 도서 상태에 맞는 입고 프로세스를 선택해 주세요.</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                {/* Card 1: Fast-track New Book Inbound (Skip Photo 100%) */}
+                <button
+                  onClick={() => {
+                    setInboundType('NEW_FASTTRACK');
+                    setStep('SCAN_BARCODE');
+                  }}
+                  className="p-6 rounded-2xl bg-gradient-to-br from-indigo-950/90 via-slate-900 to-slate-950 border-2 border-indigo-500/60 hover:border-indigo-400 text-left transition-all hover:scale-[1.02] shadow-2xl group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-3.5 rounded-2xl bg-indigo-500/20 text-indigo-300 group-hover:bg-indigo-500 group-hover:text-white transition-all shadow-inner">
+                      <BookOpen className="w-8 h-8" />
+                    </div>
+                    <span className="text-[11px] font-black bg-indigo-500 text-white px-3 py-1 rounded-full animate-pulse shadow-md">0초 고속 입고</span>
+                  </div>
+                  <h3 className="font-extrabold text-lg text-white group-hover:text-indigo-300 transition-colors">
+                    ⚡ 신품 도서 (ISBN 바코드 고속 입고)
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                    사진 촬영 과정을 <strong>100% 스킵</strong>하고, 바코드 스캔 즉시 알라딘 도서 정보를 연동하여 <strong>0초 만에 바로 재고 입고 확정</strong>합니다.
+                  </p>
+                </button>
+
+                {/* Card 2: Used / Returned Book AI Inspection */}
+                <button
+                  onClick={() => {
+                    setInboundType('USED_RETURN_INSPECTION');
+                    setStep('SCAN_BARCODE');
+                  }}
+                  className="p-6 rounded-2xl bg-gradient-to-br from-amber-950/90 via-slate-900 to-slate-950 border-2 border-amber-500/60 hover:border-amber-400 text-left transition-all hover:scale-[1.02] shadow-2xl group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-3.5 rounded-2xl bg-amber-500/20 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-all shadow-inner">
+                      <Camera className="w-8 h-8" />
+                    </div>
+                    <span className="text-[11px] font-black bg-amber-500 text-slate-950 px-3 py-1 rounded-full shadow-md">AI 훼손 정밀 검수</span>
+                  </div>
+                  <h3 className="font-extrabold text-lg text-white group-hover:text-amber-300 transition-colors">
+                    🔍 중고 / 반품 도서 (AI 정밀 검수)
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                    표지 및 속지 카메라 촬영 후 <strong>4-Agent AI 비전 파이프라인(YOLOv8)</strong>으로 훼손 등급 및 매입/반품가를 정밀 평가합니다.
+                  </p>
+                </button>
+              </div>
+            </div>
+          )}
         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-600 to-black z-0"></div>
         
         {(step === 'SCAN_BARCODE' || step === 'VISION_EVALUATION') && (
@@ -453,21 +615,41 @@ export default function InboundScannerPage() {
 
         {step === 'PRINT_STICKER' && (
           <div className="relative z-10 flex flex-col items-center">
-            <div className="w-48 h-12 bg-slate-800 border-b-4 border-slate-700 rounded-t-xl z-20 flex items-center justify-center mb-1">
-              <span className="text-slate-400 text-xs font-bold">라벨 프린터 (연동됨)</span>
-            </div>
-            {/* 50x30mm(가로형) 라벨 렌더링. 화면에 표시하기 위해 약간의 scale, box-shadow 적용 */}
-            <div className="relative z-10 animate-print shadow-2xl bg-white border border-gray-300 transform scale-[1.7] origin-top mb-20 mt-4 rounded-sm">
-              <LpnPrintLabel data={{
-                lpn_barcode: currentLpn,
-                book: {
-                  title: bookInfo?.title || '미등록 도서',
-                  author: bookInfo?.author || '-',
-                  isbn: isbn || '-'
-                },
-                worker_id: user?.name ? `${user.employee_id} (${user.name})` : 'WM2607001 (최초관리자)'
-              }} />
-            </div>
+            {inboundType === 'NEW_FASTTRACK' ? (
+              <div className="bg-slate-900/80 backdrop-blur-xl border border-indigo-500/30 p-8 rounded-3xl text-center space-y-4 shadow-2xl max-w-md animate-in zoom-in-95 duration-200">
+                <div className="w-16 h-16 bg-gradient-to-tr from-indigo-600 to-purple-500 text-white rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/30 transform hover:scale-105 transition-transform">
+                  <Zap className="w-9 h-9 text-yellow-300 fill-yellow-300 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-xl font-black text-white tracking-tight">⚡ 신품 도서 Fast-track 입고</h3>
+                  <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                    사진 촬영 및 개별 LPN 발급을 <strong className="text-emerald-400">100% 생략</strong>하고<br/>수량 확인 후 즉시 재고로 편입됩니다.
+                  </p>
+                </div>
+                <div className="inline-flex items-center gap-2 bg-indigo-950/80 border border-indigo-500/40 px-4 py-1.5 rounded-full text-xs font-mono font-bold text-indigo-200 shadow-inner">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  <span>ISBN: {isbn}</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="w-48 h-12 bg-slate-800 border-b-4 border-slate-700 rounded-t-xl z-20 flex items-center justify-center mb-1">
+                  <span className="text-slate-400 text-xs font-bold">라벨 프린터 (연동됨)</span>
+                </div>
+                {/* 50x30mm(가로형) 라벨 렌더링 */}
+                <div className="relative z-10 animate-print shadow-2xl bg-white border border-gray-300 transform scale-[1.7] origin-top mb-20 mt-4 rounded-sm">
+                  <LpnPrintLabel data={{
+                    lpn_barcode: currentLpn,
+                    book: {
+                      title: bookInfo?.title || '미등록 도서',
+                      author: bookInfo?.author || '-',
+                      isbn: isbn || '-'
+                    },
+                    worker_id: user?.name ? `${user.employeeId} (${user.name})` : 'WM2608001 (최초관리자)'
+                  }} />
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -535,10 +717,12 @@ export default function InboundScannerPage() {
           </div>
         )}
       </div>
+      </div>
 
-      {/* Bottom Control Panel */}
-      <div className="bg-white rounded-t-3xl p-6 z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.3)] min-h-[220px] flex flex-col justify-end">
-        <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto absolute top-3 left-1/2 -translate-x-1/2"></div>
+      {/* Bottom Control Panel (Light & Dark Mode Full Compatibility) */}
+      {step !== 'SELECT_TYPE' && (
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 z-20 shadow-2xl border border-slate-200 dark:border-slate-800 min-h-[180px] flex flex-col justify-end animate-in slide-in-from-bottom-4 duration-200">
+          <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto absolute top-3 left-1/2 -translate-x-1/2"></div>
         
         {step === 'SCAN_BARCODE' && (
           <div className="space-y-4 pt-4">
@@ -588,13 +772,22 @@ export default function InboundScannerPage() {
                   }
 
                   // 신규 입고 모드
-                  setCurrentLpn(generateLPN());
-                  setBookInfo(null);
-                  setIsLoadingBook(true);
-                  setStep('PRINT_STICKER');
+                  setIsbn(inputVal);
+                  if (inboundType === 'NEW_FASTTRACK') {
+                    setCurrentLpn('');
+                    setBookInfo(null);
+                    setIsLoadingBook(true);
+                    setFasttrackQty(1);
+                    setStep('PRINT_STICKER');
+                  } else {
+                    setCurrentLpn(generateLPN());
+                    setBookInfo(null);
+                    setIsLoadingBook(true);
+                    setStep('PRINT_STICKER');
+                  }
 
                   try {
-                    const res = await fetch(`/api/book?isbn=${inputVal}`);
+                    const res = await fetch(`http://localhost:8000/api/v1/inbound/book-lookup?isbn=${inputVal}`);
                     if (res.ok) {
                       const data = await res.json();
                       setBookInfo(data);
@@ -617,8 +810,8 @@ export default function InboundScannerPage() {
 
         {step === 'PRINT_STICKER' && (
           <div className="space-y-4 pt-4 animate-in slide-in-from-right-4">
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-2 shadow-inner">
-              <p className="text-xs text-gray-500 mb-2">인식된 도서 (ISBN: {isbn})</p>
+            <div className="bg-slate-50 dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 mb-2 shadow-inner transition-colors">
+              <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2.5 uppercase tracking-wider">인식된 도서 정보 (ISBN: {isbn})</p>
               
               {isLoadingBook ? (
                 <div className="flex items-center space-x-2 py-2">
@@ -627,14 +820,18 @@ export default function InboundScannerPage() {
                 </div>
               ) : bookInfo?.title ? (
                 <div className="flex gap-3 items-start">
-                  {bookInfo.imageUrl && (
-                    <img src={bookInfo.imageUrl} alt="book cover" className="w-16 h-24 object-cover rounded border border-gray-200 shadow-sm shrink-0" />
-                  )}
+                  <BookCover
+                    src={bookInfo?.imageUrl}
+                    title={bookInfo?.title || '입고 도서'}
+                    author={bookInfo?.author || ''}
+                    isbn={isbn}
+                    className="w-16 h-24"
+                  />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-emerald-600 font-bold mb-0.5 truncate">{bookInfo.categoryName?.split('>').pop()}</p>
-                    <p className="font-bold text-gray-800 text-sm leading-tight mb-1 line-clamp-2">{bookInfo.title}</p>
-                    <p className="text-[11px] text-gray-500 mb-1">{bookInfo.author} | {bookInfo.publisher}</p>
-                    {bookInfo.price && <p className="text-[11px] font-bold text-slate-700 mb-1">{bookInfo.price.toLocaleString()}원</p>}
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mb-0.5 truncate">{bookInfo.categoryName?.split('>').pop()}</p>
+                    <p className="font-bold text-slate-900 dark:text-white text-sm leading-tight mb-1 line-clamp-2">{bookInfo.title}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">{bookInfo.author} | {bookInfo.publisher}</p>
+                    {bookInfo.price && <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 mb-1">{bookInfo.price.toLocaleString()}원</p>}
                     {bookInfo.description && (
                       <p className="text-[10px] text-gray-400 line-clamp-2 leading-tight">
                         {bookInfo.description}
@@ -646,12 +843,79 @@ export default function InboundScannerPage() {
                 <p className="font-bold text-gray-800">{bookInfo?.title || '미등록 도서'}</p>
               )}
 
-              <div className="mt-3 flex items-center justify-between border-t border-gray-200 pt-2">
-                <span className="text-xs text-blue-600 font-bold">발급 예정 LPN</span>
-                <span className="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{currentLpn}</span>
-              </div>
+              {inboundType === 'NEW_FASTTRACK' ? (
+                <div className="mt-3 flex items-center justify-between border-t border-gray-200 pt-3">
+                  <span className="text-xs font-bold text-slate-700">⚡ 입고 수량 (수량 기입 가능)</span>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setFasttrackQty(prev => Math.max(1, prev - 1))}
+                      className="w-8 h-8 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold text-slate-800 text-base flex items-center justify-center transition-colors"
+                    >
+                      -
+                    </button>
+                    <input 
+                      type="number"
+                      min={1}
+                      value={fasttrackQty}
+                      onChange={(e) => setFasttrackQty(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 h-8 border border-slate-300 rounded-lg text-center font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setFasttrackQty(prev => prev + 1)}
+                      className="w-8 h-8 rounded-lg bg-indigo-100 hover:bg-indigo-200 font-bold text-indigo-700 text-base flex items-center justify-center transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 flex items-center justify-between border-t border-gray-200 pt-2">
+                  <span className="text-xs text-blue-600 font-bold">발급 예정 LPN</span>
+                  <span className="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{currentLpn}</span>
+                </div>
+              )}
             </div>
-            {bookInfo?.isRescan ? (
+
+            {inboundType === 'NEW_FASTTRACK' ? (
+              <button 
+                onClick={async () => {
+                  try {
+                    setIsAnalyzing(true);
+                    const res = await fetch("http://localhost:8000/api/v1/inbound/fasttrack", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        isbn: isbn,
+                        title: bookInfo?.title || '신품 도서',
+                        imageUrl: bookInfo?.imageUrl || '',
+                        qty: fasttrackQty
+                      })
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      alert(data.message || `⚡ [신품 패스트트랙] '${bookInfo?.title || '신품 도서'}' ${fasttrackQty}권이 재고로 즉시 입고되었습니다!`);
+                      // 결과 초기화 및 다음 스캔 준비
+                      setStep('SCAN_BARCODE');
+                      setIsbn('');
+                      setBookInfo(null);
+                      setFasttrackQty(1);
+                    } else {
+                      alert('패스트트랙 입고 처리 실패');
+                    }
+                  } catch (e) {
+                    alert('패스트트랙 서버 통신 에러');
+                  } finally {
+                    setIsAnalyzing(false);
+                  }
+                }}
+                className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black py-4 px-6 rounded-2xl shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 cursor-pointer transition-all text-base"
+              >
+                <Zap className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse" />
+                <span>⚡ 신품 도서 Fast-track 입고 완료 ({fasttrackQty}권)</span>
+              </button>
+            ) : bookInfo?.isRescan ? (
               <div className="flex gap-2 mt-2">
                 <button 
                   onClick={async () => {
@@ -673,10 +937,10 @@ export default function InboundScannerPage() {
                     }
                   }}
                   disabled={isPrinting}
-                  className="flex-1 bg-slate-200 hover:bg-slate-300 disabled:bg-slate-100 text-slate-700 py-4 rounded-xl font-bold flex items-center justify-center transition-all shadow-sm"
+                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-colors"
                 >
-                  {isPrinting ? <RefreshCcw className="w-5 h-5 animate-spin mr-2" /> : <Printer className="w-5 h-5 mr-2" />}
-                  라벨 재출력
+                  <Printer className="w-5 h-5" />
+                  <span>스티커 재출력 & 촬영</span>
                 </button>
                 <button 
                   onClick={() => setStep('VISION_EVALUATION')}
@@ -785,9 +1049,8 @@ export default function InboundScannerPage() {
             </button>
           </div>
         )}
-
       </div>
-      </div>
+      )}
       
       {/* 작업 진행 현황 패널 (비동기 큐 모니터링) */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mx-2 sm:mx-0 transition-all">
@@ -848,6 +1111,7 @@ export default function InboundScannerPage() {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

@@ -120,7 +120,7 @@ export const LpnPrintLabel: React.FC<LpnPrintLabelProps> = ({ data }) => {
           <div style={bookTitleStyle}>{data.book.title}</div>
           <div style={isbnStyle}>ISBN: {data.book.isbn}</div>
           <div style={workerStyle}>
-            작업자: {data.worker_id || 'WM2607001 (장문경)'}
+            작업자: {data.worker_id || 'WM2608001 (장문경)'}
           </div>
         </div>
       </div>

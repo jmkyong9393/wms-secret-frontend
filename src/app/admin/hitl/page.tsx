@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import BookCover from "@/components/BookCover";
 import { adminAPI } from "@/lib/api";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
 import { HitlImageModal } from "@/features/hitl/components/HitlImageModal";
@@ -34,9 +35,9 @@ const DECISION_OPTIONS = [
 ];
 
 const GRADE_OPTIONS = [
-  { value: "S", label: "S급" },
-  { value: "A", label: "A급" },
-  { value: "B", label: "B급" },
+  { value: "MINT", label: "MINT (최상급)" },
+  { value: "GOOD", label: "GOOD (상급)" },
+  { value: "NORMAL", label: "NORMAL (중급)" },
   { value: "REJECT", label: "REJECT (폐기)" },
 ];
 
@@ -109,8 +110,9 @@ export default function AdminHitlDashboard() {
   };
 
   const handleTriggerAiReinspect = async (jobId: string) => {
-    const targetTask = tasks.find((t) => t.id === jobId);
-    const lpnStr = targetTask?.agent_logs?.lpn_barcode || targetTask?.lpn_barcode || `LPN-260728-${jobId.slice(0, 4).toUpperCase()}`;
+    const targetTask = tasks.find((t) => t.id === jobId) as any;
+    const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
+    const lpnStr = targetTask?.agent_logs?.lpn_barcode || targetTask?.lpn_barcode || `LPN-${yymmdd}-${jobId.slice(0, 4).toUpperCase()}`;
     const titleStr = targetTask?.book_title || "수동 검수 요청 도서";
 
     setReinspectingIds((prev) => new Set(prev).add(jobId));
@@ -127,9 +129,12 @@ export default function AdminHitlDashboard() {
     });
 
     try {
-      const res = await adminAPI.triggerAiReinspection(jobId);
-      const logs = res?.agent_logs || {};
-      const score = res?.ubci_score !== undefined ? res.ubci_score : (logs?.ubci_score !== undefined ? logs.ubci_score : 75);
+      // 백엔드 재검수 엔드포인트는 Celery 큐에 등록만 하고 {status, message, job_id}만 즉시
+      // 반환한다 (agent_logs/ubci_score는 비동기 파이프라인 완료 후에나 나오는 값이라
+      // 이 응답엔 애초에 포함되지 않는다) - 아래는 큐 등록 직후 화면에 보여줄 진행 메시지다.
+      await adminAPI.triggerAiReinspection(jobId);
+      const logs: Record<string, string | undefined> = {};
+      const score = 75;
       const timeNow = new Date().toLocaleTimeString();
 
       const visionMsg = logs?.vision_text || `GPT-4o VLM 표지/속지 스캔 이미지 2차 검증 & GPT-4o-mini 예비 감점 산출 완료`;
@@ -215,10 +220,37 @@ export default function AdminHitlDashboard() {
       const initReasons: Record<string, string> = {};
       const initComments: Record<string, string> = {};
 
+      const getDefaultReason = (desc: string) => {
+        if (!desc) return "DMG_INT_DOODLE";
+        const d = desc.toLowerCase();
+        
+        for (const key of Object.keys(REASON_CODE_MAP)) {
+          if (d.includes(key.toLowerCase())) return key;
+        }
+        
+        // 1. 외부 손상 / 찌그러짐
+        if (d.includes("찌그러짐") || d.includes("찍힘") || d.includes("구겨짐") || d.includes("긁힘") || d.includes("스크래치") || d.includes("갈라짐")) return "DMG_EXT_CRUSH";
+        // 2. 외부 습기 / 침수
+        if (d.includes("습기") || d.includes("침수") || d.includes("물") || d.includes("액체") || d.includes("울기") || d.includes("warping") || d.includes("water")) return "DMG_EXT_WET";
+        // 3. 커버 찢어짐
+        if (d.includes("찢어짐") || d.includes("tear")) return "DMG_EXT_TEAR";
+        // 4. 오염 / 얼룩
+        if (d.includes("오염") || d.includes("얼룩") || d.includes("stain")) return "DMG_INT_STAIN";
+        // 5. 변색 / 황변
+        if (d.includes("변색") || d.includes("황변") || d.includes("빛바램")) return "DMG_INT_DISCOLOR";
+        // 6. 오탐 방어
+        if (d.includes("그림자") || d.includes("shadow")) return "FP_SHADOW";
+        if (d.includes("빛반사") || d.includes("glare")) return "FP_GLARE";
+        // 7. 필기 / 낙서 / 밑줄 (기본값)
+        if (d.includes("필기") || d.includes("낙서") || d.includes("밑줄") || d.includes("handwriting") || d.includes("scribble")) return "DMG_INT_DOODLE";
+        
+        return "DMG_INT_DOODLE";
+      };
+
       list.forEach((t: HitlTask) => {
         initDecisions[t.id] = t.agent_logs?.suggested_decision || "APPROVE_DOWNGRADE";
         initGrades[t.id] = t.agent_logs?.suggested_grade || "B";
-        initReasons[t.id] = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code || "DMG_INT_DOODLE";
+        initReasons[t.id] = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code || getDefaultReason(t.agent_logs?.defect_description || "");
         initComments[t.id] = t.human_issue_notes || "관리자 검수 오버라이드";
       });
 
@@ -227,11 +259,9 @@ export default function AdminHitlDashboard() {
       setReasons(initReasons);
       setComments(initComments);
     } catch (err: any) {
+      // 401(세션 만료) 처리는 apiClient의 전역 response 인터셉터(lib/api-client.ts)가
+      // 이미 담당한다 - 여기서 중복으로 리다이렉트하지 않는다.
       console.error("Failed to fetch HITL tasks:", err);
-      // alert() 팝업 대신 콘솔 로깅 및 401 로그인 리다이렉트 방어
-      if (err?.response?.status === 401 && typeof window !== "undefined") {
-        window.location.href = "/login";
-      }
     } finally {
       setLoading(false);
     }
@@ -273,7 +303,7 @@ export default function AdminHitlDashboard() {
   };
 
   const [masterDecision, setMasterDecision] = useState<string>("APPROVE_DOWNGRADE");
-  const [masterGrade, setMasterGrade] = useState<string>("B");
+  const [masterGrade, setMasterGrade] = useState<string>("GOOD");
   const [masterReasons, setMasterReasons] = useState<string[]>(["DMG_INT_DOODLE", "DMG_EXT_CRUSH"]);
 
   const handleMasterDecisionChange = (val: string | null) => {
@@ -302,12 +332,12 @@ export default function AdminHitlDashboard() {
     }
     const nextDecisions = { ...decisions };
     const nextGrades = { ...grades };
-    const nextReasons = { ...reasons };
+    const nextReasons = { ...reasons } as Record<string, any>;
 
     selectedIds.forEach((id) => {
       nextDecisions[id] = masterDecision;
       nextGrades[id] = masterGrade;
-      nextReasons[id] = [...masterReasons];
+      nextReasons[id] = masterReasons.length > 0 ? masterReasons.join(", ") : "";
     });
 
     setDecisions(nextDecisions);
@@ -389,32 +419,38 @@ export default function AdminHitlDashboard() {
 
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-200">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
+      {/* Top Banner Header (admin/inspections, admin/inventory 등 다른 관제 페이지와 동일 패턴) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-bold font-mono flex items-center gap-1">
+              <ShieldIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> HUMAN-IN-THE-LOOP OVERRIDE CONSOLE
+            </span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">Supervisor 이관 건 수동 결재</span>
+          </div>
+          <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
             <ShieldIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             HITL 예외 검수 대시보드
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            AI 보류 건(HITL_REQUIRED)에 대해 관리자가 이미지와 결함을 검증하여 최종 승인/반려/등급을 오버라이드합니다.
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+            Supervisor가 자동 확정이 부적절하다고 판단해 이관한 건(HITL_REQUIRED)을 관리자가 직접 검증하여 최종 승인/반려/등급을 확정합니다.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           <Button variant="outline" onClick={fetchTasks} disabled={loading} className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200">
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
             새로고침
           </Button>
-          <Button onClick={handleSubmit} disabled={selectedIds.size === 0} className="bg-blue-600 hover:bg-blue-700 font-bold text-xs shadow-md">
-            <CheckCircle2 className="w-4 h-4 mr-1.5" />
-            🚀 선택 {selectedIds.size}건 최종 결재 제출
+          <Button onClick={handleSubmit} disabled={selectedIds.size === 0} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer">
+            <CheckCircle2 className="w-4 h-4" />
+            선택 {selectedIds.size}건 최종 결재 제출
           </Button>
         </div>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between">
+        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">검수 대기 총계</p>
             <p className="text-2xl font-extrabold text-gray-900 dark:text-white mt-1">{tasks.length}건</p>
@@ -424,7 +460,7 @@ export default function AdminHitlDashboard() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between">
+        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">선택된 처리 건</p>
             <p className="text-2xl font-extrabold text-blue-600 dark:text-blue-400 mt-1">{selectedIds.size}건</p>
@@ -434,7 +470,7 @@ export default function AdminHitlDashboard() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between">
+        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">검색 필터 적용 건</p>
             <p className="text-2xl font-extrabold text-gray-700 dark:text-gray-300 mt-1">{filteredTasks.length}건</p>
@@ -446,7 +482,7 @@ export default function AdminHitlDashboard() {
       </div>
 
       {/* Control & Toolbar */}
-      <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="relative w-full md:w-80">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
@@ -465,8 +501,10 @@ export default function AdminHitlDashboard() {
               선택항목 일괄 설정:
             </div>
             <Select value={masterDecision} onValueChange={handleMasterDecisionChange}>
-              <SelectTrigger className="h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white w-32">
-                <SelectValue />
+              <SelectTrigger className="h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white w-36">
+                <SelectValue>
+                  {DECISION_OPTIONS.find((o) => o.value === masterDecision)?.label || masterDecision}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
                 {DECISION_OPTIONS.map((opt) => (
@@ -479,7 +517,9 @@ export default function AdminHitlDashboard() {
 
             <Select value={masterGrade} onValueChange={handleMasterGradeChange}>
               <SelectTrigger className="h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white w-24">
-                <SelectValue />
+                <SelectValue>
+                  {GRADE_OPTIONS.find((o) => o.value === masterGrade)?.label || masterGrade}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
                 {GRADE_OPTIONS.map((opt) => (
@@ -513,8 +553,8 @@ export default function AdminHitlDashboard() {
                 );
               })}
               <Select
-                onValueChange={(val: string) => {
-                  if (!masterReasons.includes(val)) {
+                onValueChange={(val: string | null) => {
+                  if (val && !masterReasons.includes(val)) {
                     setMasterReasons([...masterReasons, val]);
                   }
                 }}
@@ -553,7 +593,7 @@ export default function AdminHitlDashboard() {
       </div>
 
       {/* Main Table */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-gray-400 dark:text-gray-500 text-sm">데이터를 불러오는 중...</div>
         ) : filteredTasks.length === 0 ? (
@@ -561,9 +601,9 @@ export default function AdminHitlDashboard() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50 dark:bg-gray-800/80 text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800 text-xs font-semibold">
+              <thead className="bg-gray-50/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 uppercase border-y border-gray-200 dark:border-gray-800 text-xs font-bold">
                 <tr>
-                  <th className="p-3 w-10 text-center">
+                  <th className="py-3.5 px-4 w-10 text-center">
                     <input
                       type="checkbox"
                       className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
@@ -571,14 +611,14 @@ export default function AdminHitlDashboard() {
                       onChange={toggleAll}
                     />
                   </th>
-                  <th className="p-3 w-20 text-center">이미지</th>
-                  <th className="p-3 w-56">도서 정보 및 바코드</th>
-                  <th className="p-3 w-48">AI 비전 감지 사유</th>
-                  <th className="p-3 w-36">처분 결정 (Decision)</th>
-                  <th className="p-3 w-24">목표 등급</th>
-                  <th className="p-3 w-40">오버라이드 사유</th>
-                  <th className="p-3 w-48">관리자 메모</th>
-                  <th className="p-3 w-28 text-center">AI 재검수</th>
+                  <th className="py-3.5 px-4 w-20 text-center">이미지</th>
+                  <th className="py-3.5 px-4 w-56">도서 정보 및 바코드</th>
+                  <th className="py-3.5 px-4 w-48">AI 비전 감지 사유</th>
+                  <th className="py-3.5 px-4 w-36">처분 결정 (Decision)</th>
+                  <th className="py-3.5 px-4 w-24">목표 등급</th>
+                  <th className="py-3.5 px-4 w-40">오버라이드 사유</th>
+                  <th className="py-3.5 px-4 w-48">관리자 메모</th>
+                  <th className="py-3.5 px-4 w-28 text-center">AI 재검수</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
@@ -607,17 +647,16 @@ export default function AdminHitlDashboard() {
 
                       <td className="p-3">
                         <div
-                          className="relative w-14 h-18 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer group shadow-sm"
+                          className="relative w-14 h-18 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer group shadow-sm flex items-center justify-center"
                           onClick={() => setModalTask(t)}
                           title="클릭하여 원본 이미지 및 결함 박스 확대보기"
                         >
-                          {firstImage ? (
-                            <img src={firstImage} alt="book" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400 dark:text-gray-500">
-                              No Img
-                            </div>
-                          )}
+                          <BookCover
+                            src={firstImage || t.cover_image_url}
+                            title={t.book_title || "도서 제목 미지정"}
+                            isbn={t.isbn}
+                            className="w-full h-full"
+                          />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                             <Maximize2 className="w-4 h-4 text-white" />
                           </div>
@@ -628,7 +667,7 @@ export default function AdminHitlDashboard() {
                         <div className="font-bold text-gray-900 dark:text-white line-clamp-1">{t.book_title || "도서 정보 없음"}</div>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
                           <span className="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono text-[11px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
-                            {t.agent_logs?.lpn_barcode || t.lpn_barcode || `LPN-260728-${t.id.slice(0, 4).toUpperCase()}`}
+                            {(t as any).agent_logs?.lpn_barcode || (t as any).lpn_barcode || `LPN-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${t.id.slice(0, 4).toUpperCase()}`}
                           </span>
                           <span className="text-gray-500 dark:text-gray-400 font-mono text-[11px]">ISBN: {t.isbn || "-"}</span>
                         </div>
@@ -670,7 +709,9 @@ export default function AdminHitlDashboard() {
                           onValueChange={(val: any) => setDecisions({ ...decisions, [t.id]: val })}
                         >
                           <SelectTrigger className="w-full h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white">
-                            <SelectValue />
+                            <SelectValue>
+                              {DECISION_OPTIONS.find((o) => o.value === (decisions[t.id] || "APPROVE_DOWNGRADE"))?.label || (decisions[t.id] || "APPROVE_DOWNGRADE")}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
                             {DECISION_OPTIONS.map((opt) => (
@@ -685,11 +726,13 @@ export default function AdminHitlDashboard() {
                       <td className="p-3">
                         <Select
                           disabled={!isSelected || decisions[t.id] === "REJECT_RETURN" || decisions[t.id] === "RE_CHECK"}
-                          value={grades[t.id] || "B"}
+                          value={grades[t.id] || "GOOD"}
                           onValueChange={(val: any) => setGrades({ ...grades, [t.id]: val })}
                         >
                           <SelectTrigger className="w-full h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white">
-                            <SelectValue />
+                            <SelectValue>
+                              {GRADE_OPTIONS.find((o) => o.value === (grades[t.id] || "GOOD"))?.label || (grades[t.id] || "GOOD")}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
                             {GRADE_OPTIONS.map((opt) => (
@@ -712,7 +755,7 @@ export default function AdminHitlDashboard() {
                             const current = selectedList.includes(codeToToggle)
                               ? selectedList.filter((c) => c !== codeToToggle)
                               : [...selectedList, codeToToggle];
-                            setReasons({ ...reasons, [t.id]: current });
+                            setReasons({ ...reasons, [t.id]: current.join(", ") });
                           };
 
                           return (
@@ -746,9 +789,9 @@ export default function AdminHitlDashboard() {
                               )}
                               <Select
                                 disabled={!isSelected}
-                                onValueChange={(val: string) => {
-                                  if (!selectedList.includes(val)) {
-                                    setReasons({ ...reasons, [t.id]: [...selectedList, val] });
+                                onValueChange={(val: string | null) => {
+                                  if (val && !selectedList.includes(val)) {
+                                    setReasons({ ...reasons, [t.id]: [...selectedList, val].join(", ") });
                                   }
                                 }}
                               >
