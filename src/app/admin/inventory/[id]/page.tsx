@@ -185,6 +185,12 @@ export default function InventoryDetailPage() {
 
   // WBF 3-YOLO 앙상블 사전탐지 후보. Vision이 채택하지 않은 것도 그대로 남아 있어,
   // 검수자가 "AI가 무엇을 보고 무엇을 기각했는지"까지 대조할 수 있다.
+  // Vision Agent가 도서를 식별하지 못한 촬영 컷 (작업자 얼굴만 찍힘, 빈 배경 등).
+  // "결함 0건이라 정상"과 "애초에 책이 안 찍혔다"는 완전히 다른 사실이므로 구분해 표시한다.
+  const invalidImageIndexes: number[] = Array.isArray(logs.invalid_image_indexes)
+    ? logs.invalid_image_indexes.map(Number)
+    : [];
+
   const yoloCandidates: any[] = Array.isArray(logs.yolo_candidates) ? logs.yolo_candidates : [];
   const currentYoloBoxes = yoloCandidates
     .filter((c) => Number(c?.image_index ?? 0) === selectedImgIdx && c?.bbox)
@@ -507,6 +513,9 @@ export default function InventoryDetailPage() {
                       const coords = defectCoords.find((c) => c.image_index === idx);
                       const defectCnt = coords?.bboxes.length || 0;
                       const isSelected = selectedImgIdx === idx;
+                      // Vision Agent가 "도서가 식별되지 않는 컷"으로 판정한 이미지.
+                      // 이 구분이 없으면 작업자 얼굴만 찍힌 사진도 "정상(결함 0건)"으로 보인다.
+                      const isInvalid = invalidImageIndexes.includes(idx);
                       return (
                         <button
                           key={idx}
@@ -514,16 +523,21 @@ export default function InventoryDetailPage() {
                           className={`flex flex-col items-center p-1.5 rounded-xl border text-[11px] font-bold transition-all shrink-0 min-w-[95px] cursor-pointer ${
                             isSelected
                               ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-600 text-indigo-700 dark:text-indigo-300 shadow-xs ring-2 ring-indigo-500/20'
+                              : isInvalid
+                              ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300'
                               : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                           }`}
                         >
                           <img
                             src={imgUrl}
                             alt={`검수 이미지 ${idx}`}
-                            className="w-16 h-20 object-cover rounded-lg mb-1 border border-gray-200 dark:border-gray-700 bg-gray-200"
+                            className={`w-16 h-20 object-cover rounded-lg mb-1 border border-gray-200 dark:border-gray-700 bg-gray-200 ${
+                              isInvalid ? 'opacity-60' : ''
+                            }`}
                           />
                           <span className="truncate max-w-[90px]">
-                            #{idx} {defectCnt > 0 ? `결함 ${defectCnt}` : '정상'}
+                            {/* "정상"은 도서 상태 보증처럼 읽혀 "결함 미검출"로 표기 */}
+                            #{idx} {isInvalid ? '👤 도서 미식별' : defectCnt > 0 ? `결함 ${defectCnt}` : '결함 미검출'}
                           </span>
                         </button>
                       );
@@ -593,7 +607,14 @@ export default function InventoryDetailPage() {
                         </span>
                       </h4>
 
-                      {currentBBoxes.length === 0 ? (
+                      {invalidImageIndexes.includes(selectedImgIdx) ? (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 rounded-lg text-xs space-y-1">
+                          <p className="font-bold">[INVALID] 도서가 식별되지 않는 촬영 컷</p>
+                          <p className="text-[11px] leading-relaxed">
+                            결함이 없어서가 아니라 이 사진에서 도서를 찾지 못했습니다. 재촬영이 필요할 수 있습니다.
+                          </p>
+                        </div>
+                      ) : currentBBoxes.length === 0 ? (
                         <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded-lg text-xs font-bold">
                           [CLEAN] 이 이미지에서 검출된 결함 없음
                         </div>
