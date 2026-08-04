@@ -83,47 +83,69 @@ export const inventoryAPI = {
   },
 };
 
-// --- app/domains/po/router.py 응답 타입 ---
+// --- app/domains/po/router.py (/po/proposals*) 응답 타입 ---
+// Restock 판정 그래프(Collector→Agent→Validator)가 적재한 order_proposals의 칸반 카드.
 
-export interface SuggestedPo {
+export type ProposalStatus = "PENDING" | "APPROVED" | "DISMISSED";
+export type ProposalUrgency = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+
+export interface OrderProposalCard {
   id: string;
-  book_id: string;
+  bookId: string;
   isbn: string;
   title: string;
   author: string;
   publisher: string;
+  coverImageUrl: string | null;
+  triggerType: "INSPECTION_REJECT" | "SAFETY_STOCK" | "MANUAL";
+  rejectReasonCode: string | null;
   currentStock: number;
-  safetyStock: number;
-  recommendedQty: number;
+  salesVelocity30d: number;
+  rejectedQuantity: number;
+  baselineQuantity: number;
+  proposedQuantity: number;
+  urgency: ProposalUrgency;
+  reasoning: string;
+  aiSource: "LLM_GPT4O_MINI" | "FALLBACK_RULE";
+  unitCost: number;
   estimatedCost: number;
-  urgency: string;
+  status: ProposalStatus;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  orderId: string | null;
+  createdAt: string | null;
+}
+
+interface ProposalDecisionResult {
   status: string;
-  triggerDate: string;
-  _fallback_reason?: string;
+  approvedCount?: number;
+  approved?: { proposalId: string; orderId: string; title: string; quantity: number; zone: string }[];
+  dismissedCount?: number;
+  skipped: string[];
 }
 
-interface ApprovePoResult {
-  message: string;
-  approved_count: number;
-  created_order_ids: string[];
-  created_lpns: string[];
-}
-
-interface DeductStockResult {
-  [key: string]: unknown;
+interface ProposalScanResult {
+  status: string;
+  createdCount: number;
+  created: { proposalId: string; title: string; currentStock: number; proposedQuantity: number; urgency: string }[];
 }
 
 export const poAPI = {
-  getSuggestedPo: async () => {
-    const res = await apiClient.get<SuggestedPo[]>("/api/v1/po/suggested");
+  getProposals: async (status?: ProposalStatus) => {
+    const query = status ? `?status=${status}` : "";
+    const res = await apiClient.get<OrderProposalCard[]>(`/api/v1/po/proposals${query}`);
     return res.data;
   },
-  approvePo: async (book_ids: string[]) => {
-    const res = await apiClient.post<ApprovePoResult>("/api/v1/po/approve", { book_ids });
+  approveProposals: async (proposal_ids: string[]) => {
+    const res = await apiClient.post<ProposalDecisionResult>("/api/v1/po/proposals/approve", { proposal_ids });
     return res.data;
   },
-  deductStock: async (data: { book_id: string; deduct_qty?: number; reason?: string }) => {
-    const res = await apiClient.post<DeductStockResult>("/api/v1/po/deduct", data);
+  dismissProposals: async (proposal_ids: string[]) => {
+    const res = await apiClient.post<ProposalDecisionResult>("/api/v1/po/proposals/dismiss", { proposal_ids });
+    return res.data;
+  },
+  scanSafetyStock: async () => {
+    const res = await apiClient.post<ProposalScanResult>("/api/v1/po/proposals/scan");
     return res.data;
   },
 };
