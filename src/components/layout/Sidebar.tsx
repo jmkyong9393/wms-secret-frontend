@@ -51,31 +51,38 @@ const WORKER_MENU_GROUPS: MenuGroup[] = [
   },
 ];
 
+/**
+ * [수정 이력 2026-08-04] 메뉴 개편 (조장 채택안, 13개 -> 10개):
+ * - "나의 검수 내역 (Worker)" 제거 -> 검수 처리 내역 페이지 내 [전체|내 검수만] 토글로 흡수
+ * - "현장 재고 조회 (Worker)" 제거 -> 재고 현황 관리가 role-aware 공용 그리드라 중복
+ * - "FDS 이상거래 관제" 신설 (룰 엔진 + Analyst Agent 실탐지 화면)
+ * - 그룹명 "관제 & 대시보드" -> "관제 & 인텔리전스"
+ * Worker 메뉴(WORKER_MENU_GROUPS)는 현장 동선 최적화 상태 그대로 유지.
+ */
 function getMenuGroups(hitlPendingCount: number): MenuGroup[] {
   return [
     {
-      title: '📊 관제 & 대시보드',
+      title: '📊 관제 & 인텔리전스',
       items: [
         { name: '종합 대시보드', href: '/admin/dashboard', icon: LayoutDashboard },
+        { name: 'FDS 이상거래 관제', href: '/admin/fds', icon: ShieldCheck },
       ],
     },
     {
       title: '📥 입고 & AI 검수 파이프라인',
       items: [
         { name: '도서 입고 검수 (카메라)', href: '/inbound', icon: Camera },
-        { name: '나의 검수 내역 (Worker)', href: '/worker/inspections', icon: ShieldCheck },
         { name: '승인 대기 (HITL)', href: '/admin/hitl', icon: ShoppingCart, badge: hitlPendingCount > 0 ? String(hitlPendingCount) : undefined },
-        { name: '검수 처리 내역 (전체)', href: '/admin/inspections', icon: FileCheck },
+        { name: '검수 처리 내역', href: '/admin/inspections', icon: FileCheck },
       ],
     },
     {
       title: '📦 재고 & 출고 프로세스',
       items: [
-        { name: '재고 현황 관리 (Master)', href: '/admin/inventory', icon: PackageSearch },
-        { name: '현장 재고 조회 (Worker)', href: '/worker/inventory', icon: PackageSearch },
+        { name: '재고 현황 관리', href: '/admin/inventory', icon: PackageSearch },
         { name: '주문 & AI 피킹 지시서', href: '/admin/orders', icon: ShoppingCart },
         { name: '출고 최적화 및 송장 발급', href: '/admin/outbound', icon: Truck },
-        { name: '출고 피킹 스캐너 (Worker)', href: '/worker/outbound', icon: Truck },
+        { name: '출고 피킹 스캐너', href: '/worker/outbound', icon: Truck },
       ],
     },
     {
@@ -136,7 +143,7 @@ export default function Sidebar() {
   }, []);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    '📊 관제 & 대시보드': true,
+    '📊 관제 & 인텔리전스': true,
     '📥 입고 & AI 검수 파이프라인': true,
     '📦 재고 & 출고 프로세스': true,
     '🤖 SCM & 자동 발주': true,
@@ -191,7 +198,7 @@ export default function Sidebar() {
                     <span className="text-gray-900 dark:text-white">Nexus</span>
                     <span className="text-blue-600 dark:text-blue-400">WMS</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono font-bold mt-0.5">Enterprise v2.10.0.0</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono font-bold mt-0.5">Enterprise v2.12.0.0</span>
                 </div>
               </div>
               <button
