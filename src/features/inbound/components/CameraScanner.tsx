@@ -12,9 +12,9 @@ export default function CameraScanner() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // 컴포넌트 마운트 시 카메라 자동 시작
+  // 컴포넌트 마운트 시 카메라 자동 시작 (검수 촬영 전용 컴포넌트이므로 FHD)
   useEffect(() => {
-    startCamera();
+    startCamera('inspection');
     return () => stopCamera();
   }, [startCamera, stopCamera]);
 
