@@ -1,104 +1,129 @@
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const BASE_URL = rawApiUrl.endsWith("/api/v1")
-  ? rawApiUrl
-  : `${rawApiUrl.replace(/\/$/, "")}/api/v1`;
+import { apiClient } from "@/lib/api-client";
+import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
 
-/**
- * Next.js App Router에 최적화된 Native Fetch Wrapper.
- * 기존 Axios 인터셉터를 대체하며, Next.js의 Request Memoization 및 Caching 이점을 누릴 수 있습니다.
- * 인증은 credentials:"include"로 HttpOnly 쿠키(token)를 자동 전송하는 것만으로 이루어진다 -
- * JWT는 JS에서 읽을 수 없으므로 Authorization 헤더를 수동으로 붙이지 않는다.
- */
-async function fetchClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${BASE_URL}${endpoint}`;
+// --- app/domains/admin/router.py (/admin/hitl/*) 응답 타입 ---
 
-  const headers = new Headers(options.headers);
-  if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    // 401 Unauthorized 방어 로직 (Axios Response Interceptor 대체)
-    if (response.status === 401 && typeof window !== "undefined") {
-      window.location.href = "/login";
-    }
-    const errorData = await response.json().catch(() => ({}));
-    throw {
-      response: { status: response.status, data: errorData },
-      message: `HTTP Error ${response.status}`,
-    };
-  }
-
-  return response.json();
+interface HitlOverrideResult {
+  status: string;
+  processed_count: number;
+  message: string;
 }
 
-export const api = {
-  // 3주차: 반품 도서 AI 검수 파이프라인 트리거
-  triggerInspection: async (data: { book_id: string; location_id?: string; image_urls: string[] }) => {
-    return fetchClient<any>("/returns/inspections", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-};
-
-export const uploadAPI = {
-  uploadImage: async (order_id: string, file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    return fetchClient<any>(`/returns/orders/${order_id}/upload`, {
-      method: "POST",
-      body: formData,
-    });
-  },
-};
+interface HitlReinspectResult {
+  status: string;
+  message: string;
+  job_id: string;
+}
 
 export const adminAPI = {
   getPendingHitlTasks: async () => {
-    return fetchClient<any[]>("/admin/hitl/pending", { method: "GET" });
+    const res = await apiClient.get<HitlTask[]>("/api/v1/admin/hitl/pending");
+    return res.data;
   },
-  submitHitlOverrides: async (items: any[]) => {
-    return fetchClient<any>("/admin/hitl/override", {
-      method: "POST",
-      body: JSON.stringify({ items }),
-    });
+  submitHitlOverrides: async (items: HitlOverrideRequest[]) => {
+    const res = await apiClient.post<HitlOverrideResult>("/api/v1/admin/hitl/override", { items });
+    return res.data;
   },
   triggerAiReinspection: async (jobId: string) => {
-    return fetchClient<any>(`/admin/hitl/${jobId}/re-inspect`, {
-      method: "POST",
-    });
-  }
+    const res = await apiClient.post<HitlReinspectResult>(`/api/v1/admin/hitl/${jobId}/re-inspect`);
+    return res.data;
+  },
 };
+
+// --- app/domains/inventory/router.py 응답 타입 ---
+
+interface InventoryBookInfo {
+  title: string;
+  author: string;
+  publisher: string;
+  isbn: string;
+  base_price: number;
+  cover_image_url: string;
+}
+
+interface InventoryItem {
+  id: string;
+  lpn_barcode: string;
+  cover_image_url: string;
+  book: InventoryBookInfo;
+  grade: string;
+  ubci_score: number | null;
+  zone: string;
+  quantity: number;
+  worker_id: string;
+  date: string;
+}
+
+interface CreateLpnResult {
+  status: string;
+  lpn_barcode: string;
+  book: { title: string; author: string; isbn: string };
+  location_id: string;
+  worker_id?: string;
+}
+
+interface LpnListItem {
+  lpn_barcode: string;
+  book_id: string;
+  status: string;
+}
 
 export const inventoryAPI = {
   getInventory: async () => {
-    return fetchClient<any[]>("/inventory/", { method: "GET" });
+    const res = await apiClient.get<InventoryItem[]>("/api/v1/inventory/");
+    return res.data;
   },
-  createLpn: async (data: { book_id?: string; isbn?: string; worker_id?: string }) => {
-    return fetchClient<any>("/inventory/lpn", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+  createLpn: async (data: { book_id?: string; isbn?: string; worker_id?: string; zone?: string }) => {
+    const res = await apiClient.post<CreateLpnResult>("/api/v1/inventory/lpn", data);
+    return res.data;
   },
   getLpnList: async () => {
-    return fetchClient<any[]>("/inventory/lpn", { method: "GET" });
-  }
+    const res = await apiClient.get<LpnListItem[]>("/api/v1/inventory/lpn");
+    return res.data;
+  },
 };
+
+// --- app/domains/po/router.py 응답 타입 ---
+
+export interface SuggestedPo {
+  id: string;
+  book_id: string;
+  isbn: string;
+  title: string;
+  author: string;
+  publisher: string;
+  currentStock: number;
+  safetyStock: number;
+  recommendedQty: number;
+  estimatedCost: number;
+  urgency: string;
+  status: string;
+  triggerDate: string;
+  _fallback_reason?: string;
+}
+
+interface ApprovePoResult {
+  message: string;
+  approved_count: number;
+  created_order_ids: string[];
+  created_lpns: string[];
+}
+
+interface DeductStockResult {
+  [key: string]: unknown;
+}
 
 export const poAPI = {
   getSuggestedPo: async () => {
-    return fetchClient<any[]>("/po/suggested", { method: "GET" });
+    const res = await apiClient.get<SuggestedPo[]>("/api/v1/po/suggested");
+    return res.data;
   },
   approvePo: async (book_ids: string[]) => {
-    return fetchClient<any>("/po/approve", {
-      method: "POST",
-      body: JSON.stringify({ book_ids }),
-    });
-  }
+    const res = await apiClient.post<ApprovePoResult>("/api/v1/po/approve", { book_ids });
+    return res.data;
+  },
+  deductStock: async (data: { book_id: string; deduct_qty?: number; reason?: string }) => {
+    const res = await apiClient.post<DeductStockResult>("/api/v1/po/deduct", data);
+    return res.data;
+  },
 };

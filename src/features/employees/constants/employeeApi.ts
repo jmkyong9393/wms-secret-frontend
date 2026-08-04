@@ -13,3 +13,5 @@ export const employeeStatusEndpoint = (employeeId: string) =>
   `/api/v1/users/admin/${employeeId}/status`;
 export const employeeRoleEndpoint = (employeeId: string) =>
   `/api/v1/users/admin/${employeeId}/role`;
+export const employeeDetailEndpoint = (employeeId: string) =>
+  `/api/v1/users/admin/${employeeId}`;

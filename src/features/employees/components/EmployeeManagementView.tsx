@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { userAtom } from "@/stores/auth";
+import { currentUserAtom } from "@/features/auth/store/authAtoms";
 import { VALID_ROLES, type Role, type UserStatus } from "@/features/auth/types/authTypes";
 import { canManageEmployees } from "@/features/employees/utils/permissions";
 import { ROLE_LABEL, STATUS_LABEL } from "@/features/employees/utils/badges";
@@ -21,7 +21,7 @@ import { useEmployeesQuery } from "@/features/employees/hooks/useEmployeesQuery"
 import { EmployeeTable } from "@/features/employees/components/EmployeeTable";
 import { BulkCreateEmployeeModal } from "@/features/employees/components/BulkCreateEmployeeModal";
 import { SingleCreateEmployeeModal } from "@/features/employees/components/SingleCreateEmployeeModal";
-import { listEmployeesAction } from "@/features/employees/actions/employeeActions";
+import { listEmployees } from "@/features/employees/api/employeeService";
 import type { EmployeeListParams } from "@/features/employees/types/employee";
 
 const PAGE_SIZE = 20;
@@ -29,10 +29,8 @@ const ROLE_FILTER_ALL = "ALL" as const;
 const STATUS_FILTER_ALL = "ALL" as const;
 
 export function EmployeeManagementView() {
-  const user = useAtomValue(userAtom);
-  // User type from stores/auth uses employee_id, while CurrentUser expects employeeId.
-  // We can just cast it for permissions because permissions only checks .role
-  const canManage = canManageEmployees(user as any);
+  const user = useAtomValue(currentUserAtom);
+  const canManage = canManageEmployees(user);
 
   const [keyword, setKeyword] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | typeof ROLE_FILTER_ALL>(ROLE_FILTER_ALL);
@@ -63,7 +61,7 @@ export function EmployeeManagementView() {
     if (!user) return;
     try {
       setIsExporting(true);
-      const res = await listEmployeesAction({
+      const res = await listEmployees({
         keyword: keyword.trim() || undefined,
         role: roleFilter === ROLE_FILTER_ALL ? undefined : roleFilter,
         status: statusFilter === STATUS_FILTER_ALL ? undefined : statusFilter,
@@ -141,8 +139,10 @@ export function EmployeeManagementView() {
             setRoleFilter(value as Role | typeof ROLE_FILTER_ALL);
           }}
         >
-          <SelectTrigger>
-            <SelectValue />
+          <SelectTrigger className="w-[120px]">
+            <SelectValue>
+              {roleFilter === ROLE_FILTER_ALL ? "전체 역할" : ROLE_LABEL[roleFilter as Role] || roleFilter}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ROLE_FILTER_ALL}>전체 역할</SelectItem>
@@ -160,8 +160,10 @@ export function EmployeeManagementView() {
             setStatusFilter(value as UserStatus | typeof STATUS_FILTER_ALL);
           }}
         >
-          <SelectTrigger>
-            <SelectValue />
+          <SelectTrigger className="w-[120px]">
+            <SelectValue>
+              {statusFilter === STATUS_FILTER_ALL ? "전체 상태" : STATUS_LABEL[statusFilter as UserStatus] || statusFilter}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={STATUS_FILTER_ALL}>전체 상태</SelectItem>
@@ -173,14 +175,26 @@ export function EmployeeManagementView() {
         <Select
           value={`${sortBy}-${sortOrder}`}
           onValueChange={(value) => {
+            if (!value) return;
             setPage(1);
             const [sBy, sOrder] = value.split("-");
             setSortBy(sBy);
             setSortOrder(sOrder as "asc" | "desc");
           }}
         >
-          <SelectTrigger className="ml-auto w-[180px]">
-            <SelectValue />
+          <SelectTrigger className="ml-auto w-[140px]">
+            <SelectValue>
+              {
+                ({
+                  "role-asc": "직급 높은 순",
+                  "role-desc": "직급 낮은 순",
+                  "created_at-desc": "최신 가입 순",
+                  "created_at-asc": "오래된 가입 순",
+                  "name-asc": "이름 가나다 순",
+                  "employee_id-asc": "사번 순"
+                } as Record<string, string>)[`${sortBy}-${sortOrder}`] || "직급 높은 순"
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="role-asc">직급 높은 순</SelectItem>
@@ -198,7 +212,7 @@ export function EmployeeManagementView() {
 
       {data && (
         <>
-          <EmployeeTable employees={data.items} currentUser={user as any} />
+          <EmployeeTable employees={data.items} currentUser={user} />
           <div className="flex items-center justify-between text-sm text-gray-500">
             <div className="flex items-center gap-4">
               <span>총 {data.total}명</span>
@@ -245,12 +259,12 @@ export function EmployeeManagementView() {
       <BulkCreateEmployeeModal
         open={isBulkCreateModalOpen}
         onClose={() => setBulkCreateModalOpen(false)}
-        currentUser={user as any}
+        currentUser={user}
       />
       <SingleCreateEmployeeModal
         open={isSingleCreateModalOpen}
         onClose={() => setSingleCreateModalOpen(false)}
-        currentUser={user as any}
+        currentUser={user}
       />
     </div>
   );

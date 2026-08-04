@@ -4,17 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { X, Download, Upload, CheckCircle2, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
-import type { User } from "@/stores/auth";
+import type { CurrentUser } from "@/features/auth/types/authTypes";
 import type { AssignableRole, BulkCreateEmployeeResult } from "@/features/employees/types/employee";
 import { getAssignableRoles } from "@/features/employees/utils/permissions";
 import { useBulkCreateEmployeesMutation } from "@/features/employees/hooks/useEmployeeMutations";
-import { getNextEmployeeIdAction } from "@/features/employees/actions/employeeActions";
+import { getNextEmployeeId } from "@/features/employees/api/employeeService";
 import { ConfirmDialog } from "@/features/employees/components/ConfirmDialog";
 
 interface BulkCreateEmployeeModalProps {
   open: boolean;
   onClose: () => void;
-  currentUser: User | null;
+  currentUser: CurrentUser | null;
 }
 
 interface DraftRow {
@@ -35,7 +35,7 @@ function generateRandomPassword(length = 10): string {
 }
 
 export function BulkCreateEmployeeModal({ open, onClose, currentUser }: BulkCreateEmployeeModalProps) {
-  const assignableRoles = getAssignableRoles(currentUser as any);
+  const assignableRoles = getAssignableRoles(currentUser);
   
   const [rows, setRows] = useState<DraftRow[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -110,8 +110,8 @@ export function BulkCreateEmployeeModal({ open, onClose, currentUser }: BulkCrea
         let nextPrefix = "WM";
         let nextSeq = 1;
         try {
-          const idData = await getNextEmployeeIdAction();
-          const baseId = idData.next_employee_id; // e.g. WM2607001
+          const idData = await getNextEmployeeId();
+          const baseId = idData.next_employee_id; // e.g. WM2608001
           nextPrefix = baseId.slice(0, 6); // WM2607
           nextSeq = parseInt(baseId.slice(6), 10);
         } catch (err) {

@@ -2,8 +2,10 @@ import { apiClient } from "@/lib/api-client";
 import {
   EMPLOYEE_LIST_ENDPOINT,
   EMPLOYEE_BULK_CREATE_ENDPOINT,
+  EMPLOYEE_NEXT_ID_ENDPOINT,
   employeeStatusEndpoint,
   employeeRoleEndpoint,
+  employeeDetailEndpoint,
 } from "@/features/employees/constants/employeeApi";
 import type {
   EmployeeListParams,
@@ -53,6 +55,24 @@ export async function updateEmployeeRole(
   const res = await apiClient.patch<UpdateEmployeeRoleResponse>(
     employeeRoleEndpoint(employeeId),
     payload
+  );
+  return res.data;
+}
+
+// 다음 사번 미리 조회 (계정 생성 폼의 사번 자동 채번 미리보기용)
+export async function getNextEmployeeId(prefix: string = "WM"): Promise<{ next_employee_id: string }> {
+  const res = await apiClient.get<{ next_employee_id: string }>(EMPLOYEE_NEXT_ID_ENDPOINT, {
+    params: { prefix },
+  });
+  return res.data;
+}
+
+// 직원 계정 삭제
+export async function deleteEmployee(
+  employeeId: string
+): Promise<{ message: string; employee_id: string }> {
+  const res = await apiClient.delete<{ message: string; employee_id: string }>(
+    employeeDetailEndpoint(employeeId)
   );
   return res.data;
 }

@@ -5,6 +5,8 @@ import {
   bulkCreateEmployees,
   updateEmployeeStatus,
   updateEmployeeRole,
+  getNextEmployeeId,
+  deleteEmployee,
 } from "./employeeService";
 
 vi.mock("@/lib/api-client", () => {
@@ -13,6 +15,7 @@ vi.mock("@/lib/api-client", () => {
       get: vi.fn(),
       post: vi.fn(),
       patch: vi.fn(),
+      delete: vi.fn(),
     },
   };
 });
@@ -72,5 +75,29 @@ describe("employeeService", () => {
       role: "ADMIN",
     });
     expect(res.role).toBe("ADMIN");
+  });
+
+  it("getNextEmployeeId calls GET on the next-employee-id endpoint with the prefix", async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: { next_employee_id: "WM2608004" },
+    });
+
+    const res = await getNextEmployeeId("WM");
+
+    expect(apiClient.get).toHaveBeenCalledWith("/api/v1/users/admin/next-employee-id", {
+      params: { prefix: "WM" },
+    });
+    expect(res.next_employee_id).toBe("WM2608004");
+  });
+
+  it("deleteEmployee calls DELETE on the employee detail endpoint", async () => {
+    vi.mocked(apiClient.delete).mockResolvedValueOnce({
+      data: { message: "User deleted successfully", employee_id: "W0001" },
+    });
+
+    const res = await deleteEmployee("W0001");
+
+    expect(apiClient.delete).toHaveBeenCalledWith("/api/v1/users/admin/W0001");
+    expect(res.employee_id).toBe("W0001");
   });
 });
