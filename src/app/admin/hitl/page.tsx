@@ -67,6 +67,9 @@ const REASON_CODE_MAP: Record<string, { label: string; category: string; color: 
   DMG_INT_DISCOLOR: { label: '내지 황변/변색', category: '내부 훼손', color: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800' },
   FP_SHADOW: { label: '그림자 오탐', category: '오탐 방어', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
   FP_GLARE: { label: '빛 반사 오탐', category: '오탐 방어', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
+  // Supervisor가 사유 코드 없이 이관한 건은 백엔드가 이 상태 코드를 내려준다.
+  // 매핑이 없으면 원시 코드가 그대로 노출되어 다른 관제 화면과 이질적으로 보였다.
+  AWAITING_HUMAN_REVIEW: { label: '관리자 판독 대기', category: 'HITL 이관', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
 };
 
 export default function AdminHitlDashboard() {
@@ -81,16 +84,20 @@ export default function AdminHitlDashboard() {
     error?: string;
   } | null>(null);
 
-  const [explainerLogs, setExplainerLogs] = useState<Array<{ time: string; agent: string; text: string; type: string }>>([]);
+  // [수정 이력 2026-08-04] 구 명칭 "Explainer Agent"는 파이프라인 개편(Detector→Vision→
+  // Policy→Critic→Supervisor→Report)으로 사라진 노드다. 로그 패널을 실제 파이프라인
+  // 명칭 기준으로 정리 (저장 키도 교체, 구 키는 마운트 시 청소).
+  const [pipelineLogs, setPipelineLogs] = useState<Array<{ time: string; agent: string; text: string; type: string }>>([]);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("hitl_explainer_logs");
+      localStorage.removeItem("hitl_explainer_logs");
+      const saved = localStorage.getItem("hitl_pipeline_logs");
       if (saved) {
         try {
-          setExplainerLogs(JSON.parse(saved));
+          setPipelineLogs(JSON.parse(saved));
         } catch (e) {}
       }
     }
@@ -98,14 +105,14 @@ export default function AdminHitlDashboard() {
 
   useEffect(() => {
     if (isMounted && typeof window !== "undefined") {
-      localStorage.setItem("hitl_explainer_logs", JSON.stringify(explainerLogs));
+      localStorage.setItem("hitl_pipeline_logs", JSON.stringify(pipelineLogs));
     }
-  }, [explainerLogs, isMounted]);
+  }, [pipelineLogs, isMounted]);
 
   const handleClearLogs = () => {
-    setExplainerLogs([]);
+    setPipelineLogs([]);
     if (typeof window !== "undefined") {
-      localStorage.removeItem("hitl_explainer_logs");
+      localStorage.removeItem("hitl_pipeline_logs");
     }
   };
 
@@ -123,7 +130,7 @@ export default function AdminHitlDashboard() {
       step: 1,
       logs: [
         `[${new Date().toLocaleTimeString()}] 🚀 Multi-Agent AI 비전 재검수 파이프라인 트리거 시작...`,
-        `[${new Date().toLocaleTimeString()}] 👁️ [Vision Agent] 7개 검수 촬영 이미지 이미지 텐서 로딩 및 YOLOv8 3-Model Ensemble 디텍션 추론 중...`
+        `[${new Date().toLocaleTimeString()}] 🔬 [Detector] 검수 촬영 이미지 텐서 로딩 및 YOLO 3-Model(WBF) Ensemble 디텍션 추론 중...`
       ],
       isDone: false,
     });
@@ -142,7 +149,7 @@ export default function AdminHitlDashboard() {
       const criticMsg = logs?.critic_text || `Critic Agent 파이프라인 검증 ➔ 전 과정 프로세스 무결성 확인 완공`;
       const reportMsg = logs?.report_text || `📜 [디지털 WMS 품질 검수 보증서] ➔ UBCI ${score}점 검수 보증서 발급 완료`;
       const humanMsg = logs?.human_node_text || `Human Node (HITL) ➔ 관리자 수동 개입 대기 및 오버라이드 폼 연동 완료`;
-      const summaryMsg = logs?.explainer_summary || logs?.policy_text || `사내 WMS 수석 룰 연산 완료. UBCI ${score}점 입고 승인 추천`;
+      const summaryMsg = logs?.report_text || logs?.policy_text || `사내 WMS 수석 룰 연산 완료. UBCI ${score}점 입고 승인 추천`;
 
       setActiveReinspectionTask({
         id: jobId,
@@ -157,14 +164,14 @@ export default function AdminHitlDashboard() {
           `[${timeNow}] 🛡️ [Critic Agent] ${criticMsg}`,
           `[${timeNow}] 📋 [Report Agent] ${reportMsg}`,
           `[${timeNow}] 👤 [Human Node (HITL)] ${humanMsg}`,
-          `[${timeNow}] 💬 [Explainer Agent] "${summaryMsg}" DB 반영 완료!`,
+          `[${timeNow}] 💬 [Report Agent] "${summaryMsg}" DB 반영 완료!`,
         ],
       });
 
-      setExplainerLogs((prev) => [
+      setPipelineLogs((prev) => [
         {
           time: timeNow,
-          agent: "Explainer Agent 💬",
+          agent: "Report Agent 💬",
           text: `[${lpnStr}] DB 연산 결과: "${summaryMsg}" DB 반영 완료!`,
           type: "success",
         },
@@ -250,7 +257,13 @@ export default function AdminHitlDashboard() {
       list.forEach((t: HitlTask) => {
         initDecisions[t.id] = t.agent_logs?.suggested_decision || "APPROVE_DOWNGRADE";
         initGrades[t.id] = t.agent_logs?.suggested_grade || "B";
-        initReasons[t.id] = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code || getDefaultReason(t.agent_logs?.defect_description || "");
+        // AWAITING_HUMAN_REVIEW는 이관 상태 코드일 뿐 결함 사유가 아니므로, 결재 폼
+        // 기본값으로 세팅하지 않고 결함 서술 기반 추론으로 폴백한다 (그대로 제출되면
+        // primaryReasonCode에 상태 코드가 기록되는 문제).
+        const rawCode = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code;
+        initReasons[t.id] = (rawCode && rawCode !== "AWAITING_HUMAN_REVIEW")
+          ? rawCode
+          : getDefaultReason(t.agent_logs?.defect_description || "");
         initComments[t.id] = t.human_issue_notes || "관리자 검수 오버라이드";
       });
 
@@ -384,7 +397,7 @@ export default function AdminHitlDashboard() {
       const summaryInfo = `총 ${payloadList.length}건 데이터베이스 오버라이드 승인 완료 (처분: ${firstPayload?.decision || 'APPROVE'}, 목표등급: ${firstPayload?.targetGrade || 'B'}, 사유: ${firstPayload?.primaryReasonCode || 'CLEAN'})`;
 
       // 1. 하단 실시간 모니터링 로그에 누적 기록
-      setExplainerLogs((prev) => [
+      setPipelineLogs((prev) => [
         {
           time: timeNow,
           agent: "Human Node (HITL) 👤",
@@ -403,7 +416,7 @@ export default function AdminHitlDashboard() {
     } catch (err: any) {
       console.error("Batch submit failed:", err);
       const timeNow = new Date().toLocaleTimeString();
-      setExplainerLogs((prev) => [
+      setPipelineLogs((prev) => [
         {
           time: timeNow,
           agent: "Human Node (HITL) 👤",
@@ -437,71 +450,83 @@ export default function AdminHitlDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Button variant="outline" onClick={fetchTasks} disabled={loading} className="dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200">
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          <button
+            onClick={fetchTasks}
+            disabled={loading}
+            className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 font-extrabold text-xs rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             새로고침
-          </Button>
-          <Button onClick={handleSubmit} disabled={selectedIds.size === 0} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer">
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={selectedIds.size === 0}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <CheckCircle2 className="w-4 h-4" />
             선택 {selectedIds.size}건 최종 결재 제출
-          </Button>
+          </button>
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards (검수 처리 내역 KPI 카드와 동일 패턴) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">검수 대기 총계</p>
-            <p className="text-2xl font-extrabold text-gray-900 dark:text-white mt-1">{tasks.length}건</p>
+        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-xs font-extrabold text-gray-500 dark:text-gray-400">
+            <span>검수 대기 총계</span>
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           </div>
-          <div className="p-3 bg-amber-50 dark:bg-amber-950/60 rounded-lg border border-amber-100 dark:border-amber-800">
-            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-          </div>
+          <p className="text-3xl font-black text-amber-600 dark:text-amber-400 font-mono">
+            {tasks.length}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Supervisor 이관 - 관리자 결재 대기</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">선택된 처리 건</p>
-            <p className="text-2xl font-extrabold text-blue-600 dark:text-blue-400 mt-1">{selectedIds.size}건</p>
+        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-xs font-extrabold text-gray-500 dark:text-gray-400">
+            <span>선택된 처리 건</span>
+            <FileCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <div className="p-3 bg-blue-50 dark:bg-blue-950/60 rounded-lg border border-blue-100 dark:border-blue-800">
-            <FileCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          </div>
+          <p className="text-3xl font-black text-blue-600 dark:text-blue-400 font-mono">
+            {selectedIds.size}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">체크박스 선택 시 결재 폼 활성화</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">검색 필터 적용 건</p>
-            <p className="text-2xl font-extrabold text-gray-700 dark:text-gray-300 mt-1">{filteredTasks.length}건</p>
+        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-1">
+          <div className="flex items-center justify-between text-xs font-extrabold text-gray-500 dark:text-gray-400">
+            <span>검색 필터 적용 건</span>
+            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
           </div>
-          <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <Sparkles className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-          </div>
+          <p className="text-3xl font-black text-purple-600 dark:text-purple-400 font-mono">
+            {filteredTasks.length}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">도서명 / ISBN / Task ID 키워드 필터</p>
         </div>
       </div>
 
       {/* Control & Toolbar */}
-      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
-            <Input
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+            <input
+              type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="도서명, ISBN, Task ID 검색"
-              className="pl-9 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+              placeholder="도서명, ISBN, Task ID 검색..."
+              className="w-full pl-10 pr-4 py-2.5 text-xs border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50 dark:bg-gray-800 dark:text-white font-medium"
             />
           </div>
 
           {/* Master Bulk Setting Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 bg-blue-50/70 dark:bg-blue-950/50 p-2 rounded-lg border border-blue-100 dark:border-blue-800 w-full md:w-auto">
-            <div className="flex items-center text-xs font-bold text-blue-900 dark:text-blue-300 mr-1">
+          <div className="flex flex-wrap items-center gap-2 bg-blue-50/70 dark:bg-blue-950/50 p-2 rounded-xl border border-blue-100 dark:border-blue-800 w-full md:w-auto">
+            <div className="flex items-center text-xs font-extrabold text-blue-900 dark:text-blue-300 mr-1">
               <Sliders className="w-3.5 h-3.5 mr-1" />
               선택항목 일괄 설정:
             </div>
             <Select value={masterDecision} onValueChange={handleMasterDecisionChange}>
-              <SelectTrigger className="h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white w-36">
+              <SelectTrigger className="h-9 text-xs font-bold rounded-xl bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white w-36">
                 <SelectValue>
                   {DECISION_OPTIONS.find((o) => o.value === masterDecision)?.label || masterDecision}
                 </SelectValue>
@@ -516,7 +541,7 @@ export default function AdminHitlDashboard() {
             </Select>
 
             <Select value={masterGrade} onValueChange={handleMasterGradeChange}>
-              <SelectTrigger className="h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white w-24">
+              <SelectTrigger className="h-9 text-xs font-bold rounded-xl bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white w-28">
                 <SelectValue>
                   {GRADE_OPTIONS.find((o) => o.value === masterGrade)?.label || masterGrade}
                 </SelectValue>
@@ -530,7 +555,7 @@ export default function AdminHitlDashboard() {
               </SelectContent>
             </Select>
 
-            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800/80 p-1 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800/80 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
               {masterReasons.map((code) => {
                 const meta = REASON_CODE_MAP[code] || { label: code, color: "bg-gray-100 text-gray-700 border-gray-200" };
                 return (
@@ -580,24 +605,28 @@ export default function AdminHitlDashboard() {
               </Select>
             </div>
 
-            <Button
-              size="sm"
+            <button
               onClick={handleApplyMasterSettings}
               disabled={selectedIds.size === 0}
-              className="h-8 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-all cursor-pointer shadow-xs"
+              className="h-9 px-4 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-50 transition-all cursor-pointer shadow-xs"
             >
               ⚡ {selectedIds.size > 0 ? `선택 ${selectedIds.size}건 폼에 세팅` : '선택 항목 폼에 세팅'}
-            </Button>
+            </button>
           </div>
         </div>
       </div>
 
       {/* Main Table */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-4">
+        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+          <h2 className="text-sm font-black text-gray-900 dark:text-white">
+            결재 대기 목록: <strong className="text-blue-600 dark:text-blue-400 font-mono">{filteredTasks.length}</strong>건
+          </h2>
+        </div>
         {loading ? (
-          <div className="p-12 text-center text-gray-400 dark:text-gray-500 text-sm">데이터를 불러오는 중...</div>
+          <div className="py-12 text-center text-gray-400 dark:text-gray-500 text-sm">데이터를 불러오는 중...</div>
         ) : filteredTasks.length === 0 ? (
-          <div className="p-12 text-center text-gray-400 dark:text-gray-500 text-sm">대기 중인 검수 건이 없습니다.</div>
+          <div className="py-12 text-center text-gray-400 dark:text-gray-500 text-sm">대기 중인 검수 건이 없습니다.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -611,14 +640,14 @@ export default function AdminHitlDashboard() {
                       onChange={toggleAll}
                     />
                   </th>
-                  <th className="py-3.5 px-4 w-20 text-center">이미지</th>
-                  <th className="py-3.5 px-4 w-56">도서 정보 및 바코드</th>
-                  <th className="py-3.5 px-4 w-48">AI 비전 감지 사유</th>
-                  <th className="py-3.5 px-4 w-36">처분 결정 (Decision)</th>
-                  <th className="py-3.5 px-4 w-24">목표 등급</th>
-                  <th className="py-3.5 px-4 w-40">오버라이드 사유</th>
-                  <th className="py-3.5 px-4 w-48">관리자 메모</th>
-                  <th className="py-3.5 px-4 w-28 text-center">AI 재검수</th>
+                  <th className="py-3.5 px-4 w-20 text-center whitespace-nowrap">이미지</th>
+                  <th className="py-3.5 px-4 w-56 whitespace-nowrap">도서 정보 및 바코드</th>
+                  <th className="py-3.5 px-4 w-48 whitespace-nowrap">AI 비전 감지 사유</th>
+                  <th className="py-3.5 px-4 w-36 whitespace-nowrap">처분 결정 (Decision)</th>
+                  <th className="py-3.5 px-4 w-28 whitespace-nowrap">목표 등급</th>
+                  <th className="py-3.5 px-4 w-40 whitespace-nowrap">오버라이드 사유</th>
+                  <th className="py-3.5 px-4 w-48 whitespace-nowrap">관리자 메모</th>
+                  <th className="py-3.5 px-4 w-28 text-center whitespace-nowrap">AI 재검수</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
@@ -691,10 +720,14 @@ export default function AdminHitlDashboard() {
                           };
                           return (
                             <div className="space-y-1">
-                              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-extrabold font-mono border ${meta.color}`}>
-                                [{code}] {meta.label}
+                              {/* 원시 코드([DMG_...]) 노출 대신 검수 처리 내역과 동일한 한글 라벨 필 배지로 표기 */}
+                              <span
+                                title={`[${code}] ${meta.category}`}
+                                className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-extrabold border ${meta.color}`}
+                              >
+                                {meta.label}
                               </span>
-                              <p className="text-[10px] text-gray-400 font-mono truncate" title={t.agent_logs?.reason || "Vision Agent 1차 감지 완료"}>
+                              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium truncate" title={t.agent_logs?.reason || "Vision Agent 1차 감지 완료"}>
                                 {t.agent_logs?.reason || "Vision Agent 1차 감지 완료"}
                               </p>
                             </div>
@@ -708,7 +741,7 @@ export default function AdminHitlDashboard() {
                           value={decisions[t.id] || "APPROVE_DOWNGRADE"}
                           onValueChange={(val: any) => setDecisions({ ...decisions, [t.id]: val })}
                         >
-                          <SelectTrigger className="w-full h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+                          <SelectTrigger className="w-full h-9 text-xs font-bold rounded-xl bg-gray-50/50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white">
                             <SelectValue>
                               {DECISION_OPTIONS.find((o) => o.value === (decisions[t.id] || "APPROVE_DOWNGRADE"))?.label || (decisions[t.id] || "APPROVE_DOWNGRADE")}
                             </SelectValue>
@@ -729,7 +762,7 @@ export default function AdminHitlDashboard() {
                           value={grades[t.id] || "GOOD"}
                           onValueChange={(val: any) => setGrades({ ...grades, [t.id]: val })}
                         >
-                          <SelectTrigger className="w-full h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white">
+                          <SelectTrigger className="w-full h-9 text-xs font-bold rounded-xl bg-gray-50/50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white">
                             <SelectValue>
                               {GRADE_OPTIONS.find((o) => o.value === (grades[t.id] || "GOOD"))?.label || (grades[t.id] || "GOOD")}
                             </SelectValue>
@@ -825,21 +858,19 @@ export default function AdminHitlDashboard() {
                           placeholder="사유 작성 (선택)"
                           value={comments[t.id] || ""}
                           onChange={(e) => setComments({ ...comments, [t.id]: e.target.value })}
-                          className="h-8 text-xs bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                          className="h-9 text-xs font-medium rounded-xl bg-gray-50/50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white"
                         />
                       </td>
 
                       <td className="p-3 text-center">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800 shadow-2xs whitespace-nowrap"
+                        <button
+                          className="px-3.5 py-2 bg-purple-50 dark:bg-purple-950 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-extrabold rounded-xl transition-all text-xs flex items-center gap-1 shadow-2xs active:scale-95 whitespace-nowrap cursor-pointer disabled:opacity-50 mx-auto"
                           onClick={() => handleTriggerAiReinspect(t.id)}
                           disabled={reinspectingIds.has(t.id)}
                         >
-                          <Sparkles className="w-3.5 h-3.5 mr-1 text-purple-600 dark:text-purple-400" />
+                          <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                           {reinspectingIds.has(t.id) ? "재검수 중..." : "AI 재검수"}
-                        </Button>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -850,7 +881,7 @@ export default function AdminHitlDashboard() {
         )}
       </div>
 
-      {/* Explainer Agent Real-time Live Monitoring Center (Bottom Panel) */}
+      {/* Multi-Agent 파이프라인 실시간 처리 로그 (Bottom Panel) */}
       <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
           <div className="flex items-center gap-2">
@@ -859,13 +890,13 @@ export default function AdminHitlDashboard() {
             </div>
             <div>
               <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                Explainer Agent 실시간 Multi-Agent 파이프라인 모니터링
+                Multi-Agent 파이프라인 실시간 처리 로그
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse" /> Live Stream
                 </span>
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Vision Agent (YOLOv8 Ensemble) ➔ Policy Agent (WMS Rules) ➔ Critic Agent (Cross-Check) ➔ Explainer Agent (Final Diagnosis)
+                Detector(YOLO) ➔ Vision(GPT-4o) ➔ Policy ➔ Critic ➔ Supervisor ➔ Report ➔ Human Node(HITL)
               </p>
             </div>
           </div>
@@ -874,15 +905,16 @@ export default function AdminHitlDashboard() {
           </Button>
         </div>
 
-        <div className="bg-gray-950 text-gray-200 p-4 rounded-xl font-mono text-xs space-y-2 max-h-48 overflow-y-auto border border-gray-800 shadow-inner">
-          {explainerLogs.length === 0 ? (
-            <div className="text-gray-500 italic text-center py-4">대기 중인 Multi-Agent 로그가 없습니다. [AI 재검수] 실행 시 실시간 스트리밍됩니다.</div>
+        {/* 재고 상세의 파이프라인 진단 기록과 동일한 라이트/다크 겸용 로그 패널 스타일 */}
+        <div className="bg-gray-50/70 dark:bg-gray-800/60 text-gray-700 dark:text-gray-200 p-4 rounded-xl text-xs space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700">
+          {pipelineLogs.length === 0 ? (
+            <div className="text-gray-400 dark:text-gray-500 italic text-center py-4">대기 중인 Multi-Agent 로그가 없습니다. [AI 재검수] 실행 시 실시간 스트리밍됩니다.</div>
           ) : (
-            explainerLogs.map((log, idx) => (
-              <div key={idx} className="flex items-start gap-3 py-1 border-b border-gray-900/60 last:border-0">
-                <span className="text-gray-500 font-mono text-[11px] min-w-[65px]">[{log.time}]</span>
-                <span className="font-bold text-purple-400 min-w-[120px]">{log.agent}</span>
-                <span className={`flex-1 ${log.type === "success" ? "text-emerald-400" : log.type === "warning" ? "text-amber-300" : "text-gray-300"}`}>
+            pipelineLogs.map((log, idx) => (
+              <div key={idx} className="flex items-start gap-3 py-1 border-b border-gray-200/70 dark:border-gray-700/60 last:border-0">
+                <span className="text-gray-400 dark:text-gray-500 font-mono text-[11px] min-w-[65px]">[{log.time}]</span>
+                <span className="font-bold text-purple-700 dark:text-purple-400 min-w-[120px]">{log.agent}</span>
+                <span className={`flex-1 leading-relaxed ${log.type === "success" ? "text-emerald-700 dark:text-emerald-400" : log.type === "warning" ? "text-amber-700 dark:text-amber-300" : "text-gray-700 dark:text-gray-300"}`}>
                   {log.text}
                 </span>
               </div>
@@ -961,7 +993,7 @@ export default function AdminHitlDashboard() {
               <div className="w-full bg-gray-100 dark:bg-gray-800 h-2.5 rounded-full overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-purple-600 to-indigo-500 h-full transition-all duration-500"
-                  style={{ width: `${(activeReinspectionTask.step / 4) * 100}%` }}
+                  style={{ width: `${Math.min(100, (activeReinspectionTask.step / 5) * 100)}%` }}
                 />
               </div>
 

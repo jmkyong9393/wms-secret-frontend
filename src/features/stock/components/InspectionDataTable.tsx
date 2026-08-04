@@ -388,16 +388,21 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left table-fixed">
+          {/*
+            [수정 이력 2026-08-04] table-fixed 상태에서 고정 폭 컬럼 합이 테이블 전체 폭과
+            같아지면 폭 미지정인 "도서 정보" 컬럼이 0px로 붕괴해 내용이 옆 컬럼과 겹쳐 보였다.
+            재고 그리드와 동일하게 auto 레이아웃 + min-width로 전환.
+          */}
+          <table className="w-full text-xs text-left">
             <thead className="bg-gray-50/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 uppercase border-y border-gray-200 dark:border-gray-800 font-bold">
               <tr>
-                <th className="py-3.5 px-4 w-36">LPN 바코드</th>
-                <th className="py-3.5 px-4">도서 정보</th>
-                <th className="py-3.5 px-4 text-center w-48">UBCI 등급 (점수)</th>
-                <th className="py-3.5 px-4 text-center w-40">AI 판독 결과</th>
-                <th className="py-3.5 px-4 text-center w-32">AI 신뢰도</th>
-                <th className="py-3.5 px-4 text-center w-40">검수 시각</th>
-                <th className="py-3.5 px-4 text-right w-56">작업 기능</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">LPN 바코드</th>
+                <th className="py-3.5 px-4 min-w-[280px]">도서 정보</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap">UBCI 등급 (점수)</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap">AI 판독 결과</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap">AI 신뢰도</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap">검수 시각</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap">작업 기능</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
