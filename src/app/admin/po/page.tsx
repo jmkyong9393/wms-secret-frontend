@@ -90,34 +90,31 @@ export default function PurchaseOrderPage() {
   const fetchSuggestedPo = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/po/suggested');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const reasonsList = [
-            '🚨 파손/폐기율 급증 감지 (당일 12건 폐기)',
-            '🔥 S등급 출고 수요 급증 (주간 출고 45건)',
-            '⚠️ 가상 재고 고갈 경고 (안전재고 임계치 도달)',
-            '📈 수험서 시즌 출고 수요 급증 예고',
-            '⚡ B2B 도매 단체 주문 발주 대기',
-          ];
-          const mapped: PurchaseOrder[] = data.map((item: any, idx: number) => ({
-            id: item.id || `PO-20260727-${String(idx + 1).padStart(2, '0')}`,
-            book_id: item.book_id,
-            isbn: item.isbn || '9788965402603',
-            title: item.title || '자동 발주 추천 도서',
-            author: item.author || 'Nexus AI Engine',
-            publisher: item.publisher || 'AI 출판',
-            currentStock: item.currentStock ?? item.current_stock ?? 3,
-            safetyStock: 15,
-            recommendedQty: item.recommendedQty ?? 50,
-            estimatedCost: item.estimatedCost ?? 1250000,
-            reason: item.reason || reasonsList[idx % reasonsList.length],
-            status: 'PENDING',
-            triggerDate: item.triggerDate || '2026-07-30 19:27'
-          }));
-          setOrders(mapped);
-        }
+      const data = await poAPI.getSuggestedPo();
+      if (Array.isArray(data) && data.length > 0) {
+        const reasonsList = [
+          '🚨 파손/폐기율 급증 감지 (당일 12건 폐기)',
+          '🔥 S등급 출고 수요 급증 (주간 출고 45건)',
+          '⚠️ 가상 재고 고갈 경고 (안전재고 임계치 도달)',
+          '📈 수험서 시즌 출고 수요 급증 예고',
+          '⚡ B2B 도매 단체 주문 발주 대기',
+        ];
+        const mapped: PurchaseOrder[] = data.map((item, idx) => ({
+          id: item.id || `PO-20260727-${String(idx + 1).padStart(2, '0')}`,
+          book_id: item.book_id,
+          isbn: item.isbn || '9788965402603',
+          title: item.title || '자동 발주 추천 도서',
+          author: item.author || 'Nexus AI Engine',
+          publisher: item.publisher || 'AI 출판',
+          currentStock: item.currentStock ?? 3,
+          safetyStock: 15,
+          recommendedQty: item.recommendedQty ?? 50,
+          estimatedCost: item.estimatedCost ?? 1250000,
+          reason: item._fallback_reason || reasonsList[idx % reasonsList.length],
+          status: 'PENDING',
+          triggerDate: item.triggerDate || '2026-07-30 19:27'
+        }));
+        setOrders(mapped);
       }
     } catch (err) {
       console.warn("Backend server not responding, using initial active data.", err);
@@ -135,11 +132,7 @@ export default function PurchaseOrderPage() {
       const targetBookId = orders[0]?.book_id || "7c9e6679-7425-40de-944b-e07fc1f90ae7";
       const targetId = orders[0]?.id || 'PO-20260727-01';
 
-      const res = await fetch('http://localhost:8000/api/v1/po/deduct', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ book_id: targetBookId, deduct_qty: 10, reason: "출고 차감 시뮬레이션" })
-      });
+      await poAPI.deductStock({ book_id: targetBookId, deduct_qty: 10, reason: "출고 차감 시뮬레이션" });
 
       // Update local state instantly with glowing trigger highlight
       setOrders(prev => prev.map((o, idx) => {
@@ -180,11 +173,7 @@ export default function PurchaseOrderPage() {
     const target = orders.find(o => o.id === id);
     const bookId = target?.book_id || "7c9e6679-7425-40de-944b-e07fc1f90ae7";
     try {
-      await fetch('http://localhost:8000/api/v1/po/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ book_ids: [bookId] })
-      });
+      await poAPI.approvePo([bookId]);
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'APPROVED', isUpdated: false } : o));
       alert(`[발주 승인 및 재고 즉시 적치 완공]\n${id} (${target?.title || '도서'}) 50권 발주가 결제 승인되어 Zone A (신품 적치 구역)에 재고 입고 반영되었습니다!`);
     } catch (err) {
