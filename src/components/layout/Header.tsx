@@ -189,13 +189,17 @@ export default function Header() {
         return '나의 검수 내역 (Worker)';
       case '/admin/hitl':
         return '승인 대기 (HITL)';
+      case '/admin/fds':
+        return 'FDS 이상거래 관제';
       case '/admin/inspections':
-        return '검수 처리 내역 (전체)';
+        return '검수 처리 내역';
       case '/admin/inventory':
-        return '재고 현황 관리 (Master)';
+        return '재고 현황 관리';
       case '/worker/inventory':
       case '/inventory':
         return '현장 재고 조회 (Worker)';
+      case '/admin/orders':
+        return '주문 & AI 피킹 지시서';
       case '/admin/outbound':
         return '출고 최적화 및 송장 발급';
       case '/admin/po':

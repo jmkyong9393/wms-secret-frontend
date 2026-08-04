@@ -55,6 +55,9 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [dateFilter, setDateFilter] = useState<DateFilter>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
+  // 메뉴 개편(2026-08-04)으로 관리자 메뉴의 "나의 검수 내역" 항목이 제거되고,
+  // 이 페이지 안의 [전체|내 검수만] 토글이 그 역할을 흡수했다 (ADMIN 뷰 전용).
+  const [mineOnly, setMineOnly] = useState(false);
 
   // 1) 검수 완료 이력 (available-books 기반)
   useEffect(() => {
@@ -164,6 +167,9 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
 
       const matchStatus = statusFilter === 'ALL' || i.status === statusFilter;
 
+      // 관리자 [내 검수만] 토글: 본인 사번이 담당자로 기록된 건만
+      if (mineOnly && !(i.worker_id || '').includes(workerId)) return false;
+
       let matchDate = true;
       if (dateFilter === 'TODAY') {
         const kstToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
@@ -174,7 +180,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
       }
       return matchSearch && matchStatus && matchDate;
     });
-  }, [inspections, searchTerm, statusFilter, dateFilter]);
+  }, [inspections, searchTerm, statusFilter, dateFilter, mineOnly, workerId]);
 
   const totalPages = Math.ceil(filteredInspections.length / PAGE_SIZE) || 1;
   const paginatedInspections = useMemo(() => {
@@ -320,6 +326,27 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
           </div>
 
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+            {/* 관리자 전용: 전체 / 내 검수만 스코프 토글 (구 "나의 검수 내역" 메뉴 흡수) */}
+            {role === 'ADMIN' && (
+              <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => { setMineOnly(false); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-lg font-black text-xs transition-all ${
+                    !mineOnly ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-2xs' : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  전체
+                </button>
+                <button
+                  onClick={() => { setMineOnly(true); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-lg font-black text-xs transition-all ${
+                    mineOnly ? 'bg-blue-600 text-white shadow-2xs' : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  내 검수만
+                </button>
+              </div>
+            )}
             <div className="flex items-center gap-1.5 text-xs font-extrabold text-gray-500 dark:text-gray-400">
               <Filter className="w-3.5 h-3.5" />
               <span>판독 결과:</span>
