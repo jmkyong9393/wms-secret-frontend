@@ -102,7 +102,7 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
             </tr>
           )}
           {employees.map((employee) => {
-            const isSelf = (currentUser?.employeeId || (currentUser as any)?.employee_id) === employee.employee_id;
+            const isSelf = currentUser?.employeeId === employee.employee_id;
             const nextStatus: UserStatus = employee.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
             const disabledManage = !canManage || isSelf || isMutating || (currentUser?.role !== "MASTER" && employee.role === "MASTER");
             // MASTER는 역할 변경 대상에서 제외 — ASSIGNABLE_ROLES에 없으므로 셀렉트 자체를 노출하지 않음

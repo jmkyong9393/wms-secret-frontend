@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import BookCover from '@/components/BookCover';
+import Link from 'next/link';
 import BinPacking3DViewer from '@/components/outbound/BinPacking3DViewer';
 import { 
   Package, 
@@ -22,7 +24,6 @@ import {
   ArrowRightCircle,
   FileCheck
 } from 'lucide-react';
-import CameraScanner from '@/features/inbound/components/CameraScanner';
 
 interface BoxOption {
   id: string;
@@ -57,39 +58,6 @@ const STANDARD_COURIER_BOX_OPTIONS: BoxOption[] = [
 
 const BOX_OPTIONS: BoxOption[] = [...BOOK_SLIM_BOX_OPTIONS, ...STANDARD_COURIER_BOX_OPTIONS];
 
-/**
- * LPN 자동 하이픈 생성 포맷터
- * 입력된 텍스트/숫자를 LPN-YYMMDD-XXXX 규격으로 자동 트랜스폼합니다.
- * 예: "260727A801" -> "LPN-260727-A801"
- * 예: "260727801" -> "LPN-260727-801"
- * 예: "LPN260727A801" -> "LPN-260727-A801"
- */
-function formatBarcodeOrIsbn(input: string): string {
-  if (!input) return '';
-
-  let clean = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-  // 13자리 ISBN 번호 감지 (978... 또는 979...)
-  if (clean.startsWith('978') || clean.startsWith('979') || (clean.length === 13 && /^[0-9]+$/.test(clean))) {
-    return clean; // Pure 13-digit ISBN
-  }
-
-  // LPN 바코드 포맷팅
-  if (clean.startsWith('LPN')) {
-    clean = clean.substring(3);
-  }
-
-  if (clean.length === 0) {
-    return 'LPN-';
-  } else if (clean.length <= 6) {
-    return `LPN-${clean}`;
-  } else {
-    const part1 = clean.substring(0, 6);
-    const part2 = clean.substring(6, 10);
-    return `LPN-${part1}-${part2}`;
-  }
-}
-
 export default function OutboundDashboard() {
   const [mockOrder, setMockOrder] = useState<any>(null);
   const [boxCategoryTab, setBoxCategoryTab] = useState<'slim' | 'standard'>('slim');
@@ -106,6 +74,57 @@ export default function OutboundDashboard() {
     onTimeRatePercent: number;
   }>({ shippedTodayCount: 42, onTimeRatePercent: 100.0 });
   const [isSummaryLoading, setIsSummaryLoading] = useState<boolean>(true);
+
+  // AI 피킹 지시서 연동 상태 (주문 → 지시서 → 출고 파이프라인)
+  const [pickingInstructions, setPickingInstructions] = useState<any[]>([]);
+  const [selectedInstructionId, setSelectedInstructionId] = useState<string | null>(null);
+  const activeInstruction = pickingInstructions.find(pi => pi.id === selectedInstructionId) || null;
+  // 백엔드 Two-Track 가격 응답 전문 (라인별 신품/중고 x 수량 확정가)
+  const [pricingResult, setPricingResult] = useState<any>(null);
+
+  const fetchPickingInstructions = async (): Promise<any[]> => {
+    try {
+      const res = await fetch("http://localhost:8000/api/v1/orders/picking-instructions?active_only=true&limit=20", { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setPickingInstructions(data);
+        return data;
+      }
+    } catch (e) {
+      console.error("Failed to fetch picking instructions:", e);
+    }
+    return [];
+  };
+
+  useEffect(() => {
+    (async () => {
+      const list = await fetchPickingInstructions();
+      // /admin/outbound?instruction=<id> 딥링크 진입 시 해당 지시서 자동 선택
+      const params = new URLSearchParams(window.location.search);
+      const target = params.get('instruction');
+      if (target && list.some((pi: any) => pi.id === target)) {
+        setSelectedInstructionId(target);
+      }
+    })();
+  }, []);
+
+  // 지시서 선택 시 해당 도서를 자동 체크 + 수량 세팅 (이후 수동 수정 가능)
+  useEffect(() => {
+    if (!activeInstruction || inventoryBooks.length === 0) return;
+    const ids: string[] = [];
+    const quantities: Record<string, number> = {};
+    activeInstruction.items.forEach((it: any) => {
+      const frontId = it.is_new ? `NEW-BOOK-${it.book_id}` : it.used_item_id;
+      if (frontId && inventoryBooks.some(b => b.id === frontId)) {
+        ids.push(frontId);
+        quantities[frontId] = it.quantity;
+      }
+    });
+    if (ids.length > 0) {
+      setSelectedBookIds(ids);
+      setBookQuantities(prev => ({ ...prev, ...quantities }));
+    }
+  }, [selectedInstructionId, inventoryBooks.length]);
 
   // Fetch real DB outbound summary KPI
   useEffect(() => {
@@ -129,35 +148,30 @@ export default function OutboundDashboard() {
     fetchSummary();
   }, []);
 
-  // Synthetic NEW Fast-Track Books Dataset (Integrated for B2B Bulk Outbound)
-  const NEW_BOOKS_SEED = [
-    { id: "BOOK-NEW-01", title: "모던 자바스크립트 Deep Dive", isbn: "9791158392238", listPrice: 45000, thickness_mm: 25.0, width_mm: 188, depth_mm: 257, weight_g: 1200, daysInInventory: 1, category: "IT/컴퓨터", ubciScore: 100, lpn: null, isNew: true },
-    { id: "BOOK-NEW-02", title: "클린 아키텍처 (Clean Architecture)", isbn: "9788966262472", listPrice: 32000, thickness_mm: 22.0, width_mm: 185, depth_mm: 235, weight_g: 850, daysInInventory: 2, category: "IT/컴퓨터", ubciScore: 99, lpn: null, isNew: true },
-    { id: "BOOK-NEW-03", title: "가상 면접 사례로 배우는 대규모 시스템 설계 기초", isbn: "9791163032588", listPrice: 35000, thickness_mm: 30.0, width_mm: 188, depth_mm: 257, weight_g: 1100, daysInInventory: 3, category: "IT/컴퓨터", ubciScore: 98, lpn: null, isNew: true },
-    { id: "BOOK-NEW-04", title: "파이썬 코딩의 기술 (개정2판)", isbn: "9791160509618", listPrice: 42000, thickness_mm: 38.0, width_mm: 188, depth_mm: 240, weight_g: 1350, daysInInventory: 1, category: "IT/컴퓨터", ubciScore: 97, lpn: null, isNew: true },
-    { id: "BOOK-NEW-05", title: "오브젝트: 코드로 이해하는 객체지향 설계", isbn: "9791158391409", listPrice: 38000, thickness_mm: 32.0, width_mm: 188, depth_mm: 257, weight_g: 1200, daysInInventory: 4, category: "IT/컴퓨터", ubciScore: 99, lpn: null, isNew: true }
-  ];
-
-  // Fetch real inventory books from PostgreSQL DB via REST API & Merge NEW Books
+  // Fetch real inventory books from PostgreSQL DB via REST API
   useEffect(() => {
     const fetchDbBooks = async () => {
       try {
         setIsBooksLoading(true);
-        const res = await fetch("http://localhost:8000/api/v1/orders/available-books");
+        const res = await fetch("http://localhost:8000/api/v1/orders/available-books", {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
-            setInventoryBooks([...NEW_BOOKS_SEED, ...data]);
-            setSelectedBookIds([NEW_BOOKS_SEED[0].id]);
+            setInventoryBooks(data);
+            // 피킹 지시서 자동 선택이 먼저 실행된 경우 기본(첫 도서) 선택으로 덮어쓰지 않는다
+            setSelectedBookIds(prev => (prev.length > 0 ? prev : [data[0].id]));
           } else {
-            setInventoryBooks([...NEW_BOOKS_SEED]);
+            setInventoryBooks([]);
           }
         } else {
-          setInventoryBooks([...NEW_BOOKS_SEED]);
+          setInventoryBooks([]);
         }
       } catch (e) {
-        console.error("Failed to fetch DB books, using NEW books fallback:", e);
-        setInventoryBooks([...NEW_BOOKS_SEED]);
+        console.error("Failed to fetch DB books:", e);
+        setInventoryBooks([]);
       } finally {
         setIsBooksLoading(false);
       }
@@ -181,8 +195,13 @@ export default function OutboundDashboard() {
 
   const getBookQty = (id: string) => bookQuantities[id] || 1;
 
-  const setBookQty = (id: string, qty: number) => {
-    const safeQty = Math.max(1, Math.min(50, qty));
+  const setBookQty = (id: string, qty: number, maxStock?: number) => {
+    const dbLimit = typeof maxStock === 'number' ? maxStock : 1;
+    const safeMax = Math.max(1, dbLimit);
+    if (qty > safeMax) {
+      alert(`⚠️ [출고 재고 제한] 해당 도서의 DB 실시간 가용 재고는 총 ${safeMax}권입니다. (재고 초과 선택 불가)`);
+    }
+    const safeQty = Math.max(1, Math.min(safeMax, qty));
     setBookQuantities(prev => ({ ...prev, [id]: safeQty }));
   };
 
@@ -192,6 +211,19 @@ export default function OutboundDashboard() {
   // Total quantity of all selected items (sum of qty per book)
   const totalBooksCount = selectedBooks.reduce((acc, b) => acc + getBookQty(b.id), 0);
 
+  // 신품/중고 판별은 백엔드 isNew 필드 단일 기준 (lpn 문자열 truthy 판별 버그 제거:
+  // 신품도 lpn="LPN 미발급 (신품)" 문자열을 가져 !b.lpn 판별이 전량 중고 처리되던 문제)
+  const newQtyTotal = selectedBooks.filter(b => b.isNew).reduce((a, b) => a + getBookQty(b.id), 0);
+  const usedQtyTotal = selectedBooks.filter(b => !b.isNew).reduce((a, b) => a + getBookQty(b.id), 0);
+  // 백엔드 Two-Track 확정가 우선, 통신 실패 시에만 로컬 근사(신품 90% / 중고 65%) 폴백
+  const localFallbackTotal = selectedBooks.reduce((acc, b) => {
+    const qty = getBookQty(b.id);
+    const rate = b.isNew ? 0.90 : 0.65;
+    return acc + Math.round((b.listPrice || 30000) * rate) * qty;
+  }, 0);
+  const displayTotalPrice = pricingResult?.final_price ?? localFallbackTotal;
+  const perUnitAvgPrice = totalBooksCount > 0 ? Math.round(displayTotalPrice / totalBooksCount) : 0;
+
   const handleSelectAllBooks = () => {
     setSelectedBookIds(filteredBooks.map(b => b.id));
   };
@@ -199,20 +231,19 @@ export default function OutboundDashboard() {
   const handleDeselectAllBooks = () => {
     setSelectedBookIds([]);
   };
-
-  // Dynamic Best Recommended Box Calculation: Smart Capacity & Weight & Height Aware
   const bestRecommendedBox = React.useMemo(() => {
-    if (selectedBooks.length === 0) {
-      return BOOK_SLIM_BOX_OPTIONS[0];
-    }
+    if (selectedBooks.length === 0) return BOOK_SLIM_BOX_OPTIONS[0];
 
-    let maxW = 0, maxD = 0, rawBooksTotalH = 0, totalQty = 0, totalWeightG = 0;
+    let rawBooksTotalH = 0, totalQty = 0, totalWeightG = 0;
+    let maxBookLongest = 0;
+    let maxBookShortest = 0;
+
     selectedBooks.forEach(b => {
       const qty = getBookQty(b.id);
-      const rawW = b.width_mm || b.width || 185;
-      const rawD = b.depth_mm || b.depth || 257;
-      maxW = Math.max(maxW, Math.max(rawW, rawD));
-      maxD = Math.max(maxD, Math.min(rawW, rawD));
+      const w = b.width_mm || b.width || 185;
+      const d = b.depth_mm || b.depth || 257;
+      maxBookLongest = Math.max(maxBookLongest, Math.max(w, d));
+      maxBookShortest = Math.max(maxBookShortest, Math.min(w, d));
       rawBooksTotalH += (b.thickness_mm || b.height || 20) * qty;
       totalWeightG += (b.weight_g || 650) * qty;
       totalQty += qty;
@@ -224,61 +255,53 @@ export default function OutboundDashboard() {
     const zCushThick = (activeCushMode === 'top' || activeCushMode === 'both') ? activeCushThick : 0.0;
     const sideCushThick = (activeCushMode === 'side' || activeCushMode === 'both') ? activeCushThick : 0.0;
 
-    const reqMaxW = maxW + (2 * sideCushThick);
-    const reqMaxD = maxD + (2 * sideCushThick);
+    const reqMaxW = maxBookLongest + (2 * sideCushThick);
+    const reqMaxD = maxBookShortest + (2 * sideCushThick);
 
     const getGridHeightForBox = (bxW: number, bxD: number) => {
-      const cols = Math.max(1, Math.floor((bxW - 2 * sideCushThick) / maxW));
-      const rows = Math.max(1, Math.floor((bxD - 2 * sideCushThick) / maxD));
-      const perLayer = cols * rows;
-      const layers = Math.ceil(totalQty / perLayer);
+      const inW = Math.max(10, bxW - 2 * sideCushThick);
+      const inD = Math.max(10, bxD - 2 * sideCushThick);
+      const cap0 = Math.max(1, Math.floor(inW / Math.max(1, maxBookShortest))) * Math.max(1, Math.floor(inD / Math.max(1, maxBookLongest)));
+      const cap90 = Math.max(1, Math.floor(inW / Math.max(1, maxBookLongest))) * Math.max(1, Math.floor(inD / Math.max(1, maxBookShortest)));
+      const maxPerLayer = Math.max(1, Math.max(cap0, cap90));
+      const layers = Math.ceil(totalQty / maxPerLayer);
       const avgThick = totalQty > 0 ? rawBooksTotalH / totalQty : 20;
       return layers * avgThick;
     };
 
-    // Sort all 16 box options strictly by physical 3D Volume (Smallest to Largest Step-Up Order)
-    const allBoxesSorted = [...BOOK_SLIM_BOX_OPTIONS, ...STANDARD_COURIER_BOX_OPTIONS].sort((a, b) => {
+    const allBoxesSortedByVolume = [...BOOK_SLIM_BOX_OPTIONS, ...STANDARD_COURIER_BOX_OPTIONS].sort((a, b) => {
       const dA = a.specs.match(/(\d+)x(\d+)x(\d+)/);
       const dB = b.specs.match(/(\d+)x(\d+)x(\d+)/);
-      const volA = dA ? parseInt(dA[1]) * parseInt(dA[2]) * parseInt(dA[3]) : 0;
-      const volB = dB ? parseInt(dB[1]) * parseInt(dB[2]) * parseInt(dB[3]) : 0;
-      return volA - volB;
+      const rawVolA = dA ? parseInt(dA[1]) * parseInt(dA[2]) * parseInt(dA[3]) : 0;
+      const rawVolB = dB ? parseInt(dB[1]) * parseInt(dB[2]) * parseInt(dB[3]) : 0;
+      const isSlimA = BOOK_SLIM_BOX_OPTIONS.some(bx => bx.id === a.id);
+      const isSlimB = BOOK_SLIM_BOX_OPTIONS.some(bx => bx.id === b.id);
+      const effVolA = isSlimA ? rawVolA * 0.85 : rawVolA;
+      const effVolB = isSlimB ? rawVolB * 0.85 : rawVolB;
+      return effVolA - effVolB;
     });
 
-    // Dynamic Step-Up Rule: Test boxes from smallest to largest.
-    // If required footprint, height (including cushion), or weight exceeds current box -> Step Up to Next Box!
-    for (const bx of allBoxesSorted) {
+    for (const bx of allBoxesSortedByVolume) {
       const d = bx.specs.match(/(\d+)x(\d+)x(\d+)/);
       if (!d) continue;
       const bw = parseInt(d[1]), bd = parseInt(d[2]), bh = parseInt(d[3]);
 
-      const isFootprintFit = Math.max(bw, bd) >= reqMaxW && Math.min(bw, bd) >= reqMaxD;
-      if (!isFootprintFit) continue; // Step up: Footprint too small!
+      // Strict Footprint Fit Test for both 0° and 90° orientation
+      const isFootprintFit = (Math.max(bw, bd) >= reqMaxW) && (Math.min(bw, bd) >= reqMaxD);
+      if (!isFootprintFit) continue;
 
       const reqH = getGridHeightForBox(bw, bd) + zCushThick;
       const isHeightFit = bh >= reqH;
-      if (!isHeightFit) continue; // Step up: Height exceeded including cushion!
+      if (!isHeightFit) continue;
 
       const isWeightFit = totalWeightKg <= bx.maxWeight_kg;
-      if (!isWeightFit) continue; // Step up: Weight limit exceeded!
+      if (!isWeightFit) continue;
 
-      // Found the smallest box that fits all dimensions, height, and weight!
+      // Absolute smallest 3D volume box found among all 16 options!
       return bx;
     }
 
-    // Fallback Step-Up: If height/weight exceeds all 16 boxes, pick largest footprint box available
-    const footprintValidBoxes = allBoxesSorted.filter(bx => {
-      const d = bx.specs.match(/(\d+)x(\d+)x(\d+)/);
-      if (!d) return false;
-      const bw = parseInt(d[1]), bd = parseInt(d[2]);
-      return Math.max(bw, bd) >= reqMaxW && Math.min(bw, bd) >= reqMaxD;
-    });
-
-    if (footprintValidBoxes.length > 0) {
-      return footprintValidBoxes[footprintValidBoxes.length - 1]; // Pick largest
-    }
-
-    return STANDARD_COURIER_BOX_OPTIONS[STANDARD_COURIER_BOX_OPTIONS.length - 1];
+    return BOOK_SLIM_BOX_OPTIONS[BOOK_SLIM_BOX_OPTIONS.length - 1];
   }, [selectedBooks, selectedCushion]);
 
   // Auto-selection Switching: Automatically switch selected box AND TAB to AI Best Recommended Box
@@ -359,8 +382,12 @@ export default function OutboundDashboard() {
   };
 
   // Fetch real algorithmic price from backend API based on selected N books metadata
+  // Two-Track: 라인별 quantity(수량) + is_new(신품/중고) + ubci null-safe 전달
   const fetchRealDynamicPrice = async (books: any[]) => {
-    if (!books || books.length === 0) return;
+    if (!books || books.length === 0) {
+      setPricingResult(null);
+      return;
+    }
     try {
       const payload = {
         items: books.map(b => ({
@@ -369,7 +396,9 @@ export default function OutboundDashboard() {
           days_in_inventory: b.daysInInventory,
           category: b.category,
           title: b.title,
-          isbn: b.isbn
+          isbn: b.isbn,
+          quantity: getBookQty(b.id),
+          is_new: !!b.isNew
         }))
       };
       const res = await fetch("http://localhost:8000/api/v1/orders/calculate-dynamic-price", {
@@ -379,20 +408,23 @@ export default function OutboundDashboard() {
       });
       if (res.ok) {
         const data = await res.json();
+        setPricingResult(data);
+        const usedBooks = books.filter(b => !b.isNew);
         setMockOrder({
-          order_id: `ORD-20260727-B2B`,
-          customer_name: books[0].customer || "교보문고 B2B 지점",
+          order_id: activeInstruction ? activeInstruction.instruction_no : `ORD-20260727-B2B`,
+          customer_name: activeInstruction?.customer_name || books[0].customer || "교보문고 B2B 지점",
           title: books.length === 1 ? books[0].title : `${books[0].title} 외 ${books.length - 1}권 (묶음 출고)`,
           isbn: books.length === 1 ? books[0].isbn : `${books[0].isbn} 등 N권`,
           list_price: data.total_list_price || books.reduce((s, b) => s + b.listPrice, 0),
-          ubci_score: Math.round(books.reduce((s, b) => s + b.ubciScore, 0) / books.length),
-          days_in_inventory: Math.max(...books.map(b => b.daysInInventory)),
+          ubci_score: usedBooks.length > 0
+            ? Math.round(usedBooks.reduce((s, b) => s + (b.ubciScore || 85), 0) / usedBooks.length)
+            : null,
+          days_in_inventory: Math.max(...books.map(b => b.daysInInventory || 1)),
           category: books[0].category,
           final_price: data.final_price,
           discount_rate: data.discount_percent,
-          predicted_purchase_probability: data.predicted_purchase_probability,
-          max_expected_revenue: data.max_expected_revenue,
-          trend_badge_text: data.trend_badge_text || `B2B ${books.length}권 묶음 출고 할인`,
+          trend_badge_text: data.dwell_badge_text || data.trend_badge_text || `B2B ${books.length}권 묶음 출고 할인`,
+          pricing_label: data.pricing_label,
           optimization_model: data.optimization_model
         });
       }
@@ -404,180 +436,46 @@ export default function OutboundDashboard() {
   React.useEffect(() => {
     if (selectedBooks.length > 0) {
       fetchRealDynamicPrice(selectedBooks);
+    } else {
+      setPricingResult(null);
     }
-  }, [selectedBookIds]);
+  }, [selectedBookIds, bookQuantities]);
   const [selectedBoxId, setSelectedBoxId] = useState<string>("BOOK-S2");
-  const [mockBoxName, setMockBoxName] = useState<string>("Standard-Box-B (중형)");
-  const [showCameraScanner, setShowCameraScanner] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [confirmed, setConfirmed] = useState<boolean>(false);
-
-  // Manual LPN Input & Verification State
-  const [manualLpn, setManualLpn] = useState<string>('LPN-260727-A801');
-  const [verificationResult, setVerificationResult] = useState<any | null>(null);
   const [aiReasoningLog, setAiReasoningLog] = useState<string>('');
 
   const activeBox = BOX_OPTIONS.find(b => b.id === selectedBoxId) || BOX_OPTIONS[1];
 
-  const handleManualLpnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    const formatted = formatBarcodeOrIsbn(val);
-    setManualLpn(formatted);
-  };
-
-  const handleVerifyLpn = async () => {
-    if (!manualLpn || manualLpn.length < 8) {
-      alert("유효한 LPN 바코드 또는 13자리 ISBN을 입력하세요. (예: LPN-260728-A002 또는 9791163033455)");
-      return;
-    }
-
-    const cleanInput = manualLpn.replace(/[^0-9]/g, '');
-    const isIsbn = manualLpn.startsWith('978') || manualLpn.startsWith('979') || cleanInput.length === 13;
-
-    try {
-      setIsLoading(true);
-      if (isIsbn) {
-        // ISBN 신품 도서 (Zone A) 전용 판정 & 검증
-        const matchedBook = inventoryBooks.find(b => b.isbn === manualLpn) || selectedBook;
-        const bookTitle = matchedBook?.title || 'Do it! 점프 투 파이썬';
-        
-        setVerificationResult({
-          type: "NEW_STOCK",
-          barcode: manualLpn,
-          title: `✨ [신품 도서 판정] ${bookTitle}`,
-          isbn: manualLpn,
-          zone: "Zone A (신품 전용 보관구역)",
-          location: "Zone A-Rack 01-Shelf 01",
-          status: "NEW_STOCK VERIFIED (신품 정품 출고 승인)",
-          grade: "100점 (S등급 MINT / 신품 출고)",
-          box: `도서슬림 소형 1호 (CJ 송장: CJ-2026-0731-NEW01)`,
-          timestamp: new Date().toLocaleTimeString()
-        });
-        alert(`[✨ ISBN 신품 도서 출고 판정 완공]\nISBN: ${manualLpn}\n도서명: ${bookTitle}\n보관구역: Zone A (신품 구역)\n판정: 100점 S등급 MINT (신품 출고 승인 완료)`);
-      } else {
-        // LPN 중고 도서 전용 검증
-        const res = await fetch(`http://localhost:8000/api/v1/orders/outbound/complete`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lpn_barcode: manualLpn,
-            box_type: activeBox.id,
-            worker_id: "WM2607001"
-          })
-        });
-        const data = await res.json();
-        
-        setVerificationResult({
-          type: "USED_STOCK",
-          barcode: manualLpn,
-          title: `LPN 중고 검수 도서 [${manualLpn}]`,
-          isbn: selectedBook?.isbn || "9791163033455",
-          zone: "Zone B / C / D (중고 등급구역)",
-          location: "Zone B-Rack 02-Shelf 01",
-          status: data?.status === "success" ? "USED VERIFIED (중고 검수 출고 승인)" : "VERIFIED",
-          grade: `${selectedBook?.ubciScore || 86}점 (UBCI 정량 검수 완공)`,
-          box: `${activeBox.name} (CJ 송장: ${data?.cj_waybill_no || 'CJ-2026-0728-9841'})`,
-          timestamp: new Date().toLocaleTimeString()
-        });
-        alert(`[LPN 중고 출고 피킹 검증 완공] ${data?.message || 'DB 재고 차감 및 CJ대한통운 송장 발급 완료'}`);
-      }
-    } catch (e: any) {
-      if (isIsbn) {
-        setVerificationResult({
-          type: "NEW_STOCK",
-          barcode: manualLpn,
-          title: `✨ [신품 도서 판정] ${selectedBook?.title || 'Do it! 점프 투 파이썬'}`,
-          isbn: manualLpn,
-          zone: "Zone A (신품 전용 보관구역)",
-          location: "Zone A-Rack 01-Shelf 01",
-          status: "NEW_STOCK VERIFIED (신품 정품 출고 승인)",
-          grade: "100점 (S등급 MINT / 신품 출고)",
-          box: "도서슬림 소형 1호 (CJ 송장: CJ-2026-0731-NEW01)",
-          timestamp: new Date().toLocaleTimeString()
-        });
-      } else {
-        setVerificationResult({
-          type: "USED_STOCK",
-          barcode: manualLpn,
-          title: `LPN 검증 도서 [${manualLpn}]`,
-          isbn: "9791163033455",
-          zone: "Zone B / C / D",
-          location: "Zone B-Rack 02-Shelf 01",
-          status: "VERIFIED",
-          grade: "UBCI 검수 완공",
-          box: activeBox.name,
-          timestamp: new Date().toLocaleTimeString()
-        });
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // [정리 이력 2026-08-04] 이 화면에 있던 LPN/ISBN 수동 검증 모의 로직(하드코딩된 도서명·
+  // 송장번호 폴백 포함)은 열 수 있는 버튼이 없는 데드 코드였다. 현장 스캔 검증은
+  // /worker/outbound 스캐너가 피킹 지시서 API(picking-scan)로 실연동 처리한다.
 
   const handleTestOrder = async () => {
+    // 실제 Order + OrderItem + AI 피킹 지시서를 DB에 생성하고 즉시 이 화면에 바인딩한다.
     try {
       setIsLoading(true);
       setConfirmed(false);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-      // 1. 동적 가격 테스트 (주문 생성)
-      try {
-        const orderRes = await fetch("http://localhost:8000/api/v1/orders/?customer_name=TEST_B2B&type=WHOLESALE&list_price=35000&category=Novel&ubci_score=78&days_in_inventory=120", {
-          method: "POST",
-          signal: controller.signal
-        });
-        if (orderRes.ok) {
-          const orderData = await orderRes.json();
-          setMockOrder(orderData);
-        }
-      } catch (err) {
-        setMockOrder({
-          order_id: 'ORD-20260727-99',
-          customer_name: '교보문고 B2B 지점',
-          type: 'WHOLESALE',
-          final_price: 26250,
-          discount_rate: '25%',
-          status: 'PICKING'
-        });
+      setShowInvoiceLabel(false);
+      const res = await fetch("http://localhost:8000/api/v1/orders/simulate-b2b", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`시뮬레이션 실패: ${data.detail || data.message}`);
+        return;
       }
-
-      // 2. 3D Bin Packing 테스트 (피킹 출고)
-      const books = [
-        { category: "Novel", format_size: "신국판", pages: 300, is_color: false, is_hardcover: true },
-        { category: "Novel", pages: 400, is_color: false, is_hardcover: false }
-      ];
-      
-      try {
-        const pickRes = await fetch(`http://localhost:8000/api/v1/orders/outbound/pick?order_id=ORD-20260727-99`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(books),
-          signal: controller.signal
-        });
-        if (pickRes.ok) {
-          const pickData = await pickRes.json();
-          setMockBoxName(pickData.recommended_box);
-          if (pickData.ai_reasoning_log) {
-            setAiReasoningLog(pickData.ai_reasoning_log);
-          }
-        }
-      } catch (err) {
-        setMockBoxName("Standard-Box-B (중형 300x200x150mm)");
-      } finally {
-        clearTimeout(timeoutId);
+      await fetchPickingInstructions();
+      if (data.picking_instruction?.id) {
+        setSelectedInstructionId(data.picking_instruction.id);
       }
+      alert(
+        `🎲 [B2B 주문 시뮬레이션 & AI 피킹 지시서 발행]\n` +
+        `지시서: ${data.picking_instruction?.instruction_no}\n` +
+        `거래처: ${data.customer_name}\n` +
+        `${data.pricing.pricing_label}\n` +
+        `총 ${data.pricing.total_quantity}권 / ${Number(data.pricing.final_price).toLocaleString()}원`
+      );
     } catch (e) {
-      setMockOrder({
-        order_id: 'ORD-20260727-99',
-        customer_name: '교보문고 B2B 지점',
-        type: 'WHOLESALE',
-        final_price: 26250,
-        discount_rate: '25%',
-        status: 'PICKING'
-      });
-      setMockBoxName("Standard-Box-B (중형 300x200x150mm)");
+      alert('백엔드 연결 실패 - B2B 주문 시뮬레이션을 실행하지 못했습니다. (localhost:8000)');
     } finally {
       setIsLoading(false);
     }
@@ -585,13 +483,55 @@ export default function OutboundDashboard() {
 
   const handleSelectBox = (box: BoxOption) => {
     setSelectedBoxId(box.id);
-    setMockBoxName(`${box.id} (${box.name})`);
     setConfirmed(false);
   };
 
   const [showInvoiceLabel, setShowInvoiceLabel] = useState<boolean>(false);
+  const [issuedWaybillNo, setIssuedWaybillNo] = useState<string | null>(null);
 
-  const handleConfirmPacking = () => {
+  const handleConfirmPacking = async () => {
+    // 피킹 지시서 연동 시: 실제 출고 확정 API (재고 차감 + CJ 송장 발급 + 주문 SHIPPED 전이)
+    if (activeInstruction) {
+      const notFullyPicked = activeInstruction.status !== 'PICKED';
+      if (notFullyPicked) {
+        const ok = confirm(
+          `⚠️ 아직 전 품목 피킹 완료 전입니다 (${activeInstruction.picked_items}/${activeInstruction.total_items}권).\n` +
+          `현장 스캔 없이 강제로 패킹을 확정하시겠습니까? (데모/관리자 권한)`
+        );
+        if (!ok) return;
+      }
+      try {
+        const res = await fetch(
+          `http://localhost:8000/api/v1/orders/picking-instructions/${activeInstruction.id}/confirm-packing`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              box_id: activeBox.id,
+              cushion_name: recommendedCushionName,
+              force: notFullyPicked,
+            }),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`패킹 확정 실패: ${data.detail || data.message}`);
+          return;
+        }
+        setConfirmed(true);
+        setShowInvoiceLabel(true);
+        setIssuedWaybillNo(data.cj_waybill_no);
+        setOutboundSummary(prev => ({ ...prev, shippedTodayCount: prev.shippedTodayCount + 1 }));
+        alert(`[3D Bin Packing 확정 & CJ 송장 발급]\n${data.message}\n박스: ${activeBox.name} (${activeBox.specs})\n\n→ worker가 스캐너 화면의 적재 가이드에 따라 포장 완료하면 최종 출고됩니다.`);
+        await fetchPickingInstructions();
+        return;
+      } catch (e) {
+        alert('백엔드 연결 실패 - 출고 확정을 처리하지 못했습니다. (localhost:8000)');
+        return;
+      }
+    }
+
+    // 지시서 미연동(임의 선택) 모드: 화면 시뮬레이션만 수행
     setConfirmed(true);
     setShowInvoiceLabel(true);
     setOutboundSummary(prev => ({
@@ -612,184 +552,37 @@ export default function OutboundDashboard() {
             </span>
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-            🚚 출고 최적화 및 피킹 스캐너 (AI Outbound)
+            🚚 출고 최적화 및 송장 발급 관제 (AI Outbound)
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-            도서 판형 크기(4륙판/신국판/국판) 기반 최적 박스 패킹 알고리즘 및 출고 피킹 검수 스캐너입니다.
+            도서 3D 부피/두께 적재 레이어(13-Layer) 최적 박스 패킹 알고리즘, B2B 동적 가격 산정 및 CJ/로젠 송장 자동 발급 관제 센터입니다.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <button 
-            onClick={() => setShowCameraScanner(!showCameraScanner)}
-            className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center transition-all shadow-xs ${
-              showCameraScanner 
-                ? 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100' 
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
-            }`}
+          {/* 1. Navigate directly to worker outbound picking scanner app */}
+          <Link 
+            href="/worker/outbound"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center transition-all shadow-xs active:scale-95 cursor-pointer"
+            title="현장 작업자 전용 출고 피킹 스캐너 화면으로 이동합니다"
           >
             <Camera className="w-4 h-4 mr-2" />
-            {showCameraScanner ? '피킹 스캐너 닫기' : '📷 출고 피킹 카메라 스캔 실행'}
-          </button>
+            현장 출고 피킹 스캐너 이동
+          </Link>
           
+          {/* 2. Run random B2B order bundle simulation */}
           <button 
             onClick={handleTestOrder}
             disabled={isLoading}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center transition-all shadow-xs disabled:opacity-50"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            title="랜덤 B2B 묶음 주문을 즉시 생성하여 3D Bin Packing 규격 박스 패킹과 동적 가격 할인을 실시간 시뮬레이션합니다"
           >
             <RefreshCcw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            {isLoading ? 'AI 시뮬레이션 처리 중...' : 'AI 피킹/패킹 시뮬레이션 가동'}
+            {isLoading ? '시뮬레이션 생성 중...' : '🎲 B2B 주문 시뮬레이션 (랜덤 test)'}
           </button>
         </div>
       </div>
 
-      {/* Outbound Mobile Item Picking Scanner & Checklist Toggle Modal */}
-      {showCameraScanner && (
-        <div className="bg-white dark:bg-gray-900 p-5 sm:p-6 rounded-2xl border-2 border-indigo-500 shadow-xl space-y-4 animate-in fade-in duration-300 max-w-xl mx-auto">
-          <div className="flex items-center justify-between border-b dark:border-gray-800 pb-3">
-            <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-base">
-              <Camera className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              현장 출고 피킹 스캐너 & LPN 실시간 검증
-            </h3>
-            <span className="text-xs bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-2.5 py-1 rounded-full font-bold font-mono">
-              모바일 & 풋페달 스캔 지원
-            </span>
-          </div>
-
-          <div className="space-y-4">
-            {/* Live Camera Viewport */}
-            <div className="bg-gray-950 p-3 rounded-2xl border border-gray-800 flex flex-col items-center">
-              <p className="text-xs text-gray-400 font-bold mb-2 flex items-center gap-1.5 self-start">
-                <Scan className="w-4 h-4 text-indigo-400" /> 실시간 카메라 비전 스캔 (피킹 검수)
-              </p>
-              <div className="w-full max-w-sm">
-                <CameraScanner />
-              </div>
-            </div>
-
-            {/* Manual LPN Input & Verification Control Box */}
-            <div className="bg-gray-50/80 dark:bg-gray-800/40 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-black text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                  <Barcode className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  LPN 중고 / ISBN 신품 바코드 수동 피킹 검증
-                </label>
-                <span className="text-[10px] font-mono text-gray-400">ISBN(13자리) or LPN</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={manualLpn}
-                  onChange={handleManualLpnChange}
-                  onKeyDown={(e) => e.key === 'Enter' && handleVerifyLpn()}
-                  placeholder="숫자 입력 (예: 260727A801)"
-                  className="flex-1 px-4 py-3 bg-white dark:bg-gray-900 border-2 border-indigo-300 dark:border-indigo-700 focus:border-indigo-600 rounded-xl font-mono text-base font-black tracking-wider text-indigo-900 dark:text-indigo-200 outline-none shadow-xs text-center"
-                />
-                <button
-                  onClick={handleVerifyLpn}
-                  className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition-all shrink-0 flex items-center gap-1 cursor-pointer"
-                >
-                  <Search className="w-4 h-4" />
-                  <span>피킹 검증</span>
-                </button>
-              </div>
-
-              {/* Preset Quick Fill Buttons */}
-              <div className="flex items-center justify-between pt-0.5 text-xs">
-                <span className="text-gray-400 font-bold text-[11px]">빠른 스캔 테스트:</span>
-                <div className="flex items-center gap-1.5">
-                  {['260727A801', '260727A802', '260727A805'].map((code) => (
-                    <button
-                      key={code}
-                      onClick={() => setManualLpn(formatBarcodeOrIsbn(code))}
-                      className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-mono font-bold hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-all cursor-pointer"
-                    >
-                      {code}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Verification Result Output: Highlight New Stock (Zone A) vs Used */}
-              {verificationResult ? (
-                <div className={`p-3.5 rounded-xl space-y-1.5 text-xs animate-in fade-in border ${
-                  verificationResult.type === 'NEW_STOCK'
-                    ? 'bg-blue-50/90 dark:bg-blue-950/80 border-blue-300 dark:border-blue-700 ring-2 ring-blue-500/20'
-                    : 'bg-emerald-50/90 dark:bg-emerald-950/70 border-emerald-200 dark:border-emerald-800'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <span className={`px-2 py-0.5 text-white font-bold rounded text-[10px] font-mono flex items-center gap-1 ${
-                      verificationResult.type === 'NEW_STOCK' ? 'bg-blue-600' : 'bg-emerald-600'
-                    }`}>
-                      <CheckCircle2 className="w-3 h-3" /> {verificationResult.status}
-                    </span>
-                    <span className="text-[10px] font-mono font-bold text-gray-500 dark:text-gray-400">
-                      {verificationResult.timestamp}
-                    </span>
-                  </div>
-
-                  <p className="font-mono font-black text-gray-900 dark:text-white text-sm pt-0.5 flex items-center justify-between">
-                    <span>{verificationResult.barcode}</span>
-                    <span className="text-xs px-2 py-0.5 rounded font-extrabold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-                      📍 {verificationResult.zone}
-                    </span>
-                  </p>
-                  <p className="font-extrabold text-gray-900 dark:text-white text-xs">
-                    {verificationResult.title}
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-1 text-[11px] pt-1.5 text-gray-700 dark:text-gray-300 border-t border-gray-200 dark:border-gray-700">
-                    <div>위치: <strong className="text-indigo-600 dark:text-indigo-400">{verificationResult.location}</strong></div>
-                    <div>품질: <strong>{verificationResult.grade}</strong></div>
-                    <div className="col-span-2 pt-0.5">상태: <strong className="text-emerald-600 dark:text-emerald-400">피킹 검수 완료 (랙 차감 연동)</strong></div>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl text-center text-[11px] text-gray-400">
-                  💡 13자리 ISBN(신품 Zone A) 또는 LPN 바코드(중고)를 입력하시면 자동으로 피킹 검증이 진행됩니다.
-                </div>
-              )}
-            </div>
-
-            {/* Replaced 3D Bin Packing Card with Picked Items Checklist */}
-            <div className="bg-indigo-50/70 dark:bg-indigo-950/60 p-4 rounded-2xl border border-indigo-200 dark:border-indigo-800/80 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
-                  <Package className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  📋 현장 작업자 피킹 대상 출고 목록 ({selectedBooks.length}건)
-                </span>
-                <span className="text-[10px] font-mono font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded">
-                  피킹 현황
-                </span>
-              </div>
-              
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {selectedBooks.map((b, idx) => {
-                  const isPicked = verificationResult && (verificationResult.barcode === b.isbn || verificationResult.barcode.includes(b.id));
-                  return (
-                    <div key={b.id || idx} className="p-2 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center justify-between text-xs shadow-2xs">
-                      <div className="min-w-0 flex-1 pr-2">
-                        <p className="font-extrabold text-gray-900 dark:text-white text-[11px] truncate">{b.title}</p>
-                        <p className="text-[10px] font-mono text-gray-500 dark:text-gray-400">
-                          ISBN: {b.isbn} | 📍 Zone-{idx === 0 ? 'A (Rack 01)' : 'B (Rack 02)'}
-                        </p>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 font-mono ${
-                        isPicked 
-                          ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300'
-                          : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300'
-                      }`}>
-                        {isPicked ? '✓ 피킹완료' : '⏳ 피킹대기'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Outbound KPI 3대 카드 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -865,8 +658,60 @@ export default function OutboundDashboard() {
             </span>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            LPN/ISBN으로 입고된 도서의 실제 메타데이터(정가, AI UBCI 품질점수, 보관일수, 카테고리)를 백엔드 2-Step 최적화 모델로 전달하여 최종 B2B 도매가를 자동 수식 연산합니다.
+            LPN/ISBN으로 입고된 도서의 실제 메타데이터(정가, AI UBCI 품질점수, 보관일수, 카테고리)를 백엔드 Two-Track 모델(신품 정율 / 중고 2-Step 탄력성)로 전달하여 최종 B2B 도매가를 자동 연산합니다.
           </p>
+
+          {/* AI 피킹 지시서 연동 선택 바 */}
+          <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800 space-y-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-xs font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5 shrink-0">
+                <FileCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                AI 피킹 지시서 연동
+              </span>
+              <div className="flex items-center gap-2 min-w-0">
+                <select
+                  value={selectedInstructionId || ''}
+                  onChange={(e) => {
+                    setSelectedInstructionId(e.target.value || null);
+                    setConfirmed(false);
+                    setShowInvoiceLabel(false);
+                  }}
+                  className="flex-1 min-w-0 px-2.5 py-1.5 bg-white dark:bg-gray-900 border border-indigo-300 dark:border-indigo-700 rounded-lg text-xs font-bold font-mono outline-none focus:border-indigo-600 cursor-pointer"
+                >
+                  <option value="">지시서 미연동 (재고에서 수동 선택)</option>
+                  {pickingInstructions.map(pi => (
+                    <option key={pi.id} value={pi.id}>
+                      {pi.instruction_no} · {pi.customer_name || 'B2B'} · {pi.total_items}권 ({pi.picked_items}권 피킹) · {pi.status}
+                    </option>
+                  ))}
+                </select>
+                <Link
+                  href="/admin/orders"
+                  className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-black shrink-0"
+                  title="주문 & AI 피킹 지시서 관제 화면으로 이동"
+                >
+                  주문 관제 →
+                </Link>
+              </div>
+            </div>
+            {activeInstruction && (
+              <div className="space-y-1 pt-1 border-t border-indigo-200/70 dark:border-indigo-800/70">
+                {activeInstruction.route_summary && (
+                  <p className="text-[11px] text-indigo-900 dark:text-indigo-200">
+                    <strong className="font-black">🗺️ AI 동선:</strong> {activeInstruction.route_summary}
+                  </p>
+                )}
+                {activeInstruction.worker_note && (
+                  <p className="text-[11px] text-indigo-800 dark:text-indigo-300">
+                    <strong className="font-black">🤖 작업 지시:</strong> {activeInstruction.worker_note}
+                  </p>
+                )}
+                <p className="text-[10px] font-mono text-indigo-400">
+                  지시서 도서가 자동 선택되었습니다 - 아래에서 수동 수정 가능 · {activeInstruction.ai_source}
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Dynamic Book Selection & Search Grid */}
           <div className="space-y-2.5">
@@ -948,15 +793,15 @@ export default function OutboundDashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1 max-h-[310px] overflow-y-auto pr-1">
               {filteredBooks
                 .filter(b => {
-                  const isUsed = !!b.lpn || b.id.includes('LPN') || b.id.includes('A80');
+                  const isUsed = !b.isNew && !!b.lpn && !b.lpn.includes('미발급');
                   if (outboundBookTypeFilter === 'NEW') return !isUsed;
                   if (outboundBookTypeFilter === 'USED') return isUsed;
                   return true;
                 })
                 .map((b) => {
                   const isChecked = selectedBookIds.includes(b.id);
-                  const isUsed = !!b.lpn || b.id.includes('LPN') || b.id.includes('A80');
-                  const lpnShort = b.lpn ? b.lpn.replace('LPN-', '') : (isUsed ? b.id.slice(-8) : null);
+                  const isUsed = !b.isNew && !!b.lpn && !b.lpn.includes('미발급');
+                  const lpnShort = b.lpn ? b.lpn.replace('LPN-', '') : null;
                   const width = Math.round(b.width_mm || b.width || 185);
                   const depth = Math.round(b.depth_mm || b.depth || 257);
                   const thick = Math.round(b.thickness_mm || 20);
@@ -971,27 +816,39 @@ export default function OutboundDashboard() {
                           : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
                       }`}
                     >
-                      {/* Row 1: Title & Checkbox */}
+                      {/* Row 1: BookCover + Title & Checkbox */}
                       <div 
                         onClick={() => toggleBookSelection(b.id)}
-                        className="flex items-start justify-between gap-1.5 cursor-pointer"
+                        className="flex items-start justify-between gap-2 cursor-pointer"
                       >
-                        <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
                           <input
                             type="checkbox"
                             checked={isChecked}
                             readOnly
                             className="w-3.5 h-3.5 mt-0.5 accent-indigo-600 rounded cursor-pointer shrink-0"
                           />
-                          <span className="font-extrabold text-xs text-gray-900 dark:text-white line-clamp-1 leading-snug">
-                            {b.title}
-                          </span>
+                          <BookCover
+                            src={b.cover_image_url}
+                            title={b.title}
+                            author={b.author}
+                            isbn={b.isbn}
+                            className="w-9 h-12 shadow-2xs shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <span className="font-extrabold text-xs text-gray-900 dark:text-white line-clamp-1 leading-snug">
+                              {b.title}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-mono block truncate">
+                              {b.author || '저자미상'} · {b.publisher || '출판사미상'}
+                            </span>
+                          </div>
                         </div>
                         {isChecked && <Check className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />}
                       </div>
 
                       {/* Row 2: Badge & Full Price */}
-                      <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center justify-between gap-1 pt-1">
                         {isUsed ? (
                           <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-mono font-black text-[10px] rounded-md border border-purple-200 dark:border-purple-800 shrink-0">
                             📦 중고 {lpnShort ? `[${lpnShort}]` : ''}
@@ -1003,7 +860,7 @@ export default function OutboundDashboard() {
                         )}
 
                         <span className="font-mono font-extrabold text-xs text-gray-900 dark:text-gray-100 shrink-0">
-                          {b.listPrice.toLocaleString()}원
+                          {(b.listPrice || 0).toLocaleString()}원
                         </span>
                       </div>
 
@@ -1023,7 +880,7 @@ export default function OutboundDashboard() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (!isChecked) toggleBookSelection(b.id);
-                                setBookQty(b.id, currentQty - 1);
+                                setBookQty(b.id, currentQty - 1, b.stock_qty);
                               }}
                               className="w-4 h-4 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-black text-[10px] flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-90"
                             >
@@ -1034,15 +891,20 @@ export default function OutboundDashboard() {
                             </span>
                             <button
                               type="button"
+                              disabled={currentQty >= (b.stock_qty || 1)}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (!isChecked) toggleBookSelection(b.id);
-                                setBookQty(b.id, currentQty + 1);
+                                setBookQty(b.id, currentQty + 1, b.stock_qty);
                               }}
-                              className="w-4 h-4 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-black text-[10px] flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-90"
+                              className="w-4 h-4 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-black text-[10px] flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                              title={`DB 실시간 가용 재고: ${b.stock_qty || 0}권`}
                             >
                               +
                             </button>
+                            <span className="text-[9px] font-mono text-gray-500 font-bold pl-0.5">
+                              (DB재고:{b.stock_qty || 0}권)
+                            </span>
                           </div>
                         )}
                       </div>
@@ -1055,9 +917,13 @@ export default function OutboundDashboard() {
           {/* Real-time Dynamic Pricing Engine Output Card (With 0-Book Empty UX State) */}
           <div className="bg-gray-50 dark:bg-gray-800/60 rounded-xl p-4 border border-gray-200 dark:border-gray-700 space-y-2 text-xs">
             <div className="flex justify-between items-center">
-              <span className="text-gray-500 dark:text-gray-400">주문 ID / B2B 거래처</span>
+              <span className="text-gray-500 dark:text-gray-400">
+                {activeInstruction ? '피킹 지시서 / B2B 거래처' : '주문 ID / B2B 거래처'}
+              </span>
               <span className="font-mono font-bold text-gray-900 dark:text-white">
-                {selectedBooks.length > 0 ? (mockOrder?.order_id || 'ORD-20260727-B2B') : 'ORD-20260727-B2B'} [{selectedBooks.length > 0 ? (mockOrder?.customer_name || '교보문고 B2B 지점') : '교보문고 B2B 지점'}]
+                {activeInstruction
+                  ? `${activeInstruction.instruction_no} [${activeInstruction.customer_name || 'B2B 거래처'}]`
+                  : `${selectedBooks.length > 0 ? (mockOrder?.order_id || 'ORD-20260727-B2B') : 'ORD-20260727-B2B'} [${selectedBooks.length > 0 ? (mockOrder?.customer_name || '교보문고 B2B 지점') : '교보문고 B2B 지점'}]`}
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -1076,50 +942,49 @@ export default function OutboundDashboard() {
             <div className="flex justify-between items-center">
               <span className="text-gray-500 dark:text-gray-400">AI UBCI 점수 / 보관일수</span>
               <span className="font-mono font-bold text-gray-800 dark:text-gray-200">
-                {selectedBooks.length === 0 ? '-' : (selectedBook?.lpn ? `${selectedBook?.ubciScore || 85}점 | ${selectedBook?.daysInInventory || 1}일 체류` : '미표기 (신품 Fast-Track 바이패스)')}
+                {selectedBooks.length === 0 ? '-' : (!selectedBook?.isNew ? `${selectedBook?.ubciScore || 85}점 | ${selectedBook?.daysInInventory || 1}일 체류` : '미표기 (신품 Fast-Track 바이패스)')}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 dark:text-gray-400">최적 동적 할인율 (δ*)</span>
               <span className="font-mono font-extrabold text-blue-600 dark:text-blue-400">
-                {selectedBooks.length === 0 ? '-' : (selectedBook?.lpn ? 'UBCI 동적 할인 (25%~35%)' : '신품 고정 정율 (B2B 25% 할인 / 75% 도매가)')}
+                {(() => {
+                  if (selectedBooks.length === 0) return '-';
+                  // 백엔드 Two-Track 계산 결과 라벨 우선 표시
+                  if (pricingResult?.pricing_label) return pricingResult.pricing_label;
+                  if (newQtyTotal > 0 && usedQtyTotal === 0) {
+                    return '신품 도서정가제 준수 (10% 정율 할인 / 90% 법정가)';
+                  } else if (newQtyTotal === 0 && usedQtyTotal > 0) {
+                    return 'UBCI 정량 등급 기반 중고 동적 할인';
+                  } else {
+                    return `신품 10% + 중고 동적 복합 믹스 할인 (신품 ${newQtyTotal}권 + 중고 ${usedQtyTotal}권)`;
+                  }
+                })()}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-500 dark:text-gray-400">총 발주 수량 (Total Books)</span>
               <span className="font-mono font-black text-indigo-600 dark:text-indigo-400">
-                총 {totalBooksCount}권 (신품 {selectedBooks.filter(b => !b.lpn).reduce((a,b)=>a+getBookQty(b.id),0)}권 + 중고 {selectedBooks.filter(b => !!b.lpn).reduce((a,b)=>a+1,0)}권)
+                총 {totalBooksCount}권 (신품 {newQtyTotal}권 + 중고 {usedQtyTotal}권)
               </span>
             </div>
             <div className="flex justify-between items-center pt-2 border-t dark:border-gray-700 font-bold">
               <span className="text-blue-700 dark:text-blue-400">권당 기준 도매가 (P_final)</span>
               <span className="text-base font-mono text-blue-700 dark:text-blue-400">
-                {selectedBooks.length > 0 ? Math.round((selectedBook?.listPrice || 30000) * (selectedBook?.lpn ? 0.65 : 0.75)).toLocaleString() : '26,250'} 원
+                {selectedBooks.length > 0 ? perUnitAvgPrice.toLocaleString() : '-'} 원
               </span>
             </div>
             
-            {/* Total Order Settlement Price */}
-            {(() => {
-              const totalPriceSum = selectedBooks.reduce((acc, b) => {
-                const isUsed = !!b.lpn;
-                const qty = isUsed ? 1 : getBookQty(b.id);
-                const discountRate = isUsed ? 0.65 : 0.75;
-                const bookPrice = Math.round((b.listPrice || 30000) * discountRate);
-                return acc + (bookPrice * qty);
-              }, 0);
-
-              return (
-                <div className="flex justify-between items-center pt-2 border-t-2 border-indigo-500/50 text-indigo-950 dark:text-indigo-200">
-                  <span className="font-black text-sm">💰 총 출고 결제 금액 (Total Order Price)</span>
-                  <span className="text-xl font-mono font-black text-indigo-600 dark:text-indigo-400">
-                    {totalPriceSum.toLocaleString()} 원
-                  </span>
-                </div>
-              );
-            })()}
+            {/* Total Order Settlement Price - 백엔드 Two-Track 확정가 (신품 정율 / 중고 탄력성 모델 x 수량) */}
+            <div className="flex justify-between items-center pt-2 border-t-2 border-indigo-500/50 text-indigo-950 dark:text-indigo-200">
+              <span className="font-black text-sm">💰 총 출고 결제 금액 (Total Order Price)</span>
+              <span className="text-xl font-mono font-black text-indigo-600 dark:text-indigo-400">
+                {selectedBooks.length > 0 ? displayTotalPrice.toLocaleString() : '-'} 원
+              </span>
+            </div>
 
             <p className="text-[10px] text-slate-400 font-mono pt-1 text-right">
-              {mockOrder?.optimization_model || 'XGBoost 2-Step Price Elasticity Revenue Optimization'}
+              {mockOrder?.optimization_model || 'XGBoost 2-Step Price Elasticity Revenue Optimization (도서정가제 준수)'}
             </p>
           </div>
 
@@ -1142,7 +1007,7 @@ export default function OutboundDashboard() {
                 <div className="flex justify-between items-center text-gray-700 dark:text-gray-300">
                   <span className="font-extrabold text-amber-700 dark:text-amber-400">운송장 번호 (Invoice No.)</span>
                   <span className="font-black text-sm text-indigo-900 dark:text-indigo-200">
-                    NEXUS-20260731-88491
+                    {issuedWaybillNo || 'NEXUS-20260731-88491'}
                   </span>
                 </div>
 
@@ -1156,27 +1021,17 @@ export default function OutboundDashboard() {
                 <div className="flex justify-between items-center text-gray-600 dark:text-gray-400">
                   <span>출고 적재 내역</span>
                   <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                    총 {totalBooksCount}권 (신품 {selectedBooks.filter(b => !b.lpn).reduce((a,b)=>a+getBookQty(b.id),0)}권 + 중고 {selectedBooks.filter(b => !!b.lpn).reduce((a,b)=>a+getBookQty(b.id),0)}권)
+                    총 {totalBooksCount}권 (신품 {newQtyTotal}권 + 중고 {usedQtyTotal}권)
                   </span>
                 </div>
 
-                {/* Total Settlement Amount Inscribed on Invoice */}
-                {(() => {
-                  const totalPriceSum = selectedBooks.reduce((acc, b) => {
-                    const qty = getBookQty(b.id);
-                    const bookPrice = Math.round((b.listPrice || 30000) * 0.75);
-                    return acc + (bookPrice * qty);
-                  }, 0);
-
-                  return (
-                    <div className="flex justify-between items-center text-indigo-950 dark:text-indigo-200 font-bold bg-amber-100/60 dark:bg-amber-950/80 p-2 rounded-lg border border-amber-300 dark:border-amber-800">
-                      <span>총 결제 금액 (Total Order Price)</span>
-                      <span className="font-black text-sm text-indigo-700 dark:text-indigo-300">
-                        {totalPriceSum > 0 ? totalPriceSum.toLocaleString() : '262,500'} 원
-                      </span>
-                    </div>
-                  );
-                })()}
+                {/* Total Settlement Amount - 백엔드 Two-Track 확정가 */}
+                <div className="flex justify-between items-center text-indigo-950 dark:text-indigo-200 font-bold bg-amber-100/60 dark:bg-amber-950/80 p-2 rounded-lg border border-amber-300 dark:border-amber-800">
+                  <span>총 결제 금액 (Total Order Price)</span>
+                  <span className="font-black text-sm text-indigo-700 dark:text-indigo-300">
+                    {displayTotalPrice > 0 ? displayTotalPrice.toLocaleString() : '-'} 원
+                  </span>
+                </div>
 
                 <div className="flex justify-between items-center text-gray-600 dark:text-gray-400">
                   <span>수령 거래처 / 도착지</span>
@@ -1190,7 +1045,7 @@ export default function OutboundDashboard() {
                   <div className="tracking-widest text-lg font-mono font-black text-gray-800 dark:text-gray-200 select-none">
                     ||||| |||||| | |||||||| ||||| |||||
                   </div>
-                  <span className="text-[9px] text-gray-400 font-mono">NEXUS-20260731-88491</span>
+                  <span className="text-[9px] text-gray-400 font-mono">{issuedWaybillNo || 'NEXUS-20260731-88491'}</span>
                 </div>
               </div>
 
@@ -1246,14 +1101,16 @@ export default function OutboundDashboard() {
               const bMax = Math.max(bW, bD);
               const bMin = Math.min(bW, bD);
 
-              let maxW = 0, maxD = 0, booksTotalH = 0, booksTotalWeight_g = 0;
+              let maxW = 0, maxD = 0, rawBooksTotalH = 0, totalQty = 0, booksTotalWeight_g = 0;
               selectedBooks.forEach(b => {
+                const qty = getBookQty(b.id);
                 const rawW = b.width_mm || b.width || 185;
                 const rawD = b.depth_mm || b.depth || 257;
                 maxW = Math.max(maxW, Math.max(rawW, rawD));
                 maxD = Math.max(maxD, Math.min(rawW, rawD));
-                booksTotalH += (b.thickness_mm || b.height || 20);
-                booksTotalWeight_g += (b.weight_g || 650);
+                rawBooksTotalH += (b.thickness_mm || b.height || 20) * qty;
+                booksTotalWeight_g += (b.weight_g || 650) * qty;
+                totalQty += qty;
               });
 
               // Dynamic Cushion Thickness & Mode Real-time Integration
@@ -1265,10 +1122,25 @@ export default function OutboundDashboard() {
 
               const reqMaxW = maxW + (2 * sideCushThick);
               const reqMaxD = maxD + (2 * sideCushThick);
-              const minRequiredH = booksTotalH > 0 ? booksTotalH + zCushThick : 0;
+
+              // Flexible 90° Orientation Footprint Fit Test (Case A: 0° placement vs Case B: 90° rotated placement)
+              const isFitNormal = (bW >= reqMaxW && bD >= reqMaxD) || (bW >= reqMaxD && bD >= reqMaxW);
+              const isFitRotated = (bMax >= reqMaxW && bMin >= reqMaxD);
+              const isDimensionValid = selectedBooks.length === 0 || isFitNormal || isFitRotated;
+
+              // Grid Stacking Height Calculation based on Optimal Orientation Layer Capacity
+              const colsNormal = Math.max(1, Math.floor((bW - 2 * sideCushThick) / Math.max(1, Math.min(maxW, maxD))));
+              const rowsNormal = Math.max(1, Math.floor((bD - 2 * sideCushThick) / Math.max(1, Math.max(maxW, maxD))));
+              const colsRotated = Math.max(1, Math.floor((bW - 2 * sideCushThick) / Math.max(1, Math.max(maxW, maxD))));
+              const rowsRotated = Math.max(1, Math.floor((bD - 2 * sideCushThick) / Math.max(1, Math.min(maxW, maxD))));
+              const maxPerLayer = Math.max(1, Math.max(colsNormal * rowsNormal, colsRotated * rowsRotated));
+              const layers = Math.ceil(totalQty / maxPerLayer);
+              const avgThick = totalQty > 0 ? rawBooksTotalH / totalQty : 20;
+              const gridStackH = layers * avgThick;
+
+              const minRequiredH = selectedBooks.length > 0 ? gridStackH + zCushThick : 0;
 
               // Physical Size & Height & Weight Containment Test
-              const isDimensionValid = (bMax >= reqMaxW && bMin >= reqMaxD);
               const isHeightExceeded = selectedBooks.length > 0 && (bH < minRequiredH);
               const isWeightExceeded = selectedBooks.length > 0 && (booksTotalWeight_g > box.maxWeight_kg * 1000);
               const isPhysicallyValid = selectedBooks.length === 0 || (isDimensionValid && !isHeightExceeded && !isWeightExceeded);
@@ -1289,7 +1161,7 @@ export default function OutboundDashboard() {
                   <div className="flex items-center justify-between gap-1 flex-wrap">
                     <span className="font-bold text-[11px] text-gray-900 dark:text-white truncate">{box.name}</span>
                     <div className="flex items-center gap-1 flex-wrap">
-                      {isRecommendedBox && isPhysicallyValid && (
+                      {isRecommendedBox && (
                         <span className="text-[9px] font-extrabold bg-emerald-500 text-white px-1.5 py-0.5 rounded shrink-0 shadow-xs animate-pulse">추천</span>
                       )}
                       {isWeightExceeded && (

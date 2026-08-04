@@ -1,7 +1,21 @@
 /**
- * Single Source of Truth Service for WMS Inspection Images & BBox Coordinates
- * Supports dynamic N-image counts (Front, Back, + Problematic sides/pages)
- * Reused cleanly across /admin/inspections, /worker/inspections, /admin/inventory/[id], and /admin/hitl
+ * WMS 검수 이미지 / BBox 좌표 단일 소스(Single Source of Truth) 서비스
+ *
+ * /admin/inspections, /worker/inspections, /admin/inventory/[id], /admin/hitl, /lpn/[lpn],
+ * /certificate/[lpn] 에서 공통으로 사용한다.
+ *
+ * [설계 원칙 - 목업 금지]
+ * 이 모듈은 어떤 경우에도 이미지 URL이나 BBox 좌표를 "지어내지" 않는다.
+ * 데이터가 없으면 빈 배열을 반환하고, 화면이 빈 상태를 정직하게 표시하도록 한다.
+ *
+ * [수정 이력]
+ * 1) 예전 resolveInspectionImages()는 DB 이미지가 없으면 Unsplash 스톡 사진 4장을 검수
+ *    이미지인 척 반환했다. 실제 검수 사진이 아닌 이미지가 "검수 촬영 이미지"로 표시됐다.
+ * 2) 예전 resolveDefectCoordinates()는 agent_logs.defect_coordinates를 찾았지만, 백엔드는
+ *    agent_logs.defects[] 평면 배열만 저장해 키/구조가 전혀 달라 조회에 100% 실패했다.
+ *    그 결과 항상 하드코딩 폴백으로 떨어져, UBCI 100점 MINT 도서에도 존재하지 않는
+ *    "표지 우상단 모서리 눌림" BBox가 그려졌다. 이제 백엔드가 defect_coordinates를
+ *    정규화해 내려주며, 여기서는 그것과 defects[] 원본만 읽는다.
  */
 
 export interface BBoxItem {
@@ -12,6 +26,9 @@ export interface BBoxItem {
   label: string;
   type?: string;
   confidence?: number;
+  deduction?: number;
+  /** 좌표계 기준값. Vision Agent는 0~1000 상대좌표를 산출한다. */
+  coord_space?: number;
 }
 
 export interface PerImageDefectCoordinate {
@@ -20,106 +37,128 @@ export interface PerImageDefectCoordinate {
   bboxes: BBoxItem[];
 }
 
-export const BASE_IMAGE_HOST = "http://localhost:8000";
+/** 백엔드 StaticFiles 마운트(/experiment_data) 호스트. CloudFront URL이 없는 레거시 건 폴백용. */
+export const BASE_IMAGE_HOST =
+  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
-// Cover Image Map based on Book Title / ISBN keywords
-export function getBookCoverUrl(titleOrIsbn: string = ""): string {
-  const t = (titleOrIsbn || "").toLowerCase();
-  if (t.includes("파이썬") || t.includes("python") || t.includes("9791163033455")) {
-    return "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500";
+/**
+ * DB에 적재된 이미지 경로를 브라우저가 실제로 열 수 있는 URL로 정규화한다.
+ * 신규 건은 백엔드가 이미 CloudFront URL을 내려주므로 그대로 통과한다.
+ * 레거시 컨테이너 절대경로(/app/app/experiment_data/...)만 StaticFiles URL로 환원한다.
+ */
+export function normalizeImageUrl(raw: string): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+
+  const url = raw.trim();
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+
+  const posix = url.replace(/\\/g, '/');
+  const marker = 'experiment_data';
+  if (posix.includes(marker)) {
+    const tail = posix.split(marker)[1].replace(/^\/+/, '');
+    return `${BASE_IMAGE_HOST}/${marker}/${tail}`;
   }
-  if (t.includes("클린") || t.includes("clean") || t.includes("9788966262472")) {
-    return "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500";
-  }
-  if (t.includes("리팩터링") || t.includes("9791162242742")) {
-    return "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500";
-  }
-  if (t.includes("해커스") || t.includes("토익") || t.includes("9788954625517")) {
-    return "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=500";
-  }
-  if (t.includes("sql") || t.includes("9788988474846") || t.includes("9788988647639")) {
-    return `${BASE_IMAGE_HOST}/experiment_data/job-0c2929a0/raw_0.jpg`;
-  }
-  return "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500";
+
+  return url.startsWith('/') ? `${BASE_IMAGE_HOST}${url}` : `${BASE_IMAGE_HOST}/${url}`;
 }
 
 /**
- * Normalizes inspection image URLs from DB or constructs dynamic N-image array per book
+ * 검수 촬영 이미지 목록을 반환한다. 실제 촬영본이 없으면 빈 배열.
+ * (표지 이미지는 검수 사진이 아니므로 여기서 대체물로 끼워넣지 않는다.)
  */
 export function resolveInspectionImages(itemOrJob: any): string[] {
-  // If specific real job image URLs exist and are NOT the generic hardcoded SQL array for non-SQL books
-  if (itemOrJob?.image_urls && Array.isArray(itemOrJob.image_urls) && itemOrJob.image_urls.length > 0) {
-    const title = itemOrJob?.book_title || itemOrJob?.book?.title || "";
-    // If it's NOT SQL practice book but has SQL hardcoded images, ignore hardcoded images!
-    const isSqlImage = itemOrJob.image_urls[0]?.includes("job-0c2929a0");
-    const isSqlBook = title.toLowerCase().includes("sql");
-    if (!isSqlImage || isSqlBook) {
-      return itemOrJob.image_urls;
-    }
-  }
+  const raw = itemOrJob?.image_urls ?? itemOrJob?.images ?? [];
+  if (!Array.isArray(raw)) return [];
 
-  const title = itemOrJob?.book_title || itemOrJob?.book?.title || itemOrJob?.isbn || "";
-  const coverUrl = itemOrJob?.book?.cover_image_url || itemOrJob?.cover_image_url || getBookCoverUrl(title);
-  
-  // Construct dynamic 3~4 image set (0: Front Cover, 1: Back Cover, 2: Page Stain/Side, 3: Corner/Page)
-  return [
-    coverUrl,
-    coverUrl,
-    "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=500",
-    "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500"
-  ];
+  return raw
+    .map((u: string) => normalizeImageUrl(u))
+    .filter((u: string | null): u is string => Boolean(u));
 }
 
 /**
- * Normalizes defect BBox coordinates from DB or generates score-aware dynamic BBoxes
+ * 이미지별 결함 BBox 좌표를 반환한다.
+ *
+ * 1순위: 백엔드가 정규화해 내려준 agent_logs.defect_coordinates
+ * 2순위: agent_logs.defects[] 평면 배열을 image_index 기준으로 직접 묶음
+ *        (백엔드 재검수 전의 과거 데이터 호환)
+ * 데이터가 없으면 빈 배열 - 절대 좌표를 생성하지 않는다.
  */
 export function resolveDefectCoordinates(itemOrJob: any): PerImageDefectCoordinate[] {
-  if (itemOrJob?.agent_logs?.defect_coordinates && Array.isArray(itemOrJob.agent_logs.defect_coordinates) && itemOrJob.agent_logs.defect_coordinates.length > 0) {
-    return itemOrJob.agent_logs.defect_coordinates;
+  const logs = itemOrJob?.agent_logs ?? {};
+
+  const normalized = logs.defect_coordinates;
+  if (Array.isArray(normalized) && normalized.length > 0) {
+    return normalized as PerImageDefectCoordinate[];
   }
 
-  const score = itemOrJob?.ubci_score !== undefined && itemOrJob?.ubci_score !== null ? itemOrJob.ubci_score : 85;
+  const defects = logs.defects ?? itemOrJob?.defects;
+  if (!Array.isArray(defects) || defects.length === 0) return [];
 
-  // Score >= 90 (MINT / High GOOD): Minimal defect or clean
-  if (score >= 90) {
-    return [
-      {
-        image_index: 0,
-        bboxes: [
-          {
-            xmin: 520, ymin: 160, xmax: 600, ymax: 240,
-            label: "DMG_EXT_CRUSH (전면 표지 우상단 미세 모서리 눌림)",
-            type: "DMG_EXT_CRUSH",
-            confidence: 0.965
-          }
-        ]
-      }
-    ];
-  }
+  const grouped = new Map<number, PerImageDefectCoordinate>();
+  for (const d of defects) {
+    const box = d?.bbox;
+    // BBox 좌표가 없는 결함은 그릴 수 없다. 임의 좌표를 만들지 않고 건너뛴다.
+    if (!box || typeof box !== 'object') continue;
 
-  // Score < 90 (GOOD / NORMAL): Dynamic page defect coordinates
-  return [
-    {
-      image_index: 0,
-      bboxes: [
-        {
-          xmin: 520, ymin: 160, xmax: 600, ymax: 240,
-          label: "DMG_EXT_CRUSH (표지 우상단 모서리 마모)",
-          type: "DMG_EXT_CRUSH",
-          confidence: 0.955
-        }
-      ]
-    },
-    {
-      image_index: 2,
-      bboxes: [
-        {
-          xmin: 420, ymin: 360, xmax: 540, ymax: 400,
-          label: "DMG_INT_DOODLE (내지 손글씨/필기 흔적)",
-          type: "DMG_INT_DOODLE",
-          confidence: 0.982
-        }
-      ]
+    const idx = Number(d.image_index ?? 0);
+    if (!grouped.has(idx)) {
+      grouped.set(idx, { image_index: idx, bboxes: [] });
     }
-  ];
+    grouped.get(idx)!.bboxes.push({
+      xmin: box.xmin,
+      ymin: box.ymin,
+      xmax: box.xmax,
+      ymax: box.ymax,
+      coord_space: 1000,
+      type: d.type,
+      label: d.label ?? d.type ?? '상태 결함',
+      confidence: d.confidence,
+      deduction: d.preliminary_deduction,
+    });
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => a.image_index - b.image_index);
+}
+
+/**
+ * BBox 좌표를 CSS 퍼센트 값으로 변환한다.
+ *
+ * [수정 이력] 예전 상세페이지는 좌표계를 값 크기로 추측했다
+ * (`box.xmin > 1 ? 1000 : box.xmin > 0.01 ? 1 : 100`). xmin이 0인 결함은 스케일이
+ * 100으로 잘못 잡히는 등 좌표가 어긋났다. 이제 백엔드가 coord_space를 명시해 내려주므로
+ * 추측하지 않는다.
+ */
+export function bboxToPercent(box: BBoxItem) {
+  const scale = box.coord_space && box.coord_space > 0 ? box.coord_space : 1000;
+
+  const left = Math.max(0, Math.min(100, (Number(box.xmin) / scale) * 100));
+  const top = Math.max(0, Math.min(100, (Number(box.ymin) / scale) * 100));
+  const width = Math.max(0.5, Math.min(100 - left, ((Number(box.xmax) - Number(box.xmin)) / scale) * 100));
+  const height = Math.max(0.5, Math.min(100 - top, ((Number(box.ymax) - Number(box.ymin)) / scale) * 100));
+
+  return { left, top, width, height };
+}
+
+/**
+ * 결함이 가장 심한(감점 합계가 큰) 이미지의 인덱스를 반환한다.
+ * 결함이 하나도 없으면 0(첫 촬영본)을 반환한다.
+ * 고객 보증서의 "AI 실물 검수 및 결함 판독 내역"이 대표 사진을 고를 때 사용한다.
+ */
+export function pickRepresentativeImageIndex(itemOrJob: any): number {
+  const coords = resolveDefectCoordinates(itemOrJob);
+  if (coords.length === 0) return 0;
+
+  let bestIdx = coords[0].image_index;
+  let bestScore = -1;
+
+  for (const c of coords) {
+    // 감점 합계를 우선 기준으로, 감점 정보가 없으면 결함 개수로 대체한다.
+    const score = c.bboxes.reduce((sum, b) => sum + (Number(b.deduction) || 1), 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = c.image_index;
+    }
+  }
+  return bestIdx;
 }

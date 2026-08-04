@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useAtomValue } from 'jotai';
-import { userAtom } from '@/stores/auth';
+import { currentUserAtom } from '@/features/auth/store/authAtoms';
 import { 
   Package, 
   CheckCircle2, 
@@ -84,7 +84,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function AdvancedDashboardPage() {
-  const user = useAtomValue(userAtom);
+  const user = useAtomValue(currentUserAtom);
 
   const { data: kpi } = useQuery({
     queryKey: ['dashboard-kpi'],
@@ -119,13 +119,13 @@ export default function AdvancedDashboardPage() {
             <span className="px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-bold font-mono flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> EXECUTIVE MASTER DASHBOARD
             </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">v2.6.0.7 Recharts High-Tech Edition</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">v2.10.0.0 Recharts High-Tech Edition</span>
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">
             📊 최고 관리자 종합 통계 관제 대시보드
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-            환영합니다, <span className="font-bold text-gray-800 dark:text-gray-200">{user?.name || user?.employee_id || '최초관리자'}</span>님! 실시간 입출고 물동량 추이 및 AI UBCI 품질 지표입니다.
+            환영합니다, <span className="font-bold text-gray-800 dark:text-gray-200">{user?.name || user?.employeeId || '최초관리자'}</span>님! 실시간 입출고 물동량 추이 및 AI UBCI 품질 지표입니다.
           </p>
         </div>
 
@@ -134,7 +134,7 @@ export default function AdvancedDashboardPage() {
           className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center transition-all shadow-md shadow-blue-200 dark:shadow-none active:scale-95 whitespace-nowrap cursor-pointer"
         >
           <Camera className="w-4 h-4 mr-2" />
-          현장 반품 검수 앱 실행
+          도서 입고 검수 앱 실행
         </Link>
       </div>
 
@@ -273,7 +273,7 @@ export default function AdvancedDashboardPage() {
                     paddingAngle={4}
                     dataKey="value"
                   >
-                    {ubciGradeData.map((entry, index) => (
+                    {ubciGradeData.map((entry: { name: string; value: number; color: string }, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -288,7 +288,7 @@ export default function AdvancedDashboardPage() {
           </div>
 
           <div className="space-y-1.5 pt-2 border-t dark:border-gray-800 text-xs">
-            {ubciGradeData.map((item) => (
+            {ubciGradeData.map((item: { name: string; value: number; color: string }) => (
               <div key={item.name} className="flex justify-between items-center">
                 <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />

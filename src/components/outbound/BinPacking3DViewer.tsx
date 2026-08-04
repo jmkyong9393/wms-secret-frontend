@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Box, RotateCw, Sparkles, ShieldCheck, Cpu, ZoomIn, ZoomOut, Maximize2, X, RefreshCw, PackageCheck, Package, BookOpen, Layers } from 'lucide-react';
+import { Box, RotateCw, Sparkles, ShieldCheck, Cpu, ZoomIn, ZoomOut, Maximize2, X, RefreshCw, PackageCheck, Package, BookOpen, Layers, Eye, AlertTriangle } from 'lucide-react';
 
 export interface BookItem {
   id: string;
@@ -51,16 +51,16 @@ export default function BinPacking3DViewer({
     eff: 94.5
   };
 
-  // 8 Industrial Cushion Materials Catalog (Expanded Side-Guard Options)
+  // 8 Industrial Cushion Materials Catalog (See-Through Translucent Glass Packaging)
   const cushionCatalog = [
-    { id: "CUSH-08", name: "3D 폼 블록 코너 캡", mode: "side", thick_mm: 30.0, thick: "30.0mm", target: "B2B 코너 파손 방지 (보호 99점)", color: "rgba(147, 51, 234, 0.85)", stroke: "rgba(126, 34, 206, 0.95)", protection_score: 99 },
-    { id: "CUSH-05", name: "에어 튜브 3D 범퍼", mode: "both", thick_mm: 20.0, thick: "20.0mm", target: "전방위 낙하 방지 (보호 98점)", color: "rgba(99, 102, 241, 0.85)", stroke: "rgba(67, 56, 202, 0.95)", protection_score: 98 },
-    { id: "CUSH-06", name: "코너 에어 범퍼 가드", mode: "side", thick_mm: 15.0, thick: "15.0mm", target: "모서리 충격 흡수 (보호 95점)", color: "rgba(59, 130, 246, 0.85)", stroke: "rgba(29, 78, 216, 0.95)", protection_score: 95 },
-    { id: "CUSH-04", name: "PE폼/뽁뽁이 4면 둘기", mode: "side", thick_mm: 25.0, thick: "25.0mm", target: "표준 4면 둘기 (보호 92점)", color: "rgba(6, 182, 212, 0.85)", stroke: "rgba(14, 116, 144, 0.95)", protection_score: 92 },
-    { id: "CUSH-02", name: "친환경 벌집 종이", mode: "both", thick_mm: 12.0, thick: "12.0mm", target: "전면 래핑 패키징 (보호 88점)", color: "rgba(16, 185, 129, 0.85)", stroke: "rgba(4, 120, 87, 0.95)", protection_score: 88 },
-    { id: "CUSH-07", name: "크라프트 종이 4면 패킹", mode: "side", thick_mm: 10.0, thick: "10.0mm", target: "친환경 측면 둘기 (보호 85점)", color: "rgba(217, 119, 6, 0.85)", stroke: "rgba(180, 83, 9, 0.95)", protection_score: 85 },
-    { id: "CUSH-03", name: "뽁뽁이 상단 25mm 채움", mode: "top", thick_mm: 25.0, thick: "25.0mm", target: "상단 집중 채움 (보호 80점)", color: "rgba(245, 158, 11, 0.9)", stroke: "rgba(217, 119, 6, 0.95)", protection_score: 80 },
-    { id: "CUSH-01", name: "에어필로우 슬림패드", mode: "top", thick_mm: 9.0, thick: "9.0mm", target: "상단 유격 채움 (보호 75점)", color: "rgba(245, 158, 11, 0.8)", stroke: "rgba(180, 83, 9, 0.95)", protection_score: 75 },
+    { id: "CUSH-08", name: "3D 폼 블록 코너 캡", mode: "side", thick_mm: 30.0, thick: "30.0mm", target: "B2B 코너 파손 방지 (보호 99점)", color: "rgba(147, 51, 234, 0.25)", stroke: "rgba(126, 34, 206, 0.95)", protection_score: 99 },
+    { id: "CUSH-05", name: "에어 튜브 3D 범퍼", mode: "both", thick_mm: 20.0, thick: "20.0mm", target: "전방위 낙하 방지 (보호 98점)", color: "rgba(99, 102, 241, 0.25)", stroke: "rgba(67, 56, 202, 0.95)", protection_score: 98 },
+    { id: "CUSH-06", name: "코너 에어 범퍼 가드", mode: "side", thick_mm: 15.0, thick: "15.0mm", target: "모서리 충격 흡수 (보호 95점)", color: "rgba(59, 130, 246, 0.25)", stroke: "rgba(29, 78, 216, 0.95)", protection_score: 95 },
+    { id: "CUSH-04", name: "PE폼/뽁뽁이 4면 측면 래핑", mode: "side", thick_mm: 25.0, thick: "25.0mm", target: "표준 4면 측면 래핑 (보호 92점)", color: "rgba(6, 182, 212, 0.25)", stroke: "rgba(14, 116, 144, 0.95)", protection_score: 92 },
+    { id: "CUSH-02", name: "친환경 벌집 종이", mode: "both", thick_mm: 12.0, thick: "12.0mm", target: "전방위 3D 래핑 패키징 (보호 88점)", color: "rgba(16, 185, 129, 0.25)", stroke: "rgba(4, 120, 87, 0.95)", protection_score: 88 },
+    { id: "CUSH-07", name: "크라프트 종이 4면 패킹", mode: "side", thick_mm: 10.0, thick: "10.0mm", target: "친환경 4면 측면 래핑 (보호 85점)", color: "rgba(217, 119, 6, 0.25)", stroke: "rgba(180, 83, 9, 0.95)", protection_score: 85 },
+    { id: "CUSH-03", name: "뽁뽁이 상단 25mm 채움", mode: "top", thick_mm: 25.0, thick: "25.0mm", target: "상단 완충 패딩 (보호 80점)", color: "rgba(245, 158, 11, 0.28)", stroke: "rgba(217, 119, 6, 0.95)", protection_score: 80 },
+    { id: "CUSH-01", name: "에어필로우 슬림패드", mode: "top", thick_mm: 9.0, thick: "9.0mm", target: "상단 완충 패딩 (보호 75점)", color: "rgba(245, 158, 11, 0.25)", stroke: "rgba(180, 83, 9, 0.95)", protection_score: 75 },
   ];
 
   // Rotation angles (deg)
@@ -70,9 +70,11 @@ export default function BinPacking3DViewer({
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
 
-  // Zoom & Modal States
+  // Zoom, Modal & Cutaway Inspect States
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [showCutaway, setShowCutaway] = useState<boolean>(false); // Front & Right Cushion Cutaway Inspect Mode
+  const [cushionGhostMode, setCushionGhostMode] = useState<boolean>(false); // Semi-transparent Ghost Cushion Mode
 
   // Parse Outer Box Physical Dimensions (mm)
   const dimMatches = activeBox.specs.match(/(\d+)x(\d+)x(\d+)/);
@@ -143,45 +145,52 @@ export default function BinPacking3DViewer({
     return orientedD;
   })) : 240;
 
-  // Grid Capacity calculation (Columns x Rows fit on Box Floor)
-  const gridColsCap = Math.max(1, Math.floor(boxW / maxBookW));
-  const gridRowsCap = Math.max(1, Math.floor(boxD / maxBookD));
-  const perLayerGridCap = gridColsCap * gridRowsCap;
-  const gridTotalLayers = Math.ceil(sortedBooks.length / perLayerGridCap);
+  const minBookDim = Math.min(maxBookW, maxBookD);
+  const maxBookDim = Math.max(maxBookW, maxBookD);
 
-  // Exact Z-Stacking Height with Grid Multi-Row Arrangement
-  const averageThickness = sortedBooks.length > 0 
-    ? (sortedBooks.reduce((sum, b) => sum + (b.thickness_mm || b.height || 20.0), 0) / sortedBooks.length)
-    : 20.0;
-  const booksTotalH = gridTotalLayers * averageThickness;
+  const [userSelectedCushionId, setUserSelectedCushionId] = useState<string | null>(null);
 
-  // Dynamic AI 3D Physical Bounding Box Containment Cushion Recommendation Engine
-  // Priority 1: Strict Z-Height Test (booksTotalH + Z_thick <= boxH)
-  // Priority 2: Strict 2D XY-Bounding Test (maxBookW + 2*sideThick <= boxW AND maxBookD + 2*sideThick <= boxD)
-  // Priority 3: Maximum Protection Score among physically valid fit cushions
+  // Helper: Calculate actual physical Z-stacking height for a specific cushion option
+  const getStackHeightForCushion = useCallback((cush: typeof cushionCatalog[0]) => {
+    const sThick = (cush.mode === 'side' || cush.mode === 'both') ? cush.thick_mm : 0.0;
+    const zThick = (cush.mode === 'top' || cush.mode === 'both') ? cush.thick_mm : 0.0;
+
+    const inW = Math.max(10, boxW - (2 * sThick));
+    const inD = Math.max(10, boxD - (2 * sThick));
+
+    const c0 = Math.max(1, Math.floor(inW / Math.max(1, minBookDim))) * Math.max(1, Math.floor(inD / Math.max(1, maxBookDim)));
+    const c90 = Math.max(1, Math.floor(inW / Math.max(1, maxBookDim))) * Math.max(1, Math.floor(inD / Math.max(1, minBookDim)));
+    const cap = Math.max(1, Math.max(c0, c90));
+
+    const colH = new Array(cap).fill(0.0);
+    sortedBooks.forEach((b, idx) => {
+      const pos = idx % cap;
+      colH[pos] += (b.thickness_mm || b.height || 20.0);
+    });
+
+    const maxColH = sortedBooks.length > 0 ? Math.max(...colH) : 0.0;
+    return maxColH + zThick;
+  }, [boxW, boxD, minBookDim, maxBookDim, sortedBooks]);
+
+  // Dynamic AI Cushion Recommendation Engine: Exclude cushions that cause height overflow or 1-col stacking overflow!
   const recommendedCushion = React.useMemo(() => {
     const validCushions = cushionCatalog.filter(c => {
-      // 1. Z-Height Containment Test
-      const zThick = (c.mode === 'top' || c.mode === 'both') ? c.thick_mm : 0.0;
-      const isZValid = booksTotalH + zThick <= boxH;
+      const totalH = getStackHeightForCushion(c);
+      const isZValid = totalH <= boxH;
 
-      // 2. 2D XY-Bounding Box Containment Test
-      const sideThick = (c.mode === 'side' || c.mode === 'both') ? c.thick_mm : 0.0;
-      const isXYValid = (maxBookW + (2 * sideThick) <= boxW) && (maxBookD + (2 * sideThick) <= boxD);
+      const sThick = (c.mode === 'side' || c.mode === 'both') ? c.thick_mm : 0.0;
+      const isXYValid = (maxBookW + (2 * sThick) <= boxW) && (maxBookD + (2 * sThick) <= boxD);
 
       return isZValid && isXYValid;
     });
 
     if (validCushions.length > 0) {
-      // Sort physically valid cushions by Protection Score descending
       const sortedValid = [...validCushions].sort((a, b) => b.protection_score - a.protection_score);
       return sortedValid[0];
     }
     // Fallback: Default to thinnest top cushion or standard slim pad if side fit overflows
     return cushionCatalog.find(c => c.id === "CUSH-01") || cushionCatalog[cushionCatalog.length - 1];
-  }, [boxW, boxD, boxH, booksTotalH, maxBookW, maxBookD]);
-
-  const [userSelectedCushionId, setUserSelectedCushionId] = useState<string | null>(null);
+  }, [boxW, boxD, boxH, maxBookW, maxBookD, getStackHeightForCushion]);
 
   // Reset user manual override when books or box change to restore AI recommendation
   useEffect(() => {
@@ -192,11 +201,36 @@ export default function BinPacking3DViewer({
     ? (cushionCatalog.find(c => c.id === userSelectedCushionId) || recommendedCushion)
     : recommendedCushion;
 
-  // Cushion Z-Height
+  // Active Cushion Side Thickness & True Inner Space Calculation
+  const sideThick = (activeCushion.mode === 'side' || activeCushion.mode === 'both') ? activeCushion.thick_mm : 0.0;
+  const innerBoxW = Math.max(10, boxW - (2 * sideThick));
+  const innerBoxD = Math.max(10, boxD - (2 * sideThick));
+
+  // Dynamic Layer Grid Capacity based on TRUE INNER SPACE (innerBoxW & innerBoxD)
+  const cap0Deg = Math.max(1, Math.floor(innerBoxW / Math.max(1, minBookDim))) * Math.max(1, Math.floor(innerBoxD / Math.max(1, maxBookDim)));
+  const cap90Deg = Math.max(1, Math.floor(innerBoxW / Math.max(1, maxBookDim))) * Math.max(1, Math.floor(innerBoxD / Math.max(1, minBookDim)));
+  const perLayerGridCap = Math.max(1, Math.max(cap0Deg, cap90Deg));
+
+  // Column/Row Z-Height Accumulator dynamically recalculated for 1-col vs multi-col stacking!
+  const columnZHeights = React.useMemo(() => {
+    const colHeights = new Array(perLayerGridCap).fill(0.0);
+    sortedBooks.forEach((b, idx) => {
+      const posInLayer = idx % perLayerGridCap;
+      const thickness = b.thickness_mm || b.height || 20.0;
+      colHeights[posInLayer] += thickness;
+    });
+    return colHeights;
+  }, [sortedBooks, perLayerGridCap]);
+
+  const maxColumnZHeight = sortedBooks.length > 0 ? Math.max(...columnZHeights) : 0.0;
+  const booksTotalH = maxColumnZHeight;
+
+  // Cushion Z-Height & AirPad Height Alias
   const cushionZHeight = (activeCushion.mode === 'top' || activeCushion.mode === 'both') ? activeCushion.thick_mm : 0;
   const airPad_H = activeCushion.thick_mm;
 
-  const totalStackH = booksTotalH + cushionZHeight; // Exact Z-Height
+  // Physical Maximum Z-Height Fill Ratio (Calculated based on the TRUE inner-space stack height)
+  const totalStackH = booksTotalH + cushionZHeight;
   const heightFillRatio = round((totalStackH / boxH) * 100, 1);
 
   // Dynamic Volume Metric Calculation with Oriented Dimensions
@@ -222,6 +256,11 @@ export default function BinPacking3DViewer({
   const totalStackVol = booksTotalVol + topCushionVol + sideGuardVol;
   const totalBoxVol = boxW * boxD * boxH;
   const volumeFillRatio = sortedBooks.length > 0 ? round((totalStackVol / totalBoxVol) * 100, 1) : 0;
+
+  // ESG Environmental Over-Packaging Diagnosis Engine (User Directive)
+  const totalCushionVol = topCushionVol + sideGuardVol;
+  const cushionVolRatio = totalBoxVol > 0 ? round((totalCushionVol / totalBoxVol) * 100, 1) : 0;
+  const isOverpackaged = (cushionThick >= 25.0) || (cushionVolRatio >= 18.0) || (volumeFillRatio < 40.0 && cushionThick >= 20.0);
 
   function round(val: number, decimals: number) {
     const factor = Math.pow(10, decimals);
@@ -403,26 +442,7 @@ export default function BinPacking3DViewer({
     ctx.fill();
     ctx.stroke();
 
-    // 2. Side Protective Cushion Guards
-    const sideGuardThick = activeCushion.thick_mm;
-    const stackTotalH = booksTotalH + (activeCushion.mode !== 'side' ? airPad_H : 0);
-
-    if (activeCushion.mode === 'side' || activeCushion.mode === 'both') {
-      drawCuboid(
-        -maxBookW / 2 - sideGuardThick / 2, 0, 0,
-        sideGuardThick, maxBookD, stackTotalH,
-        'rgba(6, 182, 212, 0.35)', 'rgba(14, 116, 144, 0.75)',
-        'rgba(34, 211, 238, 0.45)', 'rgba(8, 145, 178, 0.4)'
-      );
-      drawCuboid(
-        maxBookW / 2 + sideGuardThick / 2, 0, 0,
-        sideGuardThick, maxBookD, stackTotalH,
-        'rgba(6, 182, 212, 0.35)', 'rgba(14, 116, 144, 0.75)',
-        'rgba(34, 211, 238, 0.45)', 'rgba(8, 145, 178, 0.4)'
-      );
-    }
-
-    // 3. DYNAMIC MULTI-ROW / MULTI-COLUMN GRID 3D STACKING ARRANGEMENT
+    // 2. DYNAMIC MULTI-ROW / MULTI-COLUMN GRID 3D STACKING ARRANGEMENT
     const colorPalettes = [
       { fill: 'rgba(147, 51, 234, 0.9)', stroke: 'rgba(107, 33, 168, 0.95)', top: 'rgba(168, 85, 247, 0.95)', side: 'rgba(126, 34, 206, 0.92)' }, // Purple (Bottom/Heavy)
       { fill: 'rgba(16, 185, 129, 0.9)', stroke: 'rgba(6, 95, 70, 0.95)', top: 'rgba(52, 211, 153, 0.95)', side: 'rgba(4, 120, 87, 0.92)' },    // Emerald
@@ -431,81 +451,161 @@ export default function BinPacking3DViewer({
     ];
 
     const sampleBook = sortedBooks[0];
-    const sampleW = sampleBook ? (sampleBook.width_mm || sampleBook.width || 185.0) : 185.0;
-    const sampleD = sampleBook ? (sampleBook.depth_mm || sampleBook.depth || 257.0) : 257.0;
-    const { orientedW: sW, orientedD: sD } = getOrientedBookDimensions(sampleW, sampleD);
+    const rawSampleW = sampleBook ? (sampleBook.width_mm || sampleBook.width || 185.0) : 185.0;
+    const rawSampleD = sampleBook ? (sampleBook.depth_mm || sampleBook.depth || 257.0) : 257.0;
 
     const sideThick = (activeCushion.mode === 'side' || activeCushion.mode === 'both') ? activeCushion.thick_mm : 0.0;
-    const availW = Math.max(sW, boxW - (2 * sideThick));
-    const availD = Math.max(sD, boxD - (2 * sideThick));
+    const innerBoxW = Math.max(10, boxW - (2 * sideThick));
+    const innerBoxD = Math.max(10, boxD - (2 * sideThick));
 
-    const horizCols = Math.max(1, Math.floor(availW / sW));
-    const horizRows = Math.max(1, Math.floor(availD / sD));
-    const horizPerLayer = horizCols * horizRows;
+    // Smart Box-Fit 90° Orientation Check: Test both 0° normal placement vs 90° rotated placement
+    const fitsNormal = (rawSampleW <= innerBoxW) && (rawSampleD <= innerBoxD);
+    const fitsRotated = (rawSampleD <= innerBoxW) && (rawSampleW <= innerBoxD);
 
-    // 1. Calculate Maximum Thickness per Layer to prevent mesh floating or overlapping
-    const numLayers = Math.ceil(sortedBooks.length / horizPerLayer);
-    const layerMaxThick: number[] = new Array(numLayers).fill(0.0);
+    const colsNormal = Math.max(1, Math.floor(innerBoxW / rawSampleW));
+    const rowsNormal = Math.max(1, Math.floor(innerBoxD / rawSampleD));
+    const perLayerNormal = colsNormal * rowsNormal;
 
-    sortedBooks.forEach((book, idx) => {
-      const bH = book.thickness_mm || book.height || 20.0;
-      const layerIdx = Math.floor(idx / horizPerLayer);
-      layerMaxThick[layerIdx] = Math.max(layerMaxThick[layerIdx], bH);
-    });
+    const colsRotated = Math.max(1, Math.floor(innerBoxW / rawSampleD));
+    const rowsRotated = Math.max(1, Math.floor(innerBoxD / rawSampleW));
+    const perLayerRotated = colsRotated * rowsRotated;
 
-    // 2. Calculate Base Y-coordinate for each Layer
-    const layerBaseY: number[] = new Array(numLayers).fill(0.0);
-    let accumY = 0.0;
-    for (let l = 0; l < numLayers; l++) {
-      layerBaseY[l] = accumY;
-      accumY += layerMaxThick[l];
+    // Pick 90° rotation if 90° fits inside box while 0° overflows, or if perLayerRotated is superior!
+    let shouldRotate90 = false;
+    if (fitsRotated && !fitsNormal) {
+      shouldRotate90 = true; // Essential 90° rotation to fit inside box dimensions!
+    } else if (perLayerRotated > perLayerNormal) {
+      shouldRotate90 = true;
+    } else if (!fitsNormal && (rawSampleD > innerBoxD)) {
+      shouldRotate90 = true;
     }
 
-    let maxGridZHeight = accumY;
+    const horizCols = shouldRotate90 ? colsRotated : colsNormal;
+    const horizRows = shouldRotate90 ? rowsRotated : rowsNormal;
+    const horizPerLayer = Math.max(1, horizCols * horizRows);
 
-    // 3. Render Books in Accurate Horizontal Flat Grid with Number Markings
+    const orientedBookW = shouldRotate90 ? rawSampleD : rawSampleW;
+    const orientedBookD = shouldRotate90 ? rawSampleW : rawSampleD;
+
+    const sW = orientedBookW;
+    const sD = orientedBookD;
+
+    // Independent Column/Row Z-Height Accumulator for Zero-Overlap Multi-Column Grid Stacking
+    const colRowAccumY = new Array(horizCols).fill(0).map(() => new Array(horizRows).fill(0.0));
+    let overallMaxZHeight = 0.0;
+
+    // Render Books in Height-Balanced Multi-Column Flat Grid with Number Markings
     sortedBooks.forEach((book, idx) => {
-      const rawW = book.width_mm || book.width || 185.0;
-      const rawD = book.depth_mm || book.depth || 257.0;
-      const { orientedW, orientedD } = getOrientedBookDimensions(rawW, rawD);
       const bH = book.thickness_mm || book.height || 20.0;
       const palette = colorPalettes[idx % colorPalettes.length];
 
-      const layerIdx = Math.floor(idx / horizPerLayer);
-      const posInLayer = idx % horizPerLayer;
-      const col = posInLayer % horizCols;
-      const row = Math.floor(posInLayer / horizCols);
+      // Greedy Minimum-Height Column/Row Selection for Perfect Level Height Balance
+      let targetCol = 0;
+      let targetRow = 0;
+      let minAccumH = Infinity;
 
-      const gridX = -(horizCols - 1) * (orientedW / 2) + (col * orientedW);
-      const gridZ = -(horizRows - 1) * (orientedD / 2) + (row * orientedD);
-      const gridY = layerBaseY[layerIdx];
+      for (let c = 0; c < horizCols; c++) {
+        for (let r = 0; r < horizRows; r++) {
+          if (colRowAccumY[c][r] < minAccumH) {
+            minAccumH = colRowAccumY[c][r];
+            targetCol = c;
+            targetRow = r;
+          }
+        }
+      }
+
+      const col = targetCol;
+      const row = targetRow;
+
+      // Calculate X and Z-Depth Grid Center Offsets accurately within Inner Box Space
+      const startX = -((horizCols - 1) * orientedBookW) / 2;
+      const startZ = -((horizRows - 1) * orientedBookD) / 2;
+
+      const gridX = horizCols === 1 ? 0 : (startX + col * orientedBookW);
+      const gridZ = horizRows === 1 ? 0 : (startZ + row * orientedBookD);
+      const gridY = colRowAccumY[col][row];
+
+      // Advance height for this specific column/row stack
+      colRowAccumY[col][row] += bH;
+      overallMaxZHeight = Math.max(overallMaxZHeight, colRowAccumY[col][row]);
 
       const shortName = book.title ? (book.title.length > 8 ? book.title.slice(0, 7) + '..' : book.title) : `도서`;
       const markLabel = `#${idx + 1} ${shortName}`;
 
       drawCuboid(
         gridX, gridY, gridZ,
-        orientedW, orientedD, bH,
+        orientedBookW, orientedBookD, bH,
         palette.fill, palette.stroke, palette.top, palette.side,
         markLabel
       );
     });
 
-    const currentY = maxGridZHeight;
+    const stackTotalH = Math.max(20, overallMaxZHeight);
+    const sideGuardThick = activeCushion.thick_mm;
+    const stackBoundingW = Math.min(Math.max(20, boxW - 2 * sideGuardThick), horizCols * sW);
+    const stackBoundingD = Math.min(Math.max(20, boxD - 2 * sideGuardThick), horizRows * sD);
 
-    // 4. Top Cushion Layer
-    if (activeCushion.mode === 'top' || activeCushion.mode === 'both') {
+    // 3. Render Full 4-Sides Protective Side Wrapping Cushions with Cutaway & See-Through Translucent Modes
+
+    // See-Through Glass Opacity: Ultra-transparent (0.10) when showCutaway is TRUE so back/side books are 100% visible
+    const cColor = showCutaway
+      ? 'rgba(147, 51, 234, 0.10)' 
+      : (cushionGhostMode ? 'rgba(99, 102, 241, 0.15)' : activeCushion.color);
+    const cStroke = showCutaway
+      ? 'rgba(126, 34, 206, 0.5)'
+      : (cushionGhostMode ? 'rgba(79, 70, 229, 0.4)' : activeCushion.stroke);
+
+    if (activeCushion.mode === 'side' || activeCushion.mode === 'both') {
+      // Left Side Cushion Guard (Always Visible with Ultra-translucent glass fill)
       drawCuboid(
-        0, currentY, 0,
-        Math.min(boxW * 0.95, horizCols * sW * 1.02), Math.min(boxD * 0.95, horizRows * sD * 1.02), airPad_H,
-        activeCushion.color,
-        activeCushion.stroke,
-        activeCushion.color,
-        activeCushion.stroke
+        -stackBoundingW / 2 - sideGuardThick / 2, 0, 0,
+        sideGuardThick, stackBoundingD + 2 * sideGuardThick, stackTotalH,
+        cColor, cStroke, cColor, cStroke,
+        showCutaway ? '' : `좌측 래핑 (${sideGuardThick}mm)`
+      );
+
+      // Back Side Cushion Guard (Always Visible with Ultra-translucent glass fill)
+      drawCuboid(
+        0, 0, -stackBoundingD / 2 - sideGuardThick / 2,
+        stackBoundingW, sideGuardThick, stackTotalH,
+        cColor, cStroke, cColor, cStroke,
+        showCutaway ? '' : `후면 래핑 (${sideGuardThick}mm)`
+      );
+
+      // Right & Front Side Cushion Guards (Hidden when showCutaway is TRUE for Clear Unobstructed Book Stack View)
+      if (!showCutaway) {
+        // Right Side Cushion Guard
+        drawCuboid(
+          stackBoundingW / 2 + sideGuardThick / 2, 0, 0,
+          sideGuardThick, stackBoundingD + 2 * sideGuardThick, stackTotalH,
+          cColor, cStroke, cColor, cStroke,
+          `우측 래핑 (${sideGuardThick}mm)`
+        );
+        // Front Side Cushion Guard
+        drawCuboid(
+          0, 0, stackBoundingD / 2 + sideGuardThick / 2,
+          stackBoundingW, sideGuardThick, stackTotalH,
+          cColor, cStroke, cColor, cStroke,
+          `전면 래핑 (${sideGuardThick}mm)`
+        );
+      }
+    }
+
+    // 4. Render Top Protective Cushion Layer (See-through when cutaway is active)
+    if (activeCushion.mode === 'top' || activeCushion.mode === 'both') {
+      const topColor = showCutaway ? 'rgba(245, 158, 11, 0.08)' : cColor;
+      const topStroke = showCutaway ? 'rgba(217, 119, 6, 0.4)' : cStroke;
+      drawCuboid(
+        0, stackTotalH, 0,
+        stackBoundingW + 2 * (activeCushion.mode === 'both' ? sideGuardThick : 0),
+        stackBoundingD + 2 * (activeCushion.mode === 'both' ? sideGuardThick : 0),
+        airPad_H,
+        topColor, topStroke, topColor, topStroke,
+        showCutaway ? '' : `상단 완충패딩 (${airPad_H}mm)`
       );
     }
 
-  }, [rotX, rotY, boxW, boxD, boxH, zoomLevel, userSelectedCushionId, activeCushion, sortedBooks, booksTotalH, maxBookW, maxBookD, airPad_H]);
+  }, [rotX, rotY, boxW, boxD, boxH, zoomLevel, userSelectedCushionId, activeCushion, sortedBooks, booksTotalH, maxBookW, maxBookD, airPad_H, showCutaway, cushionGhostMode]);
 
   useEffect(() => {
     if (canvasRef.current) {
@@ -563,8 +663,8 @@ export default function BinPacking3DViewer({
           </div>
         </div>
 
-        {/* View Preset & Zoom Control Group */}
-        <div className="flex items-center gap-2">
+        {/* View Preset, Cutaway Inspect & Zoom Control Group */}
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
             <button
               onClick={() => { setRotX(25); setRotY(-35); setAutoRotate(false); }}
@@ -583,6 +683,20 @@ export default function BinPacking3DViewer({
               평면 Top
             </button>
           </div>
+
+          {/* User Feature Directive: Cutaway Inspection Toggle Button (Removes Front & Right Cushions) */}
+          <button
+            onClick={() => setShowCutaway(!showCutaway)}
+            className={`px-2.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1 border ${
+              showCutaway 
+                ? 'bg-amber-500 text-white border-amber-600 shadow-xs animate-pulse' 
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-700'
+            }`}
+            title="전면 및 우측 완충 가드를 제거하여 내부 도서 적재 단면 정밀 검증"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>{showCutaway ? '✂️ 단면 투시 (전·우 제거됨)' : '👁️ 4면 전체 보기'}</span>
+          </button>
 
           <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
             <button onClick={() => setZoomLevel((prev) => Math.max(0.2, prev - 0.1))} title="축소" className="p-1.5 text-gray-600 dark:text-gray-400 hover:text-indigo-600 transition cursor-pointer">
@@ -606,13 +720,13 @@ export default function BinPacking3DViewer({
         </div>
       </div>
 
-      {/* Real 3D HTML5 Canvas Viewport with Expanded Height (h-96 / 400px) */}
+      {/* Real 3D HTML5 Canvas Viewport with Cool Indigo-Blue Tinted Light Background (h-96 / 400px) */}
       <div
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={() => setIsDragging(false)}
         onMouseLeave={() => setIsDragging(false)}
-        className="h-96 w-full bg-indigo-50/60 dark:bg-slate-900 rounded-2xl border border-indigo-100 dark:border-gray-800 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-inner"
+        className="h-96 w-full bg-gradient-to-br from-indigo-50/80 via-blue-50/50 to-slate-100/70 dark:from-slate-900 dark:via-slate-900 dark:to-gray-900 rounded-2xl border-2 border-indigo-200/80 dark:border-indigo-900/60 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-inner"
       >
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(99,102,241,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.08)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
 
@@ -655,15 +769,33 @@ export default function BinPacking3DViewer({
         </button>
       </div>
 
-      {/* Cushion Selector Catalog */}
+      {/* Cushion Selector Catalog & Over-Packaging Alert Banner */}
       <div className="bg-gray-50/80 dark:bg-gray-800/40 p-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
+        {/* User Directive: ESG Over-Packaging Risk Diagnostic Alert Banner */}
+        {isOverpackaged && (
+          <div className="bg-amber-50 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-700 p-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300 font-bold font-mono">
+              <span className="px-2 py-0.5 bg-amber-500 text-white rounded text-[10px] uppercase font-black animate-pulse">
+                ⚠️ ESG 과대포장 경고
+              </span>
+              <span>완충재 부피 점유율 {cushionVolRatio}% ({cushionThick}mm 완충재 과다 적용 위험!)</span>
+            </div>
+            <button
+              onClick={() => setUserSelectedCushionId("CUSH-01")}
+              className="text-[11px] font-bold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-white underline cursor-pointer font-mono"
+            >
+              👉 9mm 에어필로우 슬림패드로 과대포장 완화
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <span className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5 leading-tight">
             <Package className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-            <span className="break-keep">AI 스마트 도서 완충재 추천 (유격 & 쏠림 방지)</span>
+            <span className="break-keep">스마트 도서 완충재 추천 (유격 & 쏠림 방지)</span>
           </span>
           <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 font-bold bg-emerald-50 dark:bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 shrink-0 w-fit whitespace-nowrap">
-            선택: [{activeCushion.mode === 'top' ? '상단채움' : activeCushion.mode === 'side' ? '측면둘기' : '전방위래핑'}] {activeCushion.name} ({activeCushion.thick})
+            선택: [{activeCushion.mode === 'top' ? '상단 완충' : activeCushion.mode === 'side' ? '4면 측면 래핑' : '전방위 3D 래핑'}] {activeCushion.name} ({activeCushion.thick})
           </span>
         </div>
 
@@ -684,7 +816,7 @@ export default function BinPacking3DViewer({
                 <div className="flex items-start justify-between gap-0.5 min-w-0">
                   <span className="font-black text-[10px] sm:text-[11px] text-gray-900 dark:text-white leading-tight break-keep">{cush.name}</span>
                   {isAiRecommended && (
-                    <span className="text-[8px] font-extrabold bg-emerald-500 text-white px-1 py-0.5 rounded shrink-0 shadow-2xs">AI추천</span>
+                    <span className="text-[9px] font-extrabold bg-emerald-500 text-white px-1.5 py-0.5 rounded shrink-0 shadow-2xs animate-pulse">추천</span>
                   )}
                 </div>
                 <p className="text-[9px] sm:text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-bold pt-1 whitespace-nowrap overflow-hidden text-ellipsis">
@@ -798,54 +930,145 @@ export default function BinPacking3DViewer({
 
       {/* Real 3D Fullscreen Inspection Modal Dialog */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl w-full max-w-4xl p-6 shadow-2xl space-y-4 relative">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-800">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-600 text-white rounded-2xl shadow-sm">
-                  <PackageCheck className="w-6 h-6" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl w-full max-w-5xl p-6 shadow-2xl space-y-4 relative overflow-hidden">
+            {/* Modal Header matching main card 100% */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-800 gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-bold font-mono flex items-center gap-1">
+                    <Box className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Real 3D Bin Packing 시뮬레이터 (풀스크린 정밀 관제)
+                  </span>
                 </div>
-                <div>
-                  <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    <span>3D Bin Packing 풀스크린 정밀 관제</span>
-                    <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded text-xs font-mono font-bold">
-                      {activeBox.name} ({boxW}×{boxD}×{boxH}mm)
-                    </span>
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                    360° 마우스 드래그 자유 회전 및 층별 메쉬 레이어 마킹
-                  </p>
-                </div>
+                <h3 className="text-base font-extrabold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
+                  <span>적용 피킹 정렬: {sortedBooks.length}권 적재 상세</span>
+                  <span className="font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold">
+                    ({boxW}W × {boxD}D × {boxH}H mm)
+                  </span>
+                </h3>
               </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+                  title="풀스크린 관제 닫기"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
             </div>
 
+            {/* 3D Viewport Controls Bar matching main card 100% (Light Mode White Theme) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-gray-100 dark:bg-gray-800/80 rounded-2xl border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white text-xs font-bold font-mono">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => { setRotX(25); setRotY(-35); setAutoRotate(false); }}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-extrabold shadow-xs transition flex items-center gap-1 cursor-pointer"
+                >
+                  <Box className="w-3.5 h-3.5" /> 입체 3D
+                </button>
+                <button
+                  onClick={() => { setRotX(85); setRotY(0); setAutoRotate(false); }}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 transition flex items-center gap-1 cursor-pointer"
+                >
+                  <Layers className="w-3.5 h-3.5" /> 평면 Top
+                </button>
+                <button
+                  onClick={() => { setRotX(5); setRotY(0); setAutoRotate(false); }}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 transition flex items-center gap-1 cursor-pointer"
+                >
+                  <BookOpen className="w-3.5 h-3.5" /> 정면
+                </button>
+                <button
+                  onClick={() => { setRotX(5); setRotY(90); setAutoRotate(false); }}
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 transition flex items-center gap-1 cursor-pointer"
+                >
+                  <BookOpen className="w-3.5 h-3.5" /> 측면
+                </button>
+                {/* User Directive: Cutaway Inspection Toggle Button in Fullscreen Modal */}
+                <button
+                  onClick={() => setShowCutaway(!showCutaway)}
+                  className={`px-3 py-1.5 rounded-lg border transition flex items-center gap-1 cursor-pointer ${
+                    showCutaway 
+                      ? 'bg-amber-500 text-white border-amber-600 font-bold shadow-xs' 
+                      : 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-100'
+                  }`}
+                  title="전면 및 우측 완충 가드를 제거하여 내부 도서 적재 단면 정밀 검증"
+                >
+                  <Eye className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" /> ✂️ 단면 투시 (전·우 제거)
+                </button>
+                <button
+                  onClick={() => setAutoRotate(!autoRotate)}
+                  className={`px-3 py-1.5 rounded-lg border transition flex items-center gap-1 cursor-pointer ${
+                    autoRotate 
+                      ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 font-bold' 
+                      : 'bg-white dark:bg-gray-700 text-gray-500 border-gray-200 dark:border-gray-600'
+                  }`}
+                >
+                  <RotateCw className={`w-3.5 h-3.5 ${autoRotate ? 'animate-spin' : ''}`} /> 
+                  360° {autoRotate ? '회전' : '정지'}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setZoomLevel(prev => Math.min(2.5, prev + 0.2))}
+                  className="p-1.5 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 transition cursor-pointer"
+                  title="확대 (Zoom In)"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <span className="px-2 font-mono text-indigo-600 dark:text-indigo-400 font-bold">{Math.round(zoomLevel * 100)}%</span>
+                <button
+                  onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.2))}
+                  className="p-1.5 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 transition cursor-pointer"
+                  title="축소 (Zoom Out)"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => { setZoomLevel(1.0); setRotX(25); setRotY(-35); }}
+                  className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-gray-700 text-xs text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 transition cursor-pointer ml-1"
+                  title="시점/줌 리셋"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 3D Canvas Drag Container matching main card 100% (Cool Indigo-Blue Tinted Light Theme) */}
             <div
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={() => setIsDragging(false)}
               onMouseLeave={() => setIsDragging(false)}
-              className="h-[460px] w-full bg-slate-950 rounded-2xl border border-gray-800 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-inner"
+              className="h-[520px] w-full bg-gradient-to-br from-indigo-50/80 via-blue-50/50 to-slate-100/70 dark:from-slate-900 dark:via-slate-900 dark:to-gray-900 rounded-2xl border-2 border-indigo-200/80 dark:border-indigo-900/60 relative flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-inner"
             >
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(99,102,241,0.1)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.1)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
-              <canvas ref={modalCanvasRef} width={800} height={460} className="w-full h-full object-contain" />
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(99,102,241,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.06)_1px,transparent_1px)] bg-[size:28px_28px] pointer-events-none" />
+              <canvas ref={modalCanvasRef} width={900} height={520} className="w-full h-full object-contain" />
               
-              <div className="absolute bottom-4 left-4 bg-gray-900/90 border border-gray-700 text-white px-4 py-2 rounded-xl text-xs font-mono backdrop-blur-md shadow-md">
-                <span>📏 높이 적재율: <b className="text-emerald-400 font-bold">{heightFillRatio}%</b> | 📦 3D 부피 적재율: <b className="text-indigo-400 font-bold">{volumeFillRatio}%</b></span>
+              <div className="absolute bottom-4 left-4 bg-white/95 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 px-4 py-2 rounded-xl text-xs font-mono backdrop-blur-md shadow-md flex items-center gap-3">
+                <span className="flex items-center gap-1 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  높이 적재율: <b className="text-emerald-600 dark:text-emerald-400 font-extrabold">{heightFillRatio}%</b>
+                </span>
+                <span className="text-gray-300 dark:text-gray-600">|</span>
+                <span className="flex items-center gap-1 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                  3D 부피 적재율: <b className="text-indigo-600 dark:text-indigo-400 font-extrabold">{volumeFillRatio}%</b>
+                </span>
+                <span className="text-gray-300 dark:text-gray-600">|</span>
+                <span className="text-gray-500 dark:text-gray-400 font-bold">🖱️ 360° 마우스 드래그 회전 가능</span>
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 dark:border-gray-800">
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-bold rounded-xl transition cursor-pointer"
+                className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-md"
               >
-                닫기
+                관제 닫기
               </button>
             </div>
           </div>

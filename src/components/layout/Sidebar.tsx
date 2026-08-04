@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAtomValue } from 'jotai';
-import { userAtom } from '@/stores/auth';
+import { currentUserAtom } from '@/features/auth/store/authAtoms';
 import { 
   LayoutDashboard, 
   Camera, 
@@ -43,7 +43,7 @@ const WORKER_MENU_GROUPS: MenuGroup[] = [
   {
     title: '👷 현장 작업자 전용 메뉴',
     items: [
-      { name: '현장 반품 검수 (카메라)', href: '/inbound', icon: Camera },
+      { name: '도서 입고 검수 (카메라)', href: '/inbound', icon: Camera },
       { name: '나의 검수 내역 (Worker)', href: '/worker/inspections', icon: ShieldCheck },
       { name: '출고 피킹 스캐너 (Worker)', href: '/worker/outbound', icon: Truck },
       { name: '현장 재고 조회 (Worker)', href: '/worker/inventory', icon: PackageSearch },
@@ -62,7 +62,7 @@ function getMenuGroups(hitlPendingCount: number): MenuGroup[] {
     {
       title: '📥 입고 & AI 검수 파이프라인',
       items: [
-        { name: '현장 반품 검수 (카메라)', href: '/inbound', icon: Camera },
+        { name: '도서 입고 검수 (카메라)', href: '/inbound', icon: Camera },
         { name: '나의 검수 내역 (Worker)', href: '/worker/inspections', icon: ShieldCheck },
         { name: '승인 대기 (HITL)', href: '/admin/hitl', icon: ShoppingCart, badge: hitlPendingCount > 0 ? String(hitlPendingCount) : undefined },
         { name: '검수 처리 내역 (전체)', href: '/admin/inspections', icon: FileCheck },
@@ -73,6 +73,7 @@ function getMenuGroups(hitlPendingCount: number): MenuGroup[] {
       items: [
         { name: '재고 현황 관리 (Master)', href: '/admin/inventory', icon: PackageSearch },
         { name: '현장 재고 조회 (Worker)', href: '/worker/inventory', icon: PackageSearch },
+        { name: '주문 & AI 피킹 지시서', href: '/admin/orders', icon: ShoppingCart },
         { name: '출고 최적화 및 송장 발급', href: '/admin/outbound', icon: Truck },
         { name: '출고 피킹 스캐너 (Worker)', href: '/worker/outbound', icon: Truck },
       ],
@@ -97,7 +98,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false); // Mobile Drawer State
   const [isCollapsed, setIsCollapsed] = useState(false); // Desktop Collapsed State
-  const user = useAtomValue(userAtom);
+  const user = useAtomValue(currentUserAtom);
   const [hitlCount, setHitlCount] = useState<number>(0);
 
   // 5초 간격으로 백엔드 HITL 수동 검수 대기열 조회
@@ -190,7 +191,7 @@ export default function Sidebar() {
                     <span className="text-gray-900 dark:text-white">Nexus</span>
                     <span className="text-blue-600 dark:text-blue-400">WMS</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono font-bold mt-0.5">Enterprise v2.6.0</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono font-bold mt-0.5">Enterprise v2.10.0.0</span>
                 </div>
               </div>
               <button
@@ -299,12 +300,12 @@ export default function Sidebar() {
         <div className="p-3.5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-850 transition-colors">
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
             <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-black text-sm font-mono shadow-2xs shrink-0">
-              {user?.employee_id ? user.employee_id.slice(0, 2) : 'WM'}
+              {user?.employeeId ? user.employeeId.slice(0, 2) : 'WM'}
             </div>
             {!isCollapsed && (
               <div className="flex flex-col min-w-0 flex-1">
                 <p className="text-sm font-black text-gray-900 dark:text-white truncate">
-                  {user ? (user.name || user.employee_id) : '로그인 필요'}
+                  {user ? (user.name || user.employeeId) : '로그인 필요'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-mono font-bold truncate">
                   {user ? user.role : 'GUEST'}

@@ -8,35 +8,30 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'ISBN is required' }, { status: 400 });
   }
 
-  const TTB_KEY = process.env.ALADIN_TTB_KEY;
-
-  if (!TTB_KEY) {
-    return NextResponse.json({ error: 'ALADIN_TTB_KEY is not configured in .env.local' }, { status: 500 });
-  }
-
   try {
-    const url = `http://www.aladin.co.kr/ttb/api/ItemLookUp.aspx?ttbkey=${TTB_KEY}&itemIdType=ISBN13&ItemId=${isbn}&output=js&Version=20131101`;
-    const response = await fetch(url);
-    const data = await response.json();
-
-    if (data.item && data.item.length > 0) {
-      const book = data.item[0];
+    // 100% Zero Key Exposure: Delegate to FastAPI backend proxy endpoint
+    const backendUrl = `http://localhost:8000/api/v1/inbound/isbn-lookup?isbn=${isbn}`;
+    const response = await fetch(backendUrl, { cache: 'no-store' });
+    
+    if (response.ok) {
+      const data = await response.json();
       return NextResponse.json({
-        isbn: book.isbn13 || isbn,
-        title: book.title,
-        author: book.author,
-        publisher: book.publisher,
-        pubDate: book.pubDate,
-        price: book.priceStandard,
-        imageUrl: book.cover,
-        description: book.description,
-        categoryName: book.categoryName,
+        isbn: data.isbn || isbn,
+        title: data.title,
+        author: data.author,
+        publisher: data.publisher,
+        pubDate: data.pubDate,
+        price: data.price,
+        imageUrl: data.imageUrl,
+        description: data.description,
+        categoryName: data.categoryName,
+        source: data.source
       });
     } else {
-      return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Book not found from backend proxy' }, { status: 404 });
     }
   } catch (error: any) {
-    console.error("Aladin API fetch error:", error);
+    console.error("Backend Proxy ISBN lookup error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
