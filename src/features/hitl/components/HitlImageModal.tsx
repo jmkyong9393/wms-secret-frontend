@@ -48,18 +48,59 @@ function bboxesForIndex(rawList: any[], idx: number, imageUrl: string): any[] {
 export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [showOverlay, setShowOverlay] = useState(true);
+  // WBF YOLO 사전탐지 후보 레이어. Vision 확정 결함과 별도로 껐다 켠다 - 결재자가
+  // "AI가 무엇을 보고 무엇을 기각했는지"까지 대조해야 판단이 빨라지기 때문.
+  const [showYolo, setShowYolo] = useState(false);
+  // [2026-08-05] 서빙 conf는 VLM 힌트용으로 의도적으로 낮다(0.12~0.25). 그 원시 후보를
+  // 전부 그리면 저신뢰 오탐이 화면을 뒤덮어 결재자의 모델 신뢰를 깎으므로, 표시 기본값은
+  // conf 0.4 이상으로 제한하고 저신뢰 대역은 별도 토글로만 연다 (데이터는 그대로 보존).
+  const [showLowConfYolo, setShowLowConfYolo] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+  // Vision Agent가 "도서 미식별"로 판정한 컷은 기본으로 숨긴다 (증거 보존을 위해 토글로 열람 가능)
+  const [hideInvalid, setHideInvalid] = useState(true);
 
   if (!task) return null;
 
   const images = task.image_urls && task.image_urls.length > 0 ? task.image_urls : [];
-  const currentImageUrl = images[currentIdx] || "";
-
   const rawList: any[] = task.agent_logs?.defect_coordinates || [];
-  const currentBBoxes = bboxesForIndex(rawList, currentIdx, currentImageUrl);
   const logs: Record<string, any> = task.agent_logs || {};
   const agentEntries = AGENT_LOG_STEPS.filter((s) => typeof logs[s.key] === "string" && logs[s.key].trim().length > 0);
+
+  // [2026-08-04 조장 승인 확장] Vision Agent(GPT-4o) 산출 invalid_image_indexes —
+  // 도서가 식별되지 않는 촬영 컷(얼굴만 찍힘, 빈 배경 등)의 자동 필터링 근거
+  const invalidSet = new Set<number>(
+    (Array.isArray(logs.invalid_image_indexes) ? logs.invalid_image_indexes : [])
+      .map(Number)
+      .filter((n: number) => Number.isInteger(n) && n >= 0 && n < images.length)
+  );
+  const allIdx = images.map((_, i) => i);
+  const filteredIdx = hideInvalid ? allIdx.filter((i) => !invalidSet.has(i)) : allIdx;
+  // 전 컷이 미식별이면 숨길 수 없으므로 전체를 보여준다
+  const shownIdx = filteredIdx.length > 0 ? filteredIdx : allIdx;
+  const effIdx = shownIdx.includes(currentIdx) ? currentIdx : (shownIdx[0] ?? 0);
+  const currentImageUrl = images[effIdx] || "";
+  const currentBBoxes = bboxesForIndex(rawList, effIdx, currentImageUrl);
+  const navPos = shownIdx.indexOf(effIdx);
+
+  // WBF 3-YOLO 앙상블 사전탐지 후보 (Vision이 채택하지 않은 것도 포함)
+  const YOLO_DISPLAY_CONF = 0.4;
+  const yoloCandidates: any[] = Array.isArray(logs.yolo_candidates) ? logs.yolo_candidates : [];
+  const allYoloBoxes = yoloCandidates
+    .filter((c) => Number(c?.image_index ?? 0) === effIdx && c?.bbox)
+    .map((c) => ({
+      xmin: c.bbox.xmin,
+      ymin: c.bbox.ymin,
+      xmax: c.bbox.xmax,
+      ymax: c.bbox.ymax,
+      coord_space: 1000,
+      type: c.type,
+      label: c.type || "YOLO 후보",
+      confidence: c.confidence,
+      isLowConf: typeof c.confidence === "number" && c.confidence < YOLO_DISPLAY_CONF,
+    }));
+  const lowConfCount = allYoloBoxes.filter((b) => b.isLowConf).length;
+  const currentYoloBoxes = showLowConfYolo ? allYoloBoxes : allYoloBoxes.filter((b) => !b.isLowConf);
 
   return (
     <>
@@ -105,6 +146,28 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                 <Eye className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
                 {showOverlay ? "AI 결함 영역 숨기기" : "AI 결함 영역 표시"}
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={yoloCandidates.length === 0}
+                className="text-xs font-semibold"
+                onClick={() => setShowYolo(!showYolo)}
+                title="WBF 3-YOLO 앙상블 사전탐지 후보 (Vision이 채택하지 않은 것 포함)"
+              >
+                <ScanSearch className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+                YOLO 후보 {yoloCandidates.length}건 {showYolo ? "숨기기" : "보기"}
+              </Button>
+              {showYolo && lowConfCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs font-semibold text-gray-500"
+                  onClick={() => setShowLowConfYolo(!showLowConfYolo)}
+                  title={`신뢰도 ${Math.round(YOLO_DISPLAY_CONF * 100)}% 미만의 고재현율(High-Recall) 원시 후보 - VLM 힌트용이라 오탐이 많음`}
+                >
+                  저신뢰 {lowConfCount}건 {showLowConfYolo ? "숨기기" : "표시"}
+                </Button>
+              )}
               <button
                 onClick={onClose}
                 className="p-1.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-colors"
@@ -126,7 +189,7 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
               >
                 <img
                   src={currentImageUrl}
-                  alt={`defect-${currentIdx}`}
+                  alt={`defect-${effIdx}`}
                   onError={() => setImgError(true)}
                   className="max-w-full max-h-[65vh] w-auto h-auto object-contain rounded shadow-lg group-hover:opacity-95 transition-opacity block"
                 />
@@ -141,11 +204,19 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                     return (
                       <div
                         key={`y-${idx}`}
-                        className="absolute border-2 border-dashed border-amber-400 bg-amber-400/10 rounded pointer-events-none z-10"
+                        className={`absolute border-2 border-dashed rounded pointer-events-none z-10 ${
+                          box.isLowConf
+                            ? "border-gray-400/70 bg-gray-400/5"
+                            : "border-amber-400 bg-amber-400/10"
+                        }`}
                         style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
                       >
-                        <span className="absolute -bottom-6 left-0 bg-amber-500 text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap">
-                          YOLO 후보: {box.type}
+                        <span
+                          className={`absolute -bottom-6 left-0 text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap ${
+                            box.isLowConf ? "bg-gray-500/90" : "bg-amber-500"
+                          }`}
+                        >
+                          {box.isLowConf ? "저신뢰 후보" : "YOLO 후보"}: {box.type}
                           {box.confidence ? ` (${Math.round(box.confidence * 100)}%)` : ""}
                         </span>
                       </div>
@@ -211,13 +282,13 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
               </div>
             )}
 
-            {/* Navigation Controls */}
-            {images.length > 1 && (
+            {/* Navigation Controls — 숨김 처리된 미식별 컷은 순회에서 제외 */}
+            {shownIdx.length > 1 && (
               <>
                 <button
                   onClick={() => {
                     setImgError(false);
-                    setCurrentIdx((prev) => (prev > 0 ? prev - 1 : images.length - 1));
+                    setCurrentIdx(shownIdx[(navPos - 1 + shownIdx.length) % shownIdx.length]);
                   }}
                   className="absolute left-4 p-2.5 rounded-full bg-white/80 text-gray-800 hover:bg-white transition-all shadow-md"
                 >
@@ -226,7 +297,7 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                 <button
                   onClick={() => {
                     setImgError(false);
-                    setCurrentIdx((prev) => (prev < images.length - 1 ? prev + 1 : 0));
+                    setCurrentIdx(shownIdx[(navPos + 1) % shownIdx.length]);
                   }}
                   className="absolute right-4 p-2.5 rounded-full bg-white/80 text-gray-800 hover:bg-white transition-all shadow-md"
                 >
@@ -249,14 +320,18 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
             {/* 현재 이미지 결함 요약 */}
             <div
               className={`p-2.5 rounded-lg border text-[11px] font-bold ${
-                currentBBoxes.length > 0
+                invalidSet.has(effIdx)
+                  ? "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                  : currentBBoxes.length > 0
                   ? "bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800"
                   : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
               }`}
             >
-              현재 이미지 #{currentIdx + 1}: {currentBBoxes.length > 0
+              현재 이미지 #{effIdx + 1}: {invalidSet.has(effIdx)
+                ? "👤 도서 미식별 컷 (Vision Agent 판정 — 결함 판정 제외 대상)"
+                : currentBBoxes.length > 0
                 ? `결함 BBox ${currentBBoxes.length}건 검출`
-                : "AI 결함 미검출 (도서 포함 여부는 판정 대상 아님)"}
+                : "AI 결함 미검출"}
             </div>
 
             {agentEntries.length === 0 ? (
@@ -300,11 +375,12 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
             )}
 
             <div className="flex items-center justify-between">
-              <div className="flex gap-2 overflow-x-auto py-1">
-                {images.map((url, idx) => {
-                  // 썸네일마다 결함 건수를 표기해, 결함 없는 촬영 컷(도서 미포함 컷 포함)을
-                  // 일일이 열어보지 않고 건너뛸 수 있게 한다.
+              <div className="flex items-center gap-2 overflow-x-auto py-1">
+                {shownIdx.map((idx) => {
+                  const url = images[idx];
+                  // 썸네일마다 결함 건수를 표기해, 결함 없는 촬영 컷을 열어보지 않고 건너뛸 수 있게 한다.
                   const cnt = bboxesForIndex(rawList, idx, url).length;
+                  const isInvalid = invalidSet.has(idx);
                   return (
                     <button
                       key={idx}
@@ -312,15 +388,15 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                         setImgError(false);
                         setCurrentIdx(idx);
                       }}
-                      title={cnt > 0 ? `결함 ${cnt}건 검출` : "AI 결함 미검출"}
+                      title={isInvalid ? "도서 미식별 컷 (Vision Agent 판정)" : cnt > 0 ? `결함 ${cnt}건 검출` : "AI 결함 미검출"}
                       className={`relative w-12 h-16 rounded overflow-hidden border-2 transition-all bg-gray-200 dark:bg-gray-800 shrink-0 ${
-                        currentIdx === idx ? "border-blue-600 ring-2 ring-blue-100 dark:ring-blue-900 scale-105" : "border-gray-200 dark:border-gray-700 opacity-60 hover:opacity-100"
+                        effIdx === idx ? "border-blue-600 ring-2 ring-blue-100 dark:ring-blue-900 scale-105" : "border-gray-200 dark:border-gray-700 opacity-60 hover:opacity-100"
                       }`}
                     >
                       <img
                         src={url}
                         alt={`thumb-${idx}`}
-                        className="w-full h-full object-cover"
+                        className={`w-full h-full object-cover ${isInvalid ? "grayscale opacity-50" : ""}`}
                         onError={(e) => {
                           (e.target as HTMLElement).style.display = "none";
                         }}
@@ -330,9 +406,25 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                           {cnt}
                         </span>
                       )}
+                      {isInvalid && (
+                        <span className="absolute bottom-0 inset-x-0 bg-amber-500/95 text-white text-[8px] font-black text-center py-0.5 z-10">
+                          미식별
+                        </span>
+                      )}
                     </button>
                   );
                 })}
+
+                {/* 도서 미식별 컷 자동 필터 토글 (Vision Agent invalid_image_indexes 기반) */}
+                {invalidSet.size > 0 && (
+                  <button
+                    onClick={() => setHideInvalid(!hideInvalid)}
+                    className="shrink-0 px-2.5 py-1.5 rounded-lg border border-dashed border-amber-400 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 text-[10px] font-black hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors"
+                    title="Vision Agent가 도서를 식별하지 못한 컷 (얼굴/빈 배경 등)"
+                  >
+                    {hideInvalid ? `👤 미식별 ${invalidSet.size}컷 숨김 · 보기` : `👤 미식별 ${invalidSet.size}컷 표시 중 · 숨기기`}
+                  </button>
+                )}
               </div>
 
               <div className="text-right text-xs text-gray-500 dark:text-gray-400">
@@ -344,7 +436,7 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                       {task.inspection_type === "BUYBACK" ? "중고 바이백 정산" : "고객 반품 환불"}
                     </span>
                   )}
-                  <span>이미지 <strong className="text-gray-900 dark:text-white">{images.length > 0 ? currentIdx + 1 : 0}</strong> / {images.length}</span>
+                  <span>이미지 <strong className="text-gray-900 dark:text-white">{shownIdx.length > 0 ? navPos + 1 : 0}</strong> / {shownIdx.length}{invalidSet.size > 0 && hideInvalid ? ` (미식별 ${invalidSet.size}컷 제외)` : ""}</span>
                 </div>
                 {task.ubci_score !== undefined && (
                   <div className="mt-1 text-blue-600 dark:text-blue-400 font-bold">
