@@ -4,23 +4,53 @@ interface UseCameraOptions {
   idealFacingMode?: 'environment' | 'user';
 }
 
+/**
+ * 카메라 품질 모드 - 용도별 해상도 분리.
+ * - barcode: ZXing 1D 바코드(EAN-13) 픽셀 연산의 스윗스팟인 720p. 해상도가 높으면
+ *   오히려 스캔 속도/인식률이 떨어진다.
+ * - inspection: AI 검수 촬영용 FHD. S3 원본 화질을 확보해 백엔드 책 ROI 크롭 후에도
+ *   미세 결함(Wornout) 픽셀이 보존되게 한다. (그 이상은 GPT-4o 타일 과금만 늘어 비추천)
+ */
+export type CameraQuality = 'barcode' | 'inspection';
+
+const QUALITY_PRESETS: Record<CameraQuality, { width: number; height: number }> = {
+  barcode: { width: 1280, height: 720 },
+  inspection: { width: 1920, height: 1080 },
+};
+
 export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions = {}) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const qualityRef = useRef<CameraQuality>('barcode');
 
-  const startCamera = useCallback(async (retryCount = 0) => {
-    if (streamRef.current) return; // 방어 로직: 이미 카메라가 켜져 있으면 중복 실행 방지
+  const startCamera = useCallback(async (quality: CameraQuality = 'barcode', retryCount = 0) => {
+    const preset = QUALITY_PRESETS[quality];
+
+    if (streamRef.current) {
+      // 이미 켜져 있으면 스트림 재생성 없이 품질만 전환 (검은 화면 깜빡임 방지).
+      // applyConstraints 미지원/실패 시엔 기존 해상도 유지 - 촬영 자체는 계속 가능해야 한다.
+      if (qualityRef.current !== quality) {
+        qualityRef.current = quality;
+        const track = streamRef.current.getVideoTracks()[0];
+        try {
+          await track?.applyConstraints({ width: { ideal: preset.width }, height: { ideal: preset.height } });
+        } catch (e) {
+          console.warn(`Camera quality switch(${quality}) failed, keeping current resolution:`, e);
+        }
+      }
+      return;
+    }
+
+    qualityRef.current = quality;
     try {
-      // 1. 디바이스 최대 화질을 가져오되, 모바일 브라우저 한계상 max 제약조건 사용 (디바이스 의존)
+      // 디바이스 최대 화질을 가져오되, 모바일 브라우저 한계상 ideal 제약조건 사용 (디바이스 의존)
       const constraints: MediaStreamConstraints = {
         video: {
           facingMode: idealFacingMode,
-          // 해상도가 너무 높으면(FHD/4K) 브라우저 ZXing 엔진이 1D 바코드(EAN-13) 픽셀 연산을 따라가지 못해 인식을 실패합니다.
-          // 바코드 스캔의 최적 스윗스팟인 720p(HD) 해상도로 하향 조정하여 스캔 속도와 인식률을 극대화합니다.
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: preset.width },
+          height: { ideal: preset.height },
           advanced: [{ focusMode: "continuous" } as any]
         },
         audio: false,
@@ -42,7 +72,7 @@ export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions 
       // NotReadableError (Device in use) 발생 시 OS 하드웨어 락 해제 지연으로 인한 것일 수 있으므로 재시도
       if (err.name === 'NotReadableError' && retryCount < 3) {
         console.warn(`Camera in use, retrying... (${retryCount + 1}/3)`);
-        setTimeout(() => startCamera(retryCount + 1), 500);
+        setTimeout(() => startCamera(quality, retryCount + 1), 500);
         return;
       }
       setError("카메라 접근 권한이 없거나, 지원하지 않는 브라우저입니다.");

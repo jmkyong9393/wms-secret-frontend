@@ -212,7 +212,8 @@ export default function InboundScannerPage() {
 
   useEffect(() => {
     if (step === 'SCAN_BARCODE' || step === 'VISION_EVALUATION') {
-      startCamera();
+      // 바코드 스캔은 ZXing 스윗스팟(720p), AI 검수 촬영은 S3 원본 화질 확보용 FHD
+      startCamera(step === 'VISION_EVALUATION' ? 'inspection' : 'barcode');
     } else {
       stopCamera();
     }
