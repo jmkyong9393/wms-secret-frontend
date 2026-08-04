@@ -1,5 +1,3 @@
-import Cookies from "js-cookie";
-
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const BASE_URL = rawApiUrl.endsWith("/api/v1")
   ? rawApiUrl
@@ -8,20 +6,15 @@ const BASE_URL = rawApiUrl.endsWith("/api/v1")
 /**
  * Next.js App Router에 최적화된 Native Fetch Wrapper.
  * 기존 Axios 인터셉터를 대체하며, Next.js의 Request Memoization 및 Caching 이점을 누릴 수 있습니다.
+ * 인증은 credentials:"include"로 HttpOnly 쿠키(token)를 자동 전송하는 것만으로 이루어진다 -
+ * JWT는 JS에서 읽을 수 없으므로 Authorization 헤더를 수동으로 붙이지 않는다.
  */
 async function fetchClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
-  let token = Cookies.get("token");
-  if (!token && typeof window !== "undefined") {
-    token = localStorage.getItem("wms_auth_token") || localStorage.getItem("token") || undefined;
-  }
 
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
-  }
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const response = await fetch(url, {
@@ -32,11 +25,8 @@ async function fetchClient<T>(endpoint: string, options: RequestInit = {}): Prom
 
   if (!response.ok) {
     // 401 Unauthorized 방어 로직 (Axios Response Interceptor 대체)
-    if (response.status === 401) {
-      Cookies.remove("token");
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
-      }
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.location.href = "/login";
     }
     const errorData = await response.json().catch(() => ({}));
     throw {
