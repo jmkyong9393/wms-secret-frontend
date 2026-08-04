@@ -435,6 +435,45 @@ export default function InboundScannerPage() {
     }
   };
 
+  // 블루투스 키보드/마우스 원버튼 셔터: 촬영 단계에서 Space/Enter로 takePhoto 트리거.
+  // 거치대에 폰을 고정하고 화면을 만지지 않는 촬영 워크스테이션 운용의 전제 기능.
+  const isShutterBusyRef = useRef(false);
+  useEffect(() => {
+    if (step !== 'VISION_EVALUATION') return;
+
+    const onShutterKey = async (e: KeyboardEvent) => {
+      if (e.key !== ' ' && e.key !== 'Enter') return;
+
+      const target = e.target as HTMLElement | null;
+      // 입력 필드 타이핑 중이면 무시. 버튼에 포커스가 있으면 브라우저 네이티브 클릭에
+      // 맡기고 여기서는 스킵한다 (이중 촬영 방지).
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.tagName === 'BUTTON' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      e.preventDefault(); // Space 스크롤 방지
+
+      if (isShutterBusyRef.current || isAnalyzing) return;
+      isShutterBusyRef.current = true;
+      try {
+        await takePhoto();
+      } finally {
+        isShutterBusyRef.current = false;
+      }
+    };
+
+    window.addEventListener('keydown', onShutterKey);
+    return () => window.removeEventListener('keydown', onShutterKey);
+    // takePhoto가 참조하는 capturePhase 최신 클로저 유지를 위해 의존성에 포함
+  }, [step, capturePhase, isAnalyzing]);
+
   return (
     /*
       [수정 이력 2026-08-04] /inbound는 MainLayout을 쓰지 않아 body 기본색(다크에서 순수
