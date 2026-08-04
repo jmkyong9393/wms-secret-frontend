@@ -53,7 +53,7 @@ export default function LoginPage() {
       if (loginRes.must_change_password) {
         router.push('/onboarding');
       } else if (loginRes.role === 'WORKER') {
-        router.push('/worker/inspections');
+        router.push('/inspections?scope=mine');
       } else {
         router.push('/admin/dashboard');
       }

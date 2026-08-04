@@ -30,8 +30,8 @@ export default function RootIndexPage() {
       const upperRole = String(parsedRole).toUpperCase();
 
       if (upperRole === 'WORKER') {
-        // Worker 역할: 나의 검수내역 (/worker/inspections) 전용 메인으로 진입
-        router.replace('/worker/inspections');
+        // Worker 역할: 나의 검수내역 (/inspections?scope=mine) 전용 메인으로 진입
+        router.replace('/inspections?scope=mine');
       } else if (upperRole === 'ADMIN' || upperRole === 'MASTER') {
         // Admin / Master 역할: 종합 대시보드 (/admin/dashboard) 로 진입
         router.replace('/admin/dashboard');

@@ -44,9 +44,9 @@ const WORKER_MENU_GROUPS: MenuGroup[] = [
     title: '👷 현장 작업자 전용 메뉴',
     items: [
       { name: '도서 입고 검수 (카메라)', href: '/inbound', icon: Camera },
-      { name: '나의 검수 내역 (Worker)', href: '/worker/inspections', icon: ShieldCheck },
+      { name: '나의 검수 내역 (Worker)', href: '/inspections?scope=mine', icon: ShieldCheck },
       { name: '출고 피킹 스캐너 (Worker)', href: '/worker/outbound', icon: Truck },
-      { name: '현장 재고 조회 (Worker)', href: '/worker/inventory', icon: PackageSearch },
+      { name: '현장 재고 조회 (Worker)', href: '/inventory', icon: PackageSearch },
     ],
   },
 ];
@@ -73,13 +73,13 @@ function getMenuGroups(hitlPendingCount: number): MenuGroup[] {
       items: [
         { name: '도서 입고 검수 (카메라)', href: '/inbound', icon: Camera },
         { name: '승인 대기 (HITL)', href: '/admin/hitl', icon: ShoppingCart, badge: hitlPendingCount > 0 ? String(hitlPendingCount) : undefined },
-        { name: '검수 처리 내역', href: '/admin/inspections', icon: FileCheck },
+        { name: '검수 처리 내역', href: '/inspections', icon: FileCheck },
       ],
     },
     {
       title: '📦 재고 & 출고 프로세스',
       items: [
-        { name: '재고 현황 관리', href: '/admin/inventory', icon: PackageSearch },
+        { name: '재고 현황 관리', href: '/inventory', icon: PackageSearch },
         { name: '주문 & AI 피킹 지시서', href: '/admin/orders', icon: ShoppingCart },
         { name: '출고 최적화 및 송장 발급', href: '/admin/outbound', icon: Truck },
         { name: '출고 피킹 스캐너', href: '/worker/outbound', icon: Truck },
@@ -265,7 +265,9 @@ export default function Sidebar() {
                   {(isGroupOpen || isCollapsed) && (
                     <div className="space-y-1">
                       {group.items.map((item) => {
-                        const isActive = pathname === item.href;
+                        // C안: href에 쿼리가 붙는 항목(/inspections?scope=mine)은 경로 부분만 비교.
+                        // 메뉴가 역할별 분리 렌더링이라 한 화면에서 중복 점등은 발생하지 않는다.
+                        const isActive = pathname === item.href.split('?')[0];
                         const Icon = item.icon;
 
                         return (
