@@ -13,17 +13,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { User } from "@/stores/auth";
+import type { CurrentUser } from "@/features/auth/types/authTypes";
 import type { AssignableRole } from "@/features/employees/types/employee";
 import { getAssignableRoles } from "@/features/employees/utils/permissions";
 import { ROLE_LABEL } from "@/features/employees/utils/badges";
 import { useBulkCreateEmployeesMutation } from "@/features/employees/hooks/useEmployeeMutations";
-import { getNextEmployeeIdAction } from "@/features/employees/actions/employeeActions";
+import { getNextEmployeeId } from "@/features/employees/api/employeeService";
 
 interface SingleCreateEmployeeModalProps {
   open: boolean;
   onClose: () => void;
-  currentUser: User | null;
+  currentUser: CurrentUser | null;
 }
 
 function generateRandomPassword(length = 10): string {
@@ -36,7 +36,7 @@ function generateRandomPassword(length = 10): string {
 }
 
 export function SingleCreateEmployeeModal({ open, onClose, currentUser }: SingleCreateEmployeeModalProps) {
-  const assignableRoles = getAssignableRoles(currentUser as any);
+  const assignableRoles = getAssignableRoles(currentUser);
   const defaultRole = assignableRoles[0] ?? "WORKER";
 
   const [employeeId, setEmployeeId] = useState("");
@@ -71,7 +71,7 @@ export function SingleCreateEmployeeModal({ open, onClose, currentUser }: Single
     // 모달이 열리면 사번 추천 API 호출
     const fetchNextId = async () => {
       try {
-        const data = await getNextEmployeeIdAction();
+        const data = await getNextEmployeeId();
         setEmployeeId(data.next_employee_id);
       } catch (err) {
         console.error("Failed to fetch next employee id", err);

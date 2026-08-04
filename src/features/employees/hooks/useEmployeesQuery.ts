@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { listEmployeesAction } from "@/features/employees/actions/employeeActions";
+import { listEmployees } from "@/features/employees/api/employeeService";
 import { employeeKeys } from "@/features/employees/constants/queryKeys";
 import type { EmployeeListParams } from "@/features/employees/types/employee";
 
@@ -9,6 +9,6 @@ import type { EmployeeListParams } from "@/features/employees/types/employee";
 export function useEmployeesQuery(params: EmployeeListParams) {
   return useQuery({
     queryKey: employeeKeys.list(params),
-    queryFn: () => listEmployeesAction(params),
+    queryFn: () => listEmployees(params),
   });
 }

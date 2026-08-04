@@ -2,11 +2,11 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  bulkCreateEmployeesAction,
-  updateEmployeeStatusAction,
-  updateEmployeeRoleAction,
-  deleteEmployeeAction,
-} from "@/features/employees/actions/employeeActions";
+  bulkCreateEmployees,
+  updateEmployeeStatus,
+  updateEmployeeRole,
+  deleteEmployee,
+} from "@/features/employees/api/employeeService";
 import { employeeKeys } from "@/features/employees/constants/queryKeys";
 import type {
   BulkCreateEmployeeRequest,
@@ -24,7 +24,7 @@ import type {
 export function useBulkCreateEmployeesMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: BulkCreateEmployeeRequest) => bulkCreateEmployeesAction(payload),
+    mutationFn: (payload: BulkCreateEmployeeRequest) => bulkCreateEmployees(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: employeeKeys.all });
     },
@@ -40,7 +40,7 @@ export function useUpdateEmployeeStatusMutation() {
     }: {
       employeeId: string;
       payload: UpdateEmployeeStatusRequest;
-    }) => updateEmployeeStatusAction(employeeId, payload),
+    }) => updateEmployeeStatus(employeeId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: employeeKeys.all });
     },
@@ -56,7 +56,7 @@ export function useUpdateEmployeeRoleMutation() {
     }: {
       employeeId: string;
       payload: UpdateEmployeeRoleRequest;
-    }) => updateEmployeeRoleAction(employeeId, payload),
+    }) => updateEmployeeRole(employeeId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: employeeKeys.all });
     },
@@ -66,7 +66,7 @@ export function useUpdateEmployeeRoleMutation() {
 export function useDeleteEmployeeMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (employeeId: string) => deleteEmployeeAction(employeeId),
+    mutationFn: (employeeId: string) => deleteEmployee(employeeId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: employeeKeys.all });
     },
