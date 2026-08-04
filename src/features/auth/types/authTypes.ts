@@ -9,29 +9,10 @@ export function isRole(value: unknown): value is Role {
 
 export type UserStatus = "ACTIVE" | "INACTIVE";
 
-
-// 토큰에 들어 있는 로그인 정보
-export interface JwtClaims {
-  sub: string;
-  role: string;
-  tenant_id: string;
-  type: string;
-  exp: number;
-}
-
-// 토큰에서 만든 로그인 세션 정보
-export interface AuthSession {
-  userId: string;
-  role: Role;
-  tenantId: string;
-  exp: number;
-}
-
-// 현재 로그인한 사용자 정보
+// 현재 로그인한 사용자 정보 (GET/POST /api/v1/auth/me, /login 응답을 기반으로 구성)
 export interface CurrentUser {
   employeeId: string;
   name: string;
   role: Role;
   mustChangePassword: boolean;
-  tenantId?: string;
 }

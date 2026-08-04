@@ -1,59 +1,12 @@
 import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
-import { mapTokenToSession } from "@/features/auth/store/authSessionMapper";
-import type { AuthSession, CurrentUser } from "@/features/auth/types/authTypes";
+import type { CurrentUser } from "@/features/auth/types/authTypes";
 
 // 인증 정보 localStorage 키
-export const AUTH_TOKEN_STORAGE_KEY = "wms_auth_token";
-export const MUST_CHANGE_PASSWORD_STORAGE_KEY = "wms_must_change_password";
 export const CURRENT_USER_STORAGE_KEY = "wms_current_user";
 
-// 토큰 문자열 저장 방식
-const rawTokenStorage = {
-  getItem: (key: string, initialValue: string | null) => {
-    if (typeof window === "undefined") return initialValue;
-    const value = localStorage.getItem(key);
-    return value === null ? initialValue : value;
-  },
-  setItem: (key: string, newValue: string | null) => {
-    if (typeof window === "undefined") return;
-    if (newValue === null) {
-      localStorage.removeItem(key);
-    } else {
-      localStorage.setItem(key, newValue);
-    }
-  },
-  removeItem: (key: string) => {
-    if (typeof window === "undefined") return;
-    localStorage.removeItem(key);
-  },
-};
-
-// 로그인 토큰 저장
-export const authTokenAtom = atomWithStorage<string | null>(
-  AUTH_TOKEN_STORAGE_KEY,
-  null,
-  rawTokenStorage,
-  { getOnInit: true }
-);
-
-// 최초 비밀번호 변경 여부 저장
-export const mustChangePasswordAtom = atomWithStorage<boolean>(
-  MUST_CHANGE_PASSWORD_STORAGE_KEY,
-  false
-);
-
-// 토큰에서 로그인 세션 정보 생성
-export const sessionAtom = atom<AuthSession | null>((get) => {
-  const token = get(authTokenAtom);
-  if (!token) return null;
-  return mapTokenToSession(token);
-});
-
-// 로그인 여부 확인
-export const isAuthenticatedAtom = atom((get) => get(sessionAtom) !== null);
-
-// 로그인 사용자 정보 저장
+// 로그인 사용자 정보 저장. JWT 원본은 HttpOnly 쿠키로만 존재해 JS에서 절대 읽을 수 없으므로,
+// 로그인 상태 판단은 이 atom(서버가 반환한 프로필)의 존재 여부만으로 이루어진다.
 export const currentUserAtom = atomWithStorage<CurrentUser | null>(
   CURRENT_USER_STORAGE_KEY,
   null,
@@ -61,14 +14,12 @@ export const currentUserAtom = atomWithStorage<CurrentUser | null>(
   { getOnInit: true }
 );
 
-// 현재 세션의 서버 확인 완료 상태
-// 새로고침 시 초기화
-export const sessionVerifiedAtom = atom<string | null>(null);
+// 로그인 여부 확인
+export const isAuthenticatedAtom = atom((get) => get(currentUserAtom) !== null);
 
-// 로그인 정보 전체 초기화
+// 클라이언트 세션 정리. 실제 인증 쿠키 만료는 HttpOnly라 JS로 지울 수 없으므로
+// 반드시 먼저 features/auth/api/authService.logout()으로 백엔드 /api/v1/auth/logout을
+// 호출해 서버 측에서 쿠키를 만료시킨 뒤 이 atom을 사용한다 (features/auth/hooks/useLogout 참고).
 export const logoutAtom = atom(null, (_get, set) => {
-  set(authTokenAtom, null);
-  set(mustChangePasswordAtom, false);
   set(currentUserAtom, null);
-  set(sessionVerifiedAtom, null);
 });

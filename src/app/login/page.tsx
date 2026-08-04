@@ -3,31 +3,30 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSetAtom } from 'jotai';
-import { userAtom, Role } from '@/stores/auth';
-import { apiClient } from '@/lib/api-client';
-import Cookies from 'js-cookie';
 import { Button } from '@/components/ui/button';
-import { AUTH_TOKEN_STORAGE_KEY } from '@/features/auth/store/authAtoms';
-import { 
-  UserCheck, 
+import { CURRENT_USER_STORAGE_KEY, currentUserAtom } from '@/features/auth/store/authAtoms';
+import { login } from '@/features/auth/api/authService';
+import {
+  UserCheck,
   Sparkles,
   ArrowRight,
-  ShieldCheck
 } from 'lucide-react';
 
+// POST /api/v1/auth/login (app/domains/auth/router.py)을 호출한다. JWT는 응답 본문이
+// 아니라 백엔드가 내려주는 HttpOnly 쿠키로만 전달되므로, 여기서는 그 쿠키를 다루지 않고
+// 응답으로 받은 사용자 프로필만 정본 스토어(authAtoms.ts)에 기록한다.
 export default function LoginPage() {
   const [employee_id, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const setUser = useSetAtom(userAtom);
+  const setCurrentUser = useSetAtom(currentUserAtom);
 
-  // 로그인 페이지 진입 시 기존 스토리지 초기화
+  // 로그인 페이지 진입 시 기존 세션 표시 정보 초기화 (레거시 stores/auth.ts 잔재 포함)
   useEffect(() => {
-    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(CURRENT_USER_STORAGE_KEY);
     localStorage.removeItem('auth-user');
-    localStorage.removeItem('wms_current_user');
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -41,31 +40,19 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // 1. POST /api/v1/users/login - 실제 백엔드 PostgreSQL DB 인증
-      const response = await apiClient.post('/api/v1/users/login', { employee_id, password });
-      
-      if (!response.data?.access_token) {
-        throw new Error("인증 토큰 수신 실패");
-      }
+      const loginRes = await login({ employee_id, password });
 
-      const access_token = response.data.access_token;
-
-      // 2. GET /api/v1/users/me - DB 원본 유저 프로필 수신
-      const userResponse = await apiClient.get('/api/v1/users/me', {
-        headers: { Authorization: `Bearer ${access_token}` }
+      setCurrentUser({
+        employeeId: loginRes.employee_id,
+        name: loginRes.name,
+        role: loginRes.role,
+        mustChangePassword: loginRes.must_change_password,
       });
 
-      const dbUser = userResponse.data;
-      const userRole: Role = (dbUser?.role as Role) || 'MASTER';
-
-      // 3. 토큰 및 쿠키 세팅
-      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, access_token);
-      Cookies.set('token', access_token, { expires: 7 });
-      Cookies.set('role', userRole, { expires: 7 });
-      setUser(dbUser);
-
-      // 4. RBAC 리다이렉트
-      if (userRole === 'WORKER') {
+      // 초기 비밀번호 미변경 계정은 강제로 온보딩(비밀번호 변경) 화면으로 보낸다.
+      if (loginRes.must_change_password) {
+        router.push('/onboarding');
+      } else if (loginRes.role === 'WORKER') {
         router.push('/worker/inspections');
       } else {
         router.push('/admin/dashboard');
@@ -113,7 +100,7 @@ export default function LoginPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-center lg:justify-start gap-2 mb-1">
               <span className="px-3.5 py-1 bg-blue-100/80 text-blue-800 border border-blue-200 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" /> B2B ENTERPRISE WMS v2.6.0
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" /> B2B ENTERPRISE WMS v2.10.0.0
               </span>
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 tracking-tight font-mono">
@@ -144,8 +131,8 @@ export default function LoginPage() {
             <h2 className="text-2xl font-black text-gray-900 tracking-tight">
               관제실 로그인
             </h2>
-            <p className="text-xs text-gray-500 mt-1">
-              사번과 비밀번호를 입력하여 접속하십시오.
+            <p className="text-xs text-gray-500 mt-1 font-mono">
+              사번과 비밀번호(초기 암호: <strong className="text-indigo-600 font-bold">1234</strong>)를 입력하여 접속하십시오.
             </p>
           </div>
 
@@ -161,14 +148,14 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
                 <span>사번 (Employee ID)</span>
-                <span className="text-[10px] text-gray-400 font-mono">예: WM2607001</span>
+                <span className="text-[10px] text-gray-400 font-mono">예: WM2608001</span>
               </label>
               <input 
                 type="text" 
                 value={employee_id}
                 onChange={(e) => setEmployeeId(e.target.value)}
                 className="w-full px-3.5 py-2.5 text-xs font-mono font-bold border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50 text-gray-900 transition-all" 
-                placeholder="사번 입력 (예: WM2607001)"
+                placeholder="사번 입력 (예: WM2608001)"
                 required 
               />
             </div>
