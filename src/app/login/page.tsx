@@ -100,7 +100,7 @@ export default function LoginPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-center lg:justify-start gap-2 mb-1">
               <span className="px-3.5 py-1 bg-blue-100/80 text-blue-800 border border-blue-200 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" /> B2B ENTERPRISE WMS v2.11.0.0
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" /> B2B ENTERPRISE WMS v2.12.0.0
               </span>
             </div>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 tracking-tight font-mono">

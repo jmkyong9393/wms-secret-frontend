@@ -445,7 +445,7 @@ export default function InboundScannerPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[11px] font-black tracking-widest uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                INBOUND CONTROL CENTER v2.11.0.0
+                INBOUND CONTROL CENTER v2.12.0.0
               </span>
               <span className="text-xs text-slate-400 font-mono">Real-time Vision AI & Fast-track Pipeline</span>
             </div>
