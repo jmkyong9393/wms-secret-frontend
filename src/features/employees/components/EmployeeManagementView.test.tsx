@@ -3,7 +3,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createStore, Provider as JotaiProvider } from "jotai";
 import type { CurrentUser, Role } from "@/features/auth/types/authTypes";
-import type { MockAccount } from "@/mocks/data/accounts";
 
 // 테스트용 메모리 localStorage
 const localStorageMock = (() => {
@@ -46,34 +45,20 @@ vi.mock("@/features/employees/api/employeeService", () => ({
 // 역할별 인증 상태로 직원 관리 화면 렌더링
 async function renderAs(role: Role) {
   const { EmployeeManagementView } = await import("./EmployeeManagementView");
-  const { authTokenAtom, currentUserAtom } = await import("@/features/auth/store/authAtoms");
-  const { buildMockJwt } = await import("@/mocks/mockJwt");
+  const { currentUserAtom } = await import("@/features/auth/store/authAtoms");
 
   const employeeId = role === "MASTER" ? "M0001" : "A0001";
   const name = role === "MASTER" ? "장문경" : "소한민";
-
-  const account: MockAccount = {
-    id: role === "MASTER" ? "test-master-id" : "test-admin-id",
-    employee_id: employeeId,
-    password: "irrelevant",
-    role,
-    name,
-    email: null,
-    status: "ACTIVE",
-    must_change_password: false,
-  };
 
   const currentUser: CurrentUser = {
     employeeId,
     name,
     role,
     mustChangePassword: false,
-    tenantId: "wms-local",
   };
 
   const store = createStore();
-  // JWT 세션과 사용자 프로필 설정
-  store.set(authTokenAtom, buildMockJwt(account));
+  // 로그인 사용자 프로필 설정 (인증은 HttpOnly 쿠키로 이루어지므로 JWT는 여기서 다루지 않는다)
   store.set(currentUserAtom, currentUser);
 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
