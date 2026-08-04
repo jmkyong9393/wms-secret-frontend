@@ -1,20 +1,67 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { uploadQueueAtom } from '@/stores/atoms';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { API_BASE_URL } from '@/lib/api-client';
 import { Bell, BellOff, User, CloudUpload, CloudOff, Sun, Moon, VolumeX } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+
+/** 헤더 알림 드롭다운이 렌더하는 항목. 백엔드 notifications 응답을 화면용으로 변환한 형태. */
+interface NotificationItem {
+  id: string;
+  badge: string;
+  badgeBg: string;
+  title: string;
+  desc: string;
+  time: string;
+  link?: string | null;
+  read: boolean;
+}
+
+/**
+ * 심각도별 뱃지 색. 문구(category)와 심각도(severity)는 백엔드가 확정해 내려주므로
+ * 프론트는 색만 매핑한다 (같은 사건이 화면마다 다르게 표시되는 것을 막기 위함).
+ */
+const SEVERITY_BADGE: Record<string, string> = {
+  CRITICAL: 'bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300',
+  WARN: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300',
+  INFO: 'bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300',
+};
+
+/** ISO 시각을 "27초 전" 같은 상대 표기로 변환. */
+function formatTimeAgo(iso?: string | null): string {
+  if (!iso) return '방금 전';
+  const diffSec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diffSec < 5) return '방금 전';
+  if (diffSec < 60) return `${diffSec}초 전`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}분 전`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}시간 전`;
+  return `${Math.floor(diffSec / 86400)}일 전`;
+}
+
+function toNotificationItem(evt: any): NotificationItem {
+  return {
+    id: String(evt.id ?? `N-${Date.now()}`),
+    badge: evt.category || '시스템 알림',
+    badgeBg: SEVERITY_BADGE[evt.severity] || SEVERITY_BADGE.INFO,
+    title: evt.title || '알림',
+    desc: evt.description || '',
+    time: formatTimeAgo(evt.created_at),
+    link: evt.link_url,
+    read: Boolean(evt.is_read),
+  };
+}
 
 export default function Header() {
   const uploadQueue = useAtomValue(uploadQueueAtom);
   const user = useAtomValue(currentUserAtom);
   const logout = useLogout();
+  const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -38,51 +85,44 @@ export default function Header() {
     if (nextMute) setActiveToast(null);
   };
   const pendingCount = uploadQueue.filter(t => t.status !== 'COMPLETED').length;
-  // Real-time AI Agent & FDS Notifications State Stream matching Teamwork Track
-  const [notifications, setNotifications] = useState([
-    {
-      id: "N-101",
-      badge: "에이전트 이상감지",
-      badgeBg: "bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300",
-      title: "품질 검증 오류",
-      desc: "Critic 에이전트가 검수 파이프라인에서 처리 불가능한 오류를 반환했습니다.",
-      time: "5초 전",
-      read: false
-    },
-    {
-      id: "N-102",
-      badge: "자동발주 알림",
-      badgeBg: "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300",
-      title: "대체 발주 추천 생성",
-      desc: "'클린 코드' 반려 건에 대한 대체 발주 추천안이 생성되었습니다. (추천 수량: 6권)",
-      time: "27초 전",
-      read: false
-    },
-    {
-      id: "N-103",
-      badge: "정책상 관리자 검토",
-      badgeBg: "bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300",
-      title: "정책상 관리자 검토 필요",
-      desc: "Policy 에이전트가 자동 처리 대신 관리자 검토를 요청했습니다.",
-      time: "1분 전",
-      read: false
-    },
-    {
-      id: "N-104",
-      badge: "FDS 이상거래",
-      badgeBg: "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300",
-      title: "FDS 이상거래 적발 (위험점수 61점)",
-      desc: "비정상적인 야간 대량 주문 패턴이 감지되었습니다.",
-      time: "3분 전",
-      read: false
-    }
-  ]);
-
-  // Count unread notifications
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // 실시간 AI Agent / FDS 알림.
+  //
+  // [수정 이력] 종전에는 여기에 더미 알림 4건("품질 검증 오류", "대체 발주 추천 생성",
+  // "정책상 관리자 검토 필요", "FDS 이상거래 적발")이 useState 초기값으로 하드코딩되어
+  // 있었다. 백엔드에 알림 테이블도 조회 API도 없었고, notifications:global 채널에
+  // 발행하는 곳이 데모용 /trigger-fds 하나뿐이라 실제 파이프라인 사건은 알림이 되지
+  // 않았기 때문이다. 이제 GET /api/v1/notifications로 이력을 불러오고 SSE로 실시간
+  // 추가되며, 읽음 상태는 DB에 저장되어 새로고침해도 유지된다.
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Active Toast Notification Popup State (Shows up at top-right, disappears after 5 seconds)
   const [activeToast, setActiveToast] = useState<any | null>(null);
+
+  // 저장된 알림 이력 초기 로드 (새로고침해도 남아야 하므로 DB에서 읽는다)
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/v1/notifications?limit=20&role=${encodeURIComponent(user.role || '')}`
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        setNotifications((json.items || []).map(toNotificationItem));
+        setUnreadCount(json.unread_count || 0);
+      } catch {
+        // 알림은 부가 기능이므로 조회 실패가 헤더 렌더를 막지 않는다.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // 실시간 WMS 전역 알림 SSE 구독 (app/domains/notifications/router.py의
   // notifications:global Redis Pub/Sub 채널을 EventSource로 중계받는다)
@@ -96,20 +136,12 @@ export default function Header() {
         const evt = JSON.parse(event.data);
         if (!evt || evt.type === 'CONNECTED') return;
 
-        const newEvt = {
-          id: `N-${Date.now()}`,
-          badge: evt.category || '실시간 알림',
-          badgeBg: 'bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300',
-          toastBg: 'bg-amber-500 text-white',
-          title: evt.title || '실시간 알림',
-          desc: evt.description || '',
-          tag1: evt.category || 'ALERT',
-          tag2: evt.time_ago || '방금 전',
-          time: '방금 전',
-          read: false
-        };
+        // 이 사용자에게 공개되지 않은 역할 전용 알림은 무시한다.
+        if (evt.target_role && user.role && evt.target_role !== user.role) return;
 
-        setNotifications(prev => [newEvt, ...prev.slice(0, 9)]);
+        const newEvt = toNotificationItem(evt);
+        setNotifications(prev => [newEvt, ...prev.filter(n => n.id !== newEvt.id).slice(0, 19)]);
+        setUnreadCount(prev => prev + 1);
         setActiveToast(newEvt);
       } catch (e) {
         console.error('알림 SSE 이벤트 파싱 실패:', e);
@@ -124,6 +156,17 @@ export default function Header() {
     return () => es.close();
   }, [isMuted, user]);
 
+  // 알림 1건 읽음 처리 (DB에 반영해 새로고침 후에도 유지)
+  const markRead = React.useCallback(async (id: string) => {
+    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
+    setUnreadCount(prev => Math.max(0, prev - 1));
+    try {
+      await fetch(`${API_BASE_URL}/api/v1/notifications/${id}/read`, { method: 'POST' });
+    } catch {
+      // 낙관적 갱신 유지 - 다음 로드 때 서버 상태로 다시 맞춰진다.
+    }
+  }, []);
+
   // Auto-hide Toast Banner after 5 seconds
   useEffect(() => {
     if (activeToast) {
@@ -134,8 +177,18 @@ export default function Header() {
     }
   }, [activeToast]);
 
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
+    // 낙관적 갱신 후 서버에 반영한다. 종전에는 프론트 state만 바꿔 새로고침하면 되살아났다.
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setUnreadCount(0);
+    try {
+      await fetch(
+        `${API_BASE_URL}/api/v1/notifications/read-all?role=${encodeURIComponent(user?.role || '')}`,
+        { method: 'POST' }
+      );
+    } catch {
+      // 실패해도 화면은 읽음으로 유지 - 다음 로드 시 서버 상태로 재동기화된다.
+    }
   };
 
   useEffect(() => {
@@ -355,11 +408,22 @@ export default function Header() {
               </div>
 
               <div className="space-y-3">
+                {notifications.length === 0 && (
+                  <div className="py-10 text-center">
+                    <Bell className="w-7 h-7 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                    <p className="text-xs text-gray-400 dark:text-gray-500">새로운 알림이 없습니다.</p>
+                  </div>
+                )}
                 {notifications.map((notif) => (
                   <div 
                     key={notif.id}
                     onClick={() => {
-                      setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+                      if (!notif.read) markRead(notif.id);
+                      // 알림마다 원인 화면 경로(link_url)를 백엔드가 지정해 내려준다.
+                      if (notif.link) {
+                        setNotifOpen(false);
+                        router.push(notif.link);
+                      }
                     }}
                     className={`p-3.5 rounded-xl border space-y-1.5 hover:shadow-xs transition-all cursor-pointer relative ${
                       notif.read 
