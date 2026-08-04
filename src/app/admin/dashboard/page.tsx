@@ -336,7 +336,7 @@ export default function AdvancedDashboardPage() {
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">창고 보관 랙(Zone A-E)에 적치된 장르별 재고 장수입니다.</p>
           </div>
-          <Link href="/admin/inventory" className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+          <Link href="/inventory" className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
             재고 관리 이동 <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>

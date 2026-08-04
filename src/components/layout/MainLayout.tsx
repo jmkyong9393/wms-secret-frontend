@@ -34,7 +34,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
     if (currentRole === 'WORKER' && pathname.startsWith('/admin')) {
       // WORKER 역할이 /admin 으로 접속하면 나의 검수내역으로 강제 이동
-      router.replace('/worker/inspections');
+      router.replace('/inspections?scope=mine');
     }
   }, [user, router, pathname]);
 

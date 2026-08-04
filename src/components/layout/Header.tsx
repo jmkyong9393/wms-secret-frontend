@@ -238,19 +238,14 @@ export default function Header() {
         return '종합 대시보드';
       case '/inbound':
         return '도서 입고 검수 (카메라)';
-      case '/worker/inspections':
-        return '나의 검수 내역 (Worker)';
+      case '/inspections': // C안 통합 URL (역할 중립 타이틀, 구 URL 4종은 라우트 삭제됨)
+        return '검수 처리 내역';
       case '/admin/hitl':
         return '승인 대기 (HITL)';
       case '/admin/fds':
         return 'FDS 이상거래 관제';
-      case '/admin/inspections':
-        return '검수 처리 내역';
-      case '/admin/inventory':
+      case '/inventory': // C안 통합 URL (역할 중립 타이틀)
         return '재고 현황 관리';
-      case '/worker/inventory':
-      case '/inventory':
-        return '현장 재고 조회 (Worker)';
       case '/admin/orders':
         return '주문 & AI 피킹 지시서';
       case '/admin/outbound':
