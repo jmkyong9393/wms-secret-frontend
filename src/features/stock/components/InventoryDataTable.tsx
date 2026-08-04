@@ -16,6 +16,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import BookCover from '@/components/BookCover';
 import BookCoverModal from '@/components/BookCoverModal';
@@ -38,6 +39,7 @@ type BookType = 'ALL' | 'NEW' | 'USED';
 
 export function InventoryDataTable({ role }: { role: StockRole }) {
   const isAdmin = role === 'ADMIN';
+  const router = useRouter();
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -563,10 +565,18 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                   return (
                     <tr
                       key={item.id}
-                      className={`hover:bg-gray-50/80 dark:hover:bg-gray-800/50 transition-colors ${isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''}`}
+                      // 행 어디를 눌러도 상세로 이동한다. 버튼/링크/체크박스/표지 등 자체 동작이
+                      // 있는 요소는 closest 가드로 제외해 기존 동작(인쇄, 확대, 선택)을 보존한다.
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('button, a, input, select, label, [data-row-stop]')) return;
+                        if (href) router.push(href);
+                        else openZoom(item);
+                      }}
+                      title="클릭하여 도서 상세정보 조회"
+                      className={`cursor-pointer hover:bg-gray-50/80 dark:hover:bg-gray-800/50 transition-colors ${isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''}`}
                     >
                       {isAdmin && (
-                        <td className="py-4 px-4 text-center">
+                        <td className="py-4 px-4 text-center" data-row-stop>
                           <input type="checkbox" checked={isSelected} onChange={() => toggleSelectItem(item.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" />
                         </td>
                       )}
@@ -603,6 +613,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                       {/* 도서 정보 */}
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
+                          <span data-row-stop className="contents">
                           <BookCover
                             key={`cover-${item.id}-${item.book.isbn}`}
                             src={item.book.cover_image_url}
@@ -612,6 +623,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                             className="w-12 h-16 shadow-sm"
                             onClick={() => openZoom(item)}
                           />
+                          </span>
                           <div className="space-y-1">
                             <p className="font-black text-gray-900 dark:text-white text-base leading-snug hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                               {item.book.title}

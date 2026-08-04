@@ -109,8 +109,15 @@ export default function CertificatePage() {
 
   const score: number = item.ubci_score ?? 0;
   const view = gradeView(item.grade || '', score);
-  const basePrice: number = item.book?.base_price || 0;
-  const usedPrice = Math.floor((basePrice * (score / 100)) / 100) * 100;
+
+  // [수정 이력] 종전에는 여기서 `정가 × UBCI/100`으로 직접 계산했다. UBCI 100점(MINT)이면
+  // 계수가 1.0이라 중고 판매가가 신품 정가와 완전히 같아졌고(정가 20,000원 / 중고 20,000원),
+  // 카테고리별 차등도 반영되지 않았다. 가격 산정은 백엔드 단일 엔진(orders/pricing.py)이
+  // 담당하고 프론트는 렌더만 한다.
+  const pricing = item.pricing || null;
+  const basePrice: number = pricing?.list_price ?? item.book?.base_price ?? 0;
+  const usedPrice: number = pricing?.used_retail_price ?? 0;
+  const discountPct = Math.round((pricing?.discount_rate_vs_list ?? 0) * 100);
 
   // Report Agent가 생성한 보증서 문서. 프론트는 문장을 만들지 않고 그대로 렌더한다.
   const cert = item.certificate || null;
@@ -174,7 +181,12 @@ export default function CertificatePage() {
                   </div>
                   <div className="flex justify-between items-center font-bold">
                     <span className="text-indigo-600">중고 판매가</span>
-                    <span className="text-xl text-gray-900">{usedPrice.toLocaleString()}원</span>
+                    <div className="flex items-baseline gap-1.5">
+                      {discountPct > 0 && (
+                        <span className="text-xs font-black text-rose-600">-{discountPct}%</span>
+                      )}
+                      <span className="text-xl text-gray-900">{usedPrice.toLocaleString()}원</span>
+                    </div>
                   </div>
                 </div>
               </div>
