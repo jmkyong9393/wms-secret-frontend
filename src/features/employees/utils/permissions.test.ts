@@ -8,12 +8,12 @@ function makeUser(role: Role): CurrentUser {
 }
 
 describe("canManageEmployees", () => {
-  it("returns true only for MASTER", () => {
+  it("returns true for MASTER/ADMIN", () => {
     expect(canManageEmployees(makeUser("MASTER"))).toBe(true);
+    expect(canManageEmployees(makeUser("ADMIN"))).toBe(true);
   });
 
-  it("returns false for ADMIN/WORKER/GUEST", () => {
-    expect(canManageEmployees(makeUser("ADMIN"))).toBe(false);
+  it("returns false for WORKER/GUEST", () => {
     expect(canManageEmployees(makeUser("WORKER"))).toBe(false);
     expect(canManageEmployees(makeUser("GUEST"))).toBe(false);
   });
@@ -24,12 +24,12 @@ describe("canManageEmployees", () => {
 });
 
 describe("getAssignableRoles", () => {
-  it("returns ADMIN/WORKER/GUEST (MASTER 제외) only for MASTER", () => {
+  it("returns ADMIN/WORKER/GUEST (MASTER 제외) for MASTER/ADMIN", () => {
     expect(getAssignableRoles(makeUser("MASTER"))).toEqual(["ADMIN", "WORKER", "GUEST"]);
+    expect(getAssignableRoles(makeUser("ADMIN"))).toEqual(["ADMIN", "WORKER", "GUEST"]);
   });
 
-  it("returns an empty array for ADMIN/WORKER/GUEST", () => {
-    expect(getAssignableRoles(makeUser("ADMIN"))).toEqual([]);
+  it("returns an empty array for WORKER/GUEST", () => {
     expect(getAssignableRoles(makeUser("WORKER"))).toEqual([]);
     expect(getAssignableRoles(makeUser("GUEST"))).toEqual([]);
   });

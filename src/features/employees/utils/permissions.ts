@@ -4,10 +4,10 @@ import { ASSIGNABLE_ROLES, type AssignableRole } from "@/features/employees/type
 /**
  * 직원 관리 권한 확인
  *
- * 현재는 MASTER만 직원 계정 생성과
+ * MASTER와 ADMIN이 직원 계정 생성과
  * 상태 및 역할 변경 가능
  *
- * ADMIN은 직원 목록 조회만 가능
+ * WORKER/GUEST는 접근 불가
  */
 
 /**
