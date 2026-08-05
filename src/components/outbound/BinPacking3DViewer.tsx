@@ -262,6 +262,12 @@ export default function BinPacking3DViewer({
   const cushionVolRatio = totalBoxVol > 0 ? round((totalCushionVol / totalBoxVol) * 100, 1) : 0;
   const isOverpackaged = (cushionThick >= 25.0) || (cushionVolRatio >= 18.0) || (volumeFillRatio < 40.0 && cushionThick >= 20.0);
 
+  // 물리 수용성 실측 검증 (하드코딩 신뢰도 수치 폐기 — 3중 제약 실계산 결과로 표기)
+  const isFitVerified = sortedBooks.length > 0
+    && heightFillRatio <= 100
+    && maxBookW <= boxW
+    && maxBookD <= boxD;
+
   function round(val: number, decimals: number) {
     const factor = Math.pow(10, decimals);
     return Math.round(val * factor) / factor;
@@ -275,8 +281,19 @@ export default function BinPacking3DViewer({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const width = canvas.width;
-    const height = canvas.height;
+    // Retina/HiDPI 선명도 보정: 논리 해상도는 유지하고 물리 픽셀만 devicePixelRatio 배율로 확장
+    if (!canvas.dataset.logicalW) {
+      canvas.dataset.logicalW = String(canvas.width);
+      canvas.dataset.logicalH = String(canvas.height);
+    }
+    const width = Number(canvas.dataset.logicalW);
+    const height = Number(canvas.dataset.logicalH);
+    const dpr = Math.min(2, (typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1);
+    if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
     const cx = width / 2;
@@ -302,7 +319,10 @@ export default function BinPacking3DViewer({
       };
     };
 
-    const drawCuboid = (
+    // Painter's Algorithm 렌더 큐: 원거리(depth 큰) 큐보이드부터 그려 전후 가림 왜곡 제거
+    const cuboidQueue: { depth: number; render: () => void }[] = [];
+
+    const renderCuboidNow = (
       origX: number, origY: number, origZ: number,
       w: number, d: number, h: number,
       fillColor: string, strokeColor: string,
@@ -368,12 +388,33 @@ export default function BinPacking3DViewer({
       }
     };
 
+    // 큐 적재용 drawCuboid: 중심점 투영 depth 기준으로 렌더 순서를 지연 결정
+    const drawCuboid = (
+      origX: number, origY: number, origZ: number,
+      w: number, d: number, h: number,
+      fillColor: string, strokeColor: string,
+      topColor: string, sideColor: string,
+      labelText?: string
+    ) => {
+      const center = project(origX, origY + h / 2, origZ);
+      cuboidQueue.push({
+        depth: center.depth,
+        render: () => renderCuboidNow(origX, origY, origZ, w, d, h, fillColor, strokeColor, topColor, sideColor, labelText),
+      });
+    };
+
+    const flushCuboidQueue = () => {
+      cuboidQueue.sort((a, b) => b.depth - a.depth); // 원거리 우선 렌더
+      cuboidQueue.forEach(q => q.render());
+      cuboidQueue.length = 0;
+    };
+
     const hw = boxW / 2;
     const hd = boxD / 2;
     const bh = boxH;
 
-    // 1. Draw Outer Cardboard Box Wireframe
-    drawCuboid(
+    // 1. Draw Outer Cardboard Box Wireframe (반투명 배경 컨테이너 — 큐 미적용 즉시 렌더)
+    renderCuboidNow(
       0, 0, 0,
       boxW, boxD, bh,
       'rgba(79, 70, 229, 0.04)',
@@ -605,6 +646,9 @@ export default function BinPacking3DViewer({
       );
     }
 
+    // 5. Painter's Algorithm 일괄 플러시: 도서/완충재 큐보이드를 depth 내림차순 렌더
+    flushCuboidQueue();
+
   }, [rotX, rotY, boxW, boxD, boxH, zoomLevel, userSelectedCushionId, activeCushion, sortedBooks, booksTotalH, maxBookW, maxBookD, airPad_H, showCutaway, cushionGhostMode]);
 
   useEffect(() => {
@@ -618,10 +662,17 @@ export default function BinPacking3DViewer({
 
   useEffect(() => {
     if (!autoRotate) return;
-    const interval = setInterval(() => {
-      setRotY((prev) => (prev + 1) % 360);
-    }, 45);
-    return () => clearInterval(interval);
+    // requestAnimationFrame 기반 시간 보정 회전 (약 22°/s — 기존 setInterval 속도 동일 유지)
+    let rafId = 0;
+    let last = performance.now();
+    const loop = (now: number) => {
+      const dt = now - last;
+      last = now;
+      setRotY((prev) => (prev + dt * 0.022) % 360);
+      rafId = requestAnimationFrame(loop);
+    };
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
   }, [autoRotate]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -901,8 +952,18 @@ export default function BinPacking3DViewer({
             <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
             <span className="break-words">AI Multi-Agent 3D Pack Optimizer 실시간 맵핑 결과</span>
           </div>
-          <span className="text-[10px] font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 font-bold shrink-0">
-            CONFIDENCE: 99.4%
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold shrink-0 ${
+            sortedBooks.length === 0
+              ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-700'
+              : isFitVerified
+                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                : 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
+          }`}>
+            {sortedBooks.length === 0
+              ? 'FIT-CHECK: 대기'
+              : isFitVerified
+                ? `FIT-CHECK PASS (높이 ${heightFillRatio}% · 부피 ${volumeFillRatio}%)`
+                : 'FIT-CHECK FAIL (물리 제약 초과)'}
           </span>
         </div>
         <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-sans font-medium">
