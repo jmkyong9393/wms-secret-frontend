@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api-client';
 
 import React, { useState, useEffect } from 'react';
 import BookCover from '@/components/BookCover';
@@ -84,7 +85,7 @@ export default function OutboundDashboard() {
 
   const fetchPickingInstructions = async (): Promise<any[]> => {
     try {
-      const res = await fetch("http://localhost:8000/api/v1/orders/picking-instructions?active_only=true&limit=20", { cache: 'no-store' });
+      const res = await fetch(`${API_BASE_URL}/api/v1/orders/picking-instructions?active_only=true&limit=20`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setPickingInstructions(data);
@@ -131,7 +132,7 @@ export default function OutboundDashboard() {
     const fetchSummary = async () => {
       try {
         setIsSummaryLoading(true);
-        const res = await fetch("http://localhost:8000/api/v1/orders/outbound-summary");
+        const res = await fetch(`${API_BASE_URL}/api/v1/orders/outbound-summary`);
         if (res.ok) {
           const data = await res.json();
           setOutboundSummary({
@@ -153,7 +154,7 @@ export default function OutboundDashboard() {
     const fetchDbBooks = async () => {
       try {
         setIsBooksLoading(true);
-        const res = await fetch("http://localhost:8000/api/v1/orders/available-books", {
+        const res = await fetch(`${API_BASE_URL}/api/v1/orders/available-books`, {
           cache: 'no-store',
           headers: { 'Cache-Control': 'no-cache' }
         });
@@ -401,7 +402,7 @@ export default function OutboundDashboard() {
           is_new: !!b.isNew
         }))
       };
-      const res = await fetch("http://localhost:8000/api/v1/orders/calculate-dynamic-price", {
+      const res = await fetch(`${API_BASE_URL}/api/v1/orders/calculate-dynamic-price`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -457,7 +458,7 @@ export default function OutboundDashboard() {
       setIsLoading(true);
       setConfirmed(false);
       setShowInvoiceLabel(false);
-      const res = await fetch("http://localhost:8000/api/v1/orders/simulate-b2b", { method: "POST" });
+      const res = await fetch(`${API_BASE_URL}/api/v1/orders/simulate-b2b`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         alert(`시뮬레이션 실패: ${data.detail || data.message}`);
@@ -475,7 +476,7 @@ export default function OutboundDashboard() {
         `총 ${data.pricing.total_quantity}권 / ${Number(data.pricing.final_price).toLocaleString()}원`
       );
     } catch (e) {
-      alert('백엔드 연결 실패 - B2B 주문 시뮬레이션을 실행하지 못했습니다. (localhost:8000)');
+      alert('백엔드 연결 실패 - B2B 주문 시뮬레이션을 실행하지 못했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -502,7 +503,7 @@ export default function OutboundDashboard() {
       }
       try {
         const res = await fetch(
-          `http://localhost:8000/api/v1/orders/picking-instructions/${activeInstruction.id}/confirm-packing`,
+          `${API_BASE_URL}/api/v1/orders/picking-instructions/${activeInstruction.id}/confirm-packing`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -526,7 +527,7 @@ export default function OutboundDashboard() {
         await fetchPickingInstructions();
         return;
       } catch (e) {
-        alert('백엔드 연결 실패 - 출고 확정을 처리하지 못했습니다. (localhost:8000)');
+        alert('백엔드 연결 실패 - 출고 확정을 처리하지 못했습니다.');
         return;
       }
     }

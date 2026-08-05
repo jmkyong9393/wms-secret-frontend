@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api-client';
 
 import Link from 'next/link';
 import React, { useState } from 'react';
@@ -6,7 +7,6 @@ import { useAtomValue } from 'jotai';
 import { uploadQueueAtom } from '@/stores/atoms';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
 import { useLogout } from '@/features/auth/hooks/useLogout';
-import { API_BASE_URL } from '@/lib/api-client';
 import { Bell, BellOff, User, CloudUpload, CloudOff, Sun, Moon, VolumeX } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';

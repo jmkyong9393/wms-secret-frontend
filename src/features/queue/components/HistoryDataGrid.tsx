@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api-client';
 
 import { useState, useEffect } from 'react';
 import { Search, Download, Filter, FileText, Loader2, AlertTriangle, Trash2, Camera, Printer, RefreshCcw, Check, Edit2, X } from 'lucide-react';
@@ -32,7 +33,7 @@ export default function HistoryDataGrid() {
     if (selectedBook && selectedBook.job_id) {
       setIsDetailLoading(true);
       setSelectedImageIndex(0); // Reset index when opening a new book
-      fetch(`http://localhost:8000/api/v1/inbound/result/${selectedBook.job_id}`)
+      fetch(`${API_BASE_URL}/api/v1/inbound/result/${selectedBook.job_id}`)
         .then(res => res.json())
         .then(data => {
           setDetailData(data);
@@ -581,7 +582,7 @@ export default function HistoryDataGrid() {
                         const btn = document.getElementById('retry-btn');
                         if (btn) btn.innerHTML = '<span class="animate-spin mr-2">⏳</span> AI 재평가 진행 중... (최대 30초 소요)';
                         
-                        const res = await fetch(`http://localhost:8000/api/v1/inbound/retry/${selectedBook.job_id}`, {
+                        const res = await fetch(`${API_BASE_URL}/api/v1/inbound/retry/${selectedBook.job_id}`, {
                           method: 'POST'
                         });
                         if (!res.ok) throw new Error('재평가 실패');

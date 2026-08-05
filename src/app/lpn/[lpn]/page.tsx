@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api-client';
 
 /**
  * LPN 내부 조회 (직원 전용)
@@ -26,7 +27,7 @@ import {
   bboxToPercent,
 } from '@/features/inspection/utils/inspectionImageService';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || `${API_BASE_URL}`;
 const INTERNAL_ROLES = ['WORKER', 'ADMIN', 'MASTER'];
 
 export default function LpnInternalLookupPage() {

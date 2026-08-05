@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api-client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -113,14 +114,14 @@ export default function Sidebar() {
     let isMounted = true;
     const fetchPendingHitl = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/v1/admin/hitl/pending', { method: 'GET' });
+        const res = await fetch(`${API_BASE_URL}/api/v1/admin/hitl/pending`, { method: 'GET' });
         if (res.ok) {
           const data = await res.json();
           if (isMounted && Array.isArray(data)) {
             setHitlCount(data.length);
           }
         } else {
-          const resHistory = await fetch('http://localhost:8000/api/v1/inbound/history', { method: 'GET' });
+          const resHistory = await fetch(`${API_BASE_URL}/api/v1/inbound/history`, { method: 'GET' });
           if (resHistory.ok) {
             const historyData = await resHistory.json();
             if (isMounted && Array.isArray(historyData)) {

@@ -1,7 +1,7 @@
+import { API_BASE_URL } from '@/lib/api-client';
 import axios from 'axios';
 
-// 백엔드 API URL (환경 변수에 따라 동적 할당)
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// 백엔드 API URL은 api-client에서 중앙 관리 (NEXT_PUBLIC_API_URL 환경변수 기반)
 const UPLOAD_COOKIE_URL = `${API_BASE_URL}/api/v1/uploads/authorize`;
 
 /**

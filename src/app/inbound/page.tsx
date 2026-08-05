@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api-client';
 
 import { useState, useEffect, useRef } from 'react';
 import BookCover from '@/components/BookCover';
@@ -99,7 +100,7 @@ export default function InboundScannerPage() {
       });
       const base64Images = await Promise.all(data.images.map(getBase64));
 
-      const res = await fetch("http://localhost:8000/api/v1/inbound/evaluate", {
+      const res = await fetch(`${API_BASE_URL}/api/v1/inbound/evaluate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lpn: data.lpn, images: base64Images, book_metadata: data.book_metadata })
@@ -138,7 +139,7 @@ export default function InboundScannerPage() {
       // -----------------------------------------------------------------------
       // 무거운 WebSocket을 쓰지 않고, HTTP/1.1 표준인 EventSource를 활용해 
       // AI 분석이 끝날 때까지 10% 단위의 진행률(Progress)을 쪼개서 받아옵니다.
-      const evtSource = new EventSource(`http://localhost:8000/api/v1/inbound/stream/${job_id}`);
+      const evtSource = new EventSource(`${API_BASE_URL}/api/v1/inbound/stream/${job_id}`);
       
       evtSource.onmessage = (event) => {
         // 서버에서 던져준 데이터("디코딩 중... 20%")를 실시간으로 UI 프로그레스 바에 반영
@@ -306,7 +307,7 @@ export default function InboundScannerPage() {
 
           // 백그라운드에서 알라딘 API 연동 도서 정보 조회
           try {
-            const res = await fetch(`http://localhost:8000/api/v1/inbound/book-lookup?isbn=${text}`);
+            const res = await fetch(`${API_BASE_URL}/api/v1/inbound/book-lookup?isbn=${text}`);
             if (res.ok) {
               const data = await res.json();
               setBookInfo(data);
@@ -834,7 +835,7 @@ export default function InboundScannerPage() {
                   }
 
                   try {
-                    const res = await fetch(`http://localhost:8000/api/v1/inbound/book-lookup?isbn=${inputVal}`);
+                    const res = await fetch(`${API_BASE_URL}/api/v1/inbound/book-lookup?isbn=${inputVal}`);
                     if (res.ok) {
                       const data = await res.json();
                       setBookInfo(data);
@@ -930,7 +931,7 @@ export default function InboundScannerPage() {
                 onClick={async () => {
                   try {
                     setIsAnalyzing(true);
-                    const res = await fetch("http://localhost:8000/api/v1/inbound/fasttrack", {
+                    const res = await fetch(`${API_BASE_URL}/api/v1/inbound/fasttrack`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({

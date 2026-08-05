@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/lib/api-client';
 /**
  * WMS 검수 이미지 / BBox 좌표 단일 소스(Single Source of Truth) 서비스
  *
@@ -39,7 +40,7 @@ export interface PerImageDefectCoordinate {
 
 /** 백엔드 StaticFiles 마운트(/experiment_data) 호스트. CloudFront URL이 없는 레거시 건 폴백용. */
 export const BASE_IMAGE_HOST =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+  process.env.NEXT_PUBLIC_API_BASE_URL || `${API_BASE_URL}`;
 
 /**
  * DB에 적재된 이미지 경로를 브라우저가 실제로 열 수 있는 URL로 정규화한다.

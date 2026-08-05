@@ -61,7 +61,7 @@ export default function LoginPage() {
     } catch (err: any) {
       console.error("Login Error:", err);
       if (err.code === "ERR_NETWORK" || err.message?.includes("Network Error") || !err.response) {
-        setError("백엔드 서버(http://localhost:8000) 연결 실패! 백엔드 서버가 종료되어 있어 통신할 수 없습니다.");
+        setError("백엔드 서버 연결 실패! 서버가 실행 중인지 확인해 주세요.");
       } else {
         const msg = err.response?.data?.message || err.response?.data?.detail || '사번 또는 비밀번호가 올바르지 않습니다.';
         setError(msg);

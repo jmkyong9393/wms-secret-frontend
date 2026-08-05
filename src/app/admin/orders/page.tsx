@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
@@ -20,7 +21,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = `${API_BASE_URL}/api/v1`;
 
 interface PickingItem {
   id: string;
@@ -119,7 +120,7 @@ export default function OrdersPickingPage() {
         alert(`시뮬레이션 실패: ${data.detail || data.message}`);
       }
     } catch (e) {
-      alert('백엔드 연결에 실패했습니다. (localhost:8000)');
+      alert('백엔드 연결에 실패했습니다.');
     } finally {
       setIsSimulating(false);
     }
@@ -155,7 +156,7 @@ export default function OrdersPickingPage() {
         alert(`주문 실패: ${data.detail || data.message}`);
       }
     } catch (e) {
-      alert('백엔드 연결에 실패했습니다. (localhost:8000)');
+      alert('백엔드 연결에 실패했습니다.');
     } finally {
       setIsSubmitting(false);
     }

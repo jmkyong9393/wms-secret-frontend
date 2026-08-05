@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from '@/lib/api-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -21,7 +22,7 @@ import CameraScanner from '@/features/inbound/components/CameraScanner';
 import { useAtomValue } from 'jotai';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
 
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = `${API_BASE_URL}/api/v1`;
 
 /**
  * LPN / ISBN 겸용 바코드 포맷터
@@ -130,7 +131,7 @@ export default function WorkerOutboundPage() {
       }
       await fetchInstructions();
     } catch (e) {
-      alert('백엔드 연결 실패 (localhost:8000)');
+      alert('백엔드 연결 실패');
     } finally {
       setIsAccepting(false);
     }
@@ -153,7 +154,7 @@ export default function WorkerOutboundPage() {
       alert(`✅ ${data.message}`);
       await fetchInstructions();
     } catch (e) {
-      alert('백엔드 연결 실패 (localhost:8000)');
+      alert('백엔드 연결 실패');
     } finally {
       setIsCompleting(false);
     }
@@ -197,7 +198,7 @@ export default function WorkerOutboundPage() {
         alert(`✅ [피킹 전량 완료] 지시서 ${data.instruction_no}의 모든 품목 피킹이 완료되었습니다.\n관리자 출고 화면에서 패킹 박스 확정 후 송장이 발급됩니다.`);
       }
     } catch (e) {
-      setScanError('백엔드 연결 실패 (localhost:8000)');
+      setScanError('백엔드 연결 실패');
     } finally {
       setIsScanning(false);
     }

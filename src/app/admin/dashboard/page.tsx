@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api-client';
 
 import React from 'react';
 import { useAtomValue } from 'jotai';
@@ -91,7 +92,7 @@ export default function AdvancedDashboardPage() {
   const { data: kpi } = useQuery({
     queryKey: ['dashboard-kpi'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:8000/api/v1/dashboard/kpi');
+      const res = await fetch(`${API_BASE_URL}/api/v1/dashboard/kpi`);
       if (!res.ok) return null;
       return res.json();
     },
@@ -101,7 +102,7 @@ export default function AdvancedDashboardPage() {
   const { data: charts } = useQuery({
     queryKey: ['dashboard-charts'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:8000/api/v1/dashboard/charts');
+      const res = await fetch(`${API_BASE_URL}/api/v1/dashboard/charts`);
       if (!res.ok) return null;
       return res.json();
     },
