@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '@/lib/api-client';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
@@ -10,7 +11,7 @@ export async function GET(request: Request) {
 
   try {
     // 100% Zero Key Exposure: Delegate to FastAPI backend proxy endpoint
-    const backendUrl = `http://localhost:8000/api/v1/inbound/isbn-lookup?isbn=${isbn}`;
+    const backendUrl = `${API_BASE_URL}/api/v1/inbound/isbn-lookup?isbn=${isbn}`;
     const response = await fetch(backendUrl, { cache: 'no-store' });
     
     if (response.ok) {

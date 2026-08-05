@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api-client';
 
 import { useState, useEffect } from 'react';
 import { Printer, RefreshCcw, Search, Barcode, CheckCircle } from 'lucide-react';
@@ -23,7 +24,7 @@ export default function LpnDashboardPage() {
     setIsLoading(true);
     try {
       // API call to the backend router we created
-      const res = await fetch('http://localhost:8000/api/v1/inventory/lpn');
+      const res = await fetch(`${API_BASE_URL}/api/v1/inventory/lpn`);
       if (res.ok) {
         const data = await res.json();
         setLpns(data);

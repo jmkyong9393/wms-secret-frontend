@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api-client';
 
 /**
  * 고객 공개용 AI 품질 보증서
@@ -26,7 +27,7 @@ import {
   bboxToPercent,
 } from '@/features/inspection/utils/inspectionImageService';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || `${API_BASE_URL}`;
 
 function gradeView(grade: string, score: number) {
   const isMint = score >= 95 || grade === 'MINT' || grade === 'S';
