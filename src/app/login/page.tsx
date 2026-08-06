@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { CURRENT_USER_STORAGE_KEY, currentUserAtom } from '@/features/auth/store/authAtoms';
 import { login } from '@/features/auth/api/authService';
 import LoginFailureAlert from '@/features/auth/components/LoginFailureAlert';
+import PasswordResetGuideModal from '@/features/auth/components/PasswordResetGuideModal';
 import { resolveLoginFailure, type LoginFailure } from '@/features/auth/utils/loginFailure';
 import {
   UserCheck,
@@ -23,6 +24,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   // 인라인 배너와 별개로, 실패 사유를 코드/조치와 함께 알림창으로 띄운다.
   const [failure, setFailure] = useState<LoginFailure | null>(null);
+  const [resetGuideOpen, setResetGuideOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const setCurrentUser = useSetAtom(currentUserAtom);
@@ -93,6 +95,9 @@ export default function LoginPage() {
       {/* 실패 사유 알림창 (사유 코드 + 조치 안내 포함) */}
       <LoginFailureAlert failure={failure} onClose={() => setFailure(null)} />
 
+      {/* 비밀번호 재설정 절차 안내 (개인 연락처 노출 없이 사내 절차만 안내) */}
+      <PasswordResetGuideModal open={resetGuideOpen} onClose={() => setResetGuideOpen(false)} />
+
       {/* Soft Light Ambient Glow Orbs */}
       <div className="absolute -top-40 -left-40 w-[600px] h-[600px] bg-blue-200/40 rounded-full blur-[140px] pointer-events-none animate-pulse"></div>
       <div className="absolute -bottom-40 -right-40 w-[600px] h-[600px] bg-indigo-200/40 rounded-full blur-[140px] pointer-events-none"></div>
@@ -124,15 +129,58 @@ export default function LoginPage() {
               Nexus <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">WMS</span>
             </h1>
             <p className="text-base sm:text-lg font-extrabold text-blue-950 tracking-tight">
-              멀티 에이전트 AI 기반 B2B 스마트 물류 관제 파이프라인
+              입고부터 출고까지 <span className="text-blue-600">사람 대신 AI가 판단</span>하는 통합 물류 관제 플랫폼
             </p>
+            {/* [2026-08-06 개선] 종전 문구는 기술명 나열이라("비전 딥러닝 앙상블, UBCI 검증 등급
+                평가, LangGraph Multi-Agent 오케스트레이션 및 3D Bin Packing...") 처음 보는 사람이
+                무엇을 하는 시스템인지 알 수 없었다. 무엇을 해결하는지를 먼저 말하고 기술명은
+                근거로 뒤에 붙인다.
+                [2026-08-06 재개정] "중고 도서" 한정 표현을 걷어냈다. 이 플랫폼은 신품 무검수
+                Fast-Track 입고와 검수 대상 품목을 같은 파이프라인에서 처리하는 통합 물류
+                시스템이고, 도서는 현재 적용 중인 첫 품목군일 뿐이다. 품목을 앞세우면 확장
+                가능한 플랫폼이 단일 카테고리 솔루션으로 축소되어 보인다. */}
             <p className="text-xs sm:text-sm text-gray-600 max-w-md pt-1 leading-relaxed">
-              비전 딥러닝 앙상블, UBCI 검증 등급 평가, LangGraph Multi-Agent 오케스트레이션 및 3D Bin Packing 알고리즘이 통합된 차세대 풀필먼트 관제실입니다.
+              신품은 무검수 Fast-Track으로 즉시 입고하고, 검수가 필요한 품목은 사진 한 장으로
+              상태를 등급화합니다. 가격 산정부터 적재 위치·포장 박스·출고까지 한 흐름으로
+              처리하고, 애매한 건은 사람에게 넘깁니다.
             </p>
           </div>
 
+          {/* 입고 파이프라인 요약 - 이 시스템의 핵심 흐름을 한 줄로 보여준다.
+              [2026-08-06] '랙 배정'에서 끝나면 입고 전용 시스템으로 읽혀 출고·배차까지 잇는
+              전체 물류 범위가 드러나지 않는다. 마지막 단계를 출고로 확장한다. */}
+          <div className="w-full max-w-md">
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-1.5 gap-y-1.5">
+              {['촬영', 'YOLO 앙상블', 'GPT-4o 판독', '등급 산정', '랙 배정', '출고 최적화'].map((step, i, arr) => (
+                <span key={step} className="flex items-center gap-1.5">
+                  <span className="px-2.5 py-1 rounded-lg bg-white/80 border border-gray-200 text-[10px] font-bold text-gray-700 shadow-xs">
+                    {step}
+                  </span>
+                  {i < arr.length - 1 && <span className="text-gray-300 text-[10px]">›</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* 시스템 특징 3종 - 기술을 '무엇을 보장하는가'로 번역해 제시 */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full max-w-md text-left">
+            {[
+              { label: '판정 근거 추적', desc: '감점 조항·BBox까지 기록', accent: 'text-blue-600' },
+              { label: '사람 개입 지점', desc: '애매한 건은 HITL 이관', accent: 'text-indigo-600' },
+              { label: '이상거래 관제', desc: 'FDS 룰 + AI 권고', accent: 'text-violet-600' },
+            ].map((f) => (
+              <div
+                key={f.label}
+                className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2.5 backdrop-blur-sm"
+              >
+                <p className={`text-[11px] font-black ${f.accent}`}>{f.label}</p>
+                <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+
           {/* Author Metadata Tag */}
-          <div className="pt-2 text-xs text-gray-500 font-mono">
+          <div className="pt-1 text-xs text-gray-500 font-mono">
             대표자: <strong className="text-gray-900 font-bold">장문경 (Lead Architect & Project Owner)</strong> | 팀: AI_05조
           </div>
         </div>
@@ -148,8 +196,14 @@ export default function LoginPage() {
             <h2 className="text-2xl font-black text-gray-900 tracking-tight">
               관제실 로그인
             </h2>
-            <p className="text-xs text-gray-500 mt-1 font-mono">
-              사번과 비밀번호(초기 암호: <strong className="text-indigo-600 font-bold">1234</strong>)를 입력하여 접속하십시오.
+            {/* [2026-08-06 정정] 종전에는 "초기 암호: 1234"를 고정 안내했다. 그러나 계정 발급
+                (POST /users/issue)은 계정마다 **랜덤 8자 임시 비밀번호**를 생성하므로 이 안내는
+                사실과 달랐고(실제로 5개 계정이 랜덤 임시 비밀번호 상태), 무엇보다 공개 로그인
+                화면에 유효한 비밀번호를 적어두는 것은 그 자체가 취약점이다. */}
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+              관리자가 발급한 <strong className="text-gray-700 font-bold">사번</strong>과{' '}
+              <strong className="text-gray-700 font-bold">임시 비밀번호</strong>로 접속하십시오.
+              최초 로그인 시 개인정보 동의와 비밀번호 변경 절차가 진행됩니다.
             </p>
           </div>
 
@@ -190,7 +244,13 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
                 <span>비밀번호 (Password)</span>
-                <a href="#" onClick={(e) => { e.preventDefault(); alert("관리자(jmkyong2002@naver.com)에게 비밀번호 재설정을 문의하세요."); }} className="text-[10px] text-blue-600 hover:underline">재설정 요청</a>
+                <button
+                  type="button"
+                  onClick={() => setResetGuideOpen(true)}
+                  className="text-[10px] text-blue-600 hover:underline font-bold"
+                >
+                  재설정 요청
+                </button>
               </label>
               <input 
                 type="password" 
@@ -228,8 +288,15 @@ export default function LoginPage() {
               <a href="/opensource" className="text-gray-600 hover:text-blue-600">오픈소스라이선스</a>
             </div>
 
+            {/* [2026-08-06] 개인 이메일 원문 노출 제거.
+                로그인 화면은 인증 없이 누구나 열람 가능해 수집 봇의 1순위 표적이다.
+                문의 경로는 법정 고지 문서인 개인정보 처리방침으로 유도한다. */}
             <div className="text-[10px] text-gray-400">
-              Contact: <a href="mailto:jmkyong2002@naver.com" className="hover:underline text-blue-600 font-bold">jmkyong2002@naver.com</a>
+              문의는{' '}
+              <a href="/privacy" className="hover:underline text-blue-600 font-bold">
+                개인정보 처리방침
+              </a>
+              의 담당자 연락처를 이용해 주세요.
               <p className="mt-0.5">© 2026 Nexus AI_05조. All rights reserved.</p>
             </div>
           </div>

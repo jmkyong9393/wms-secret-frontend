@@ -6,7 +6,7 @@ import Link from 'next/link';
 import React, { useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { uploadQueueAtom } from '@/stores/atoms';
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
+import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { Bell, BellOff, User, CloudUpload, CloudOff, Sun, Moon, VolumeX } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -60,7 +60,8 @@ function toNotificationItem(evt: any): NotificationItem {
 
 export default function Header() {
   const uploadQueue = useAtomValue(uploadQueueAtom);
-  const user = useAtomValue(currentUserAtom);
+  // 사용자명·역할을 그대로 렌더하므로 하이드레이션 안전 훅을 쓴다 (Sidebar와 동일한 이유).
+  const { user } = useHydratedUser();
   const logout = useLogout();
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -74,6 +75,16 @@ export default function Header() {
     if (typeof window !== 'undefined') {
       const savedMute = localStorage.getItem('nexus-notif-muted') === 'true';
       setIsMuted(savedMute);
+
+      // 시스템 설정(/admin/settings) 페이지의 음소거 토글과 실시간 동기화
+      const handleMuteEvent = (e: Event) => {
+        const evt = e as CustomEvent<{ isMuted: boolean }>;
+        if (evt.detail && typeof evt.detail.isMuted === 'boolean') {
+          setIsMuted(evt.detail.isMuted);
+        }
+      };
+      window.addEventListener('nexus-notif-mute-change', handleMuteEvent);
+      return () => window.removeEventListener('nexus-notif-mute-change', handleMuteEvent);
     }
   }, []);
 
@@ -192,6 +203,23 @@ export default function Header() {
     }
   };
 
+  // [2026-08-06 신설] 알림 이력 일괄 삭제. "모두 읽음"은 배지만 끄고 목록은 계속 쌓이므로
+  // 누적된 이력을 정리할 수단이 없었다. 삭제는 되돌릴 수 없어 confirm 한 번을 거친다.
+  const handleClearAll = async () => {
+    if (notifications.length === 0) return;
+    if (!window.confirm(`알림 ${notifications.length}건을 모두 삭제할까요? (되돌릴 수 없습니다)`)) return;
+    setNotifications([]);
+    setUnreadCount(0);
+    try {
+      await fetch(
+        `${API_BASE_URL}/api/v1/notifications?role=${encodeURIComponent(user?.role || '')}`,
+        { method: 'DELETE' }
+      );
+    } catch {
+      // 실패해도 화면은 비운 상태 유지 - 다음 로드 시 서버 상태로 재동기화된다.
+    }
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('nexus-theme') === 'dark';
@@ -251,6 +279,10 @@ export default function Header() {
         return '주문 & AI 피킹 지시서';
       case '/admin/outbound':
         return '출고 최적화 및 송장 발급';
+      // WORKER 모바일 셸에서도 이 Header를 쓰므로 피킹 스캐너 경로를 명시한다
+      // (없으면 default로 떨어져 "종합 대시보드"라는 엉뚱한 제목이 떴다).
+      case '/worker/outbound':
+        return '출고 피킹 스캐너';
       case '/admin/po':
       case '/po':
         return '발주 관리 (AI)';
@@ -298,8 +330,8 @@ export default function Header() {
         </h1>
       </div>
 
-      {/* Right Side: Status & Profile */}
-      <div className="flex items-center space-x-4">
+      {/* Right Side: Status & Profile — 모바일에서는 간격을 좁혀 타이틀 공간을 확보한다 */}
+      <div className="flex items-center space-x-1.5 sm:space-x-4 shrink-0">
         
         {/* Network & Queue Status */}
         <div className="hidden sm:flex items-center px-3 py-1.5 rounded-full bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
@@ -358,8 +390,13 @@ export default function Header() {
           </button>
 
           {/* FDS Notification Popup Menu matching User Screenshot Specification */}
+          {/*
+            [수정 이력 2026-08-05] w-80(320px) 고정 + 종 아이콘 기준 absolute right-0 배치라
+            모바일에서 패널이 뷰포트 왼쪽 밖으로 밀려 잘렸다. 모바일(<sm)에서는 화면 폭에
+            맞춘 fixed 배치(inset-x-3), sm 이상에서는 기존 앵커 드롭다운을 유지한다.
+          */}
           {notifOpen && (
-            <div className="absolute right-0 top-12 mt-2 w-80 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-4 z-50 border border-gray-100 dark:border-gray-800 font-sans animate-in fade-in zoom-in-95 duration-150 max-h-[420px] overflow-y-auto">
+            <div className="fixed inset-x-3 top-16 w-auto max-h-[70vh] sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:mt-2 sm:w-80 sm:max-h-[420px] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-4 z-50 border border-gray-100 dark:border-gray-800 font-sans animate-in fade-in zoom-in-95 duration-150 overflow-y-auto">
               <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
                 <div className="flex items-center gap-2">
                   <span className="font-extrabold text-sm text-gray-900 dark:text-white">알림</span>
@@ -387,11 +424,18 @@ export default function Header() {
                   >
                     {isMuted ? '🔔 알림 켜기' : '🔕 알림 끄기'}
                   </button>
-                  <button 
+                  <button
                     onClick={handleMarkAllAsRead}
                     className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                   >
                     모두 읽음
+                  </button>
+                  <button
+                    onClick={handleClearAll}
+                    title="알림 이력 일괄 삭제 (되돌릴 수 없음)"
+                    className="text-xs font-bold text-rose-500 dark:text-rose-400 hover:underline cursor-pointer"
+                  >
+                    모두 삭제
                   </button>
                 </div>
               </div>
@@ -506,7 +550,8 @@ export default function Header() {
 
       {/* Floating Live AI Toast Banner (Matching User Screenshot 100% with 1-Click Mute Control) */}
       {!isMuted && activeToast && (
-        <div className="fixed top-16 right-6 z-50 w-84 bg-amber-500 text-white p-4 rounded-2xl shadow-2xl space-y-2 animate-in slide-in-from-top-5 fade-in duration-300 border border-amber-400/50">
+        // 모바일에서는 좌우 여백 기준으로 펼치고, sm 이상에서만 우측 고정 카드 폭(w-84)을 쓴다
+        <div className="fixed top-16 inset-x-3 w-auto sm:inset-x-auto sm:right-6 sm:w-84 z-50 bg-amber-500 text-white p-4 rounded-2xl shadow-2xl space-y-2 animate-in slide-in-from-top-5 fade-in duration-300 border border-amber-400/50">
           <div className="flex items-start justify-between gap-2">
             <h4 className="font-extrabold text-sm tracking-tight leading-snug">
               {activeToast.title}

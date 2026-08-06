@@ -201,6 +201,11 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                 {showYolo &&
                   currentYoloBoxes.map((box: any, idx: number) => {
                     const { left, top, width, height } = bboxToPercent(box);
+                    // [수정 이력 2026-08-06] 이미지 가장자리 박스의 라벨이 프레임 밖으로 나가
+                    // 잘리던 문제 - 가장자리 근처면 박스 안쪽/반대 앵커로 뒤집는다
+                    // (admin/inventory/[id] 상세 페이지 오버레이와 동일 규칙).
+                    const yoloLabelPos = top + height > 92 ? "bottom-1" : "-bottom-6";
+                    const yoloLabelAnchor = left > 50 ? "right-0" : "left-0";
                     return (
                       <div
                         key={`y-${idx}`}
@@ -212,7 +217,7 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                         style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
                       >
                         <span
-                          className={`absolute -bottom-6 left-0 text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap ${
+                          className={`absolute ${yoloLabelPos} ${yoloLabelAnchor} text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap ${
                             box.isLowConf ? "bg-gray-500/90" : "bg-amber-500"
                           }`}
                         >
@@ -230,6 +235,9 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                     // 백엔드가 coord_space를 명시해 내려주므로 공용 유틸이 그대로 환산한다.
                     const { left, top, width, height } = bboxToPercent(box);
                     const label = box.label || box.type || `결함 #${idx + 1}`;
+                    // 상단 8% 이내 박스는 라벨을 박스 안쪽으로 내려 잘림 방지
+                    const visionLabelPos = top < 8 ? "top-1" : "-top-6";
+                    const visionLabelAnchor = left > 50 ? "right-0" : "left-0";
 
                     return (
                       <div
@@ -242,7 +250,7 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                           height: `${height}%`,
                         }}
                       >
-                        <span className="absolute -top-6 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap z-10">
+                        <span className={`absolute ${visionLabelPos} ${visionLabelAnchor} bg-red-600 text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap z-10`}>
                           {label}
                         </span>
                       </div>

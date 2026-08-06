@@ -18,7 +18,7 @@ import { API_BASE_URL } from '@/lib/api-client';
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { ShieldCheck, BookOpen, ThumbsUp, Medal, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, BookOpen, Download, Medal, AlertTriangle } from 'lucide-react';
 
 import {
   resolveInspectionImages,
@@ -132,7 +132,11 @@ export default function CertificatePage() {
   const repBBoxes = defectCoords.find((c) => c.image_index === repIdx)?.bboxes || [];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans pb-12">
+    // print-color-adjust: exact - 등급 배지 그라데이션/배경색이 PDF 출력물에서 날아가지 않게 강제
+    <div
+      className="min-h-screen bg-slate-50 flex flex-col font-sans pb-12 print:pb-0"
+      style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
+    >
       {/* Header */}
       <div className="bg-indigo-600 text-white p-6 shadow-md rounded-b-3xl">
         <div className="flex items-center justify-center gap-2 mb-2">
@@ -321,10 +325,20 @@ export default function CertificatePage() {
           </div>
         </div>
 
-        <div className="mt-6 flex justify-center">
-          <button className="bg-gray-900 text-white rounded-full px-6 py-3 font-bold text-sm shadow-lg flex items-center gap-2 hover:bg-gray-800 active:scale-95 transition-all cursor-pointer">
-            <ThumbsUp size={16} />
-            품질 보증서 확인 완료
+        {/*
+          [수정 이력 2026-08-06] 아무 동작 없던 "확인 완료" 버튼을 보증서 저장 버튼으로 교체.
+          외부 캡처 라이브러리 없이 브라우저 인쇄 엔진으로 PDF를 만든다(window.print) -
+          html2canvas 계열은 Tailwind v4의 oklch 색상과 외부 표지 이미지 CORS에서 깨지므로
+          채택하지 않았다. 버튼 자체는 print:hidden으로 출력물에서 제외한다.
+        */}
+        <div className="mt-6 flex justify-center print:hidden">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="bg-gray-900 text-white rounded-full px-6 py-3 font-bold text-sm shadow-lg flex items-center gap-2 hover:bg-gray-800 active:scale-95 transition-all cursor-pointer"
+          >
+            <Download size={16} />
+            보증서 PDF 저장 (인쇄)
           </button>
         </div>
       </div>
