@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
+import { maskName } from "@/lib/privacy-mask";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import {
@@ -111,7 +112,11 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
             return (
               <tr key={employee.employee_id} className="border-b border-gray-50 last:border-0">
                 <td className="px-4 py-3 font-medium text-gray-800">{employee.employee_id}</td>
-                <td className="px-4 py-3 text-gray-700">{employee.name}</td>
+                {/* ISMS-P 2.6.3 표시제한: 타인의 성명은 조회 화면에서 마스킹한다.
+                    (본인 확인용 원본은 마이페이지에서 정보주체 본인에게만 노출) */}
+                <td className="px-4 py-3 text-gray-700" title="개인정보 표시제한 적용">
+                  {maskName(employee.name)}
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <span

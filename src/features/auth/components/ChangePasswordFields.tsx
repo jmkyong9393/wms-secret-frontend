@@ -6,6 +6,7 @@ import { isAxiosError } from 'axios';
 import { Button } from '@/components/ui/button';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
 import { useChangePasswordMutation } from '@/features/auth/hooks/useChangePasswordMutation';
+import { checkPasswordPolicy, getPolicyChecklist } from '@/features/auth/utils/passwordPolicy';
 import type { AuthMeResponse } from '@/features/auth/types/authApiTypes';
 
 interface ChangePasswordFieldsProps {
@@ -44,8 +45,11 @@ export function ChangePasswordFields({ onSuccess, submitLabel = '비밀번호 �
       setError('새 비밀번호가 일치하지 않습니다.');
       return;
     }
-    if (newPassword.length < 4) {
-      setError('비밀번호는 최소 4자리 이상이어야 합니다.');
+    // 서버(app/core/password_policy.py)와 동일한 규칙을 사전 검증한다. 최종 판정은 서버가 하며,
+    // 여기서는 왕복 없이 즉시 알려주는 역할만 한다.
+    const violations = checkPasswordPolicy(newPassword, currentUser?.employeeId, currentUser?.name);
+    if (violations.length > 0) {
+      setError(violations.join(' / '));
       return;
     }
 
@@ -92,6 +96,24 @@ export function ChangePasswordFields({ onSuccess, submitLabel = '비밀번호 �
           required
         />
       </div>
+      {/* 비밀번호 작성 규칙 안내 (KISA 기술적·관리적 보호조치 기준).
+          입력에 따라 실시간으로 충족 여부를 표시해, 무엇이 부족한지 시행착오 없이 알 수 있게 한다. */}
+      <ul className="space-y-1 rounded-md bg-gray-50 border border-gray-200 p-3">
+        {getPolicyChecklist(newPassword, currentUser?.employeeId, currentUser?.name).map((item) => (
+          <li
+            key={item.label}
+            className={`flex items-start gap-2 text-xs ${
+              !newPassword ? 'text-gray-500' : item.satisfied ? 'text-emerald-600' : 'text-rose-600'
+            }`}
+          >
+            <span aria-hidden className="mt-px font-bold">
+              {!newPassword ? '•' : item.satisfied ? '✓' : '✕'}
+            </span>
+            <span>{item.label}</span>
+          </li>
+        ))}
+      </ul>
+
       <div>
         <label className="block text-sm font-medium text-gray-700">새 비밀번호 확인</label>
         <input
