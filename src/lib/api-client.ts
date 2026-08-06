@@ -1,9 +1,17 @@
 import axios from "axios";
 import { CURRENT_USER_STORAGE_KEY } from "@/features/auth/store/authAtoms";
 
-// 백엔드 API 기본 주소
-// 환경변수 미설정 시 로컬 백엔드 주소 사용
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// 백엔드 API 기본 주소.
+//
+// 빈 문자열("")을 넣으면 **같은 오리진**으로 상대경로 요청을 보낸다. 이 경우 next.config.ts의
+// rewrites가 /api/* 를 서버사이드에서 백엔드로 프록시하므로, 브라우저 입장에서는 CORS도
+// 크로스사이트 쿠키도 발생하지 않는다 (인증이 HttpOnly 쿠키라 이 점이 중요하다).
+// 터널/외부 접속 환경에서는 이 방식을 쓴다.
+//
+// `||`가 아니라 `??`를 쓴다 - `||`는 빈 문자열도 falsy로 보아 기본값으로 덮어써 버리므로
+// "같은 오리진" 설정 자체가 불가능해진다.
+// 환경변수 자체가 없으면 종전과 동일하게 로컬 백엔드를 가리킨다.
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

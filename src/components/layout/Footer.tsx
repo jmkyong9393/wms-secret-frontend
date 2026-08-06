@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { CONTACT_EMAIL } from '@/lib/contact';
 
 export default function Footer() {
   return (
@@ -31,7 +32,7 @@ export default function Footer() {
 
       <div className="text-gray-400 dark:text-gray-500 leading-relaxed font-sans text-[11px] md:text-xs pt-1">
         <p>
-          <strong className="text-gray-700 dark:text-gray-300 font-bold">Nexus</strong> : 멀티 에이전트 AI 기반 B2B 스마트 물류(WMS) 관제 플랫폼 &nbsp;|&nbsp; 대표자: 장문경 &nbsp;|&nbsp; 팀: AI_05조 &nbsp;|&nbsp; 문의: <a href="mailto:jmkyong2002@naver.com" className="hover:underline font-bold text-gray-500 dark:text-gray-400">jmkyong2002@naver.com</a>
+          <strong className="text-gray-700 dark:text-gray-300 font-bold">Nexus</strong> : 멀티 에이전트 AI 기반 B2B 스마트 물류(WMS) 관제 플랫폼 &nbsp;|&nbsp; 대표자: 장문경 &nbsp;|&nbsp; 팀: AI_05조 &nbsp;|&nbsp; 문의: <a href={`mailto:${CONTACT_EMAIL}`} className="hover:underline font-bold text-gray-500 dark:text-gray-400">{CONTACT_EMAIL}</a>
         </p>
         <p className="mt-0.5 text-gray-400 dark:text-gray-500 font-mono">
           © 2026 Nexus AI_05조. All rights reserved.

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ShieldCheck, ArrowLeft, Lock, EyeOff, FileCheck, Server, KeyRound } from 'lucide-react';
+import { PRIVACY_OFFICER } from '@/lib/contact';
 
 export default function PrivacyPolicyPage() {
   return (
@@ -112,7 +113,7 @@ export default function PrivacyPolicyPage() {
               <p><strong>대표자:</strong> 장문경 (Lead Architect & Project Owner)</p>
               <p><strong>소속:</strong> KT AIVLE School 빅프로젝트 AI_05조</p>
               <p className="text-gray-700 font-mono pt-1">
-                <strong>Contact Email:</strong> <a href="mailto:jmkyong2002@naver.com" className="text-blue-600 underline font-bold">jmkyong2002@naver.com</a>
+                <strong>개인정보 보호책임자:</strong> {PRIVACY_OFFICER.name} ({PRIVACY_OFFICER.role}) · <a href={`mailto:${PRIVACY_OFFICER.email}`} className="text-blue-600 underline font-bold">{PRIVACY_OFFICER.email}</a>
               </p>
             </div>
           </section>
