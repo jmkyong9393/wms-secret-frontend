@@ -73,21 +73,41 @@ export default function InboundScannerPage() {
   const setUploadQueue = useSetAtom(uploadQueueAtom);
   const user = useAtomValue(currentUserAtom);
 
-  const generateLPN = () => {
-    const today = new Date();
-    const dateStr = today.getFullYear().toString().slice(-2) + 
-                    ('0' + (today.getMonth() + 1)).slice(-2) + 
-                    ('0' + today.getDate()).slice(-2);
-    
-    // MVP 시연용 Workstation Station Line A 기본 고정
-    const activeStationLine = (typeof window !== 'undefined' && localStorage.getItem('active_workstation_line')) || 'A';
-    
-    // Line A 기준 순차 시퀀스 관리 (A001, A002, A003 ...)
-    let seq = parseInt(localStorage.getItem(`lpn_seq_${activeStationLine}_${dateStr}`) || '1', 10);
-    const seqStr = String(seq).padStart(3, '0');
-    localStorage.setItem(`lpn_seq_${activeStationLine}_${dateStr}`, String(seq + 1));
-    
-    return `LPN-${dateStr}-${activeStationLine}${seqStr}`;
+  /**
+   * LPN 채번 — 반드시 서버(POST /inventory/lpn)에서 받아온다.
+   *
+   * [2026-08-06 수정 — 데이터 손상 사고 수정]
+   * 종전에는 이 함수가 localStorage 카운터로 LPN을 직접 만들었다. DB를 한 번도 조회하지
+   * 않았기 때문에 아래 세 증상이 동시에 발생했다.
+   *   1) 이미 재고/HITL에 존재하는 번호를 새 도서에 다시 발급
+   *   2) 다른 스마트폰·브라우저에서는 카운터가 공유되지 않아 항상 001부터 재시작
+   *   3) Cloudflare 임시 터널(trycloudflare.com)은 재시작마다 서브도메인이 바뀌는데,
+   *      도메인이 바뀌면 브라우저가 별개 사이트로 취급해 localStorage가 초기화됨
+   *
+   * 단순 중복이 아니라 **조용한 데이터 손상**이었다. inventory_used_items.lpn_barcode는
+   * UNIQUE지만, 검수 확정 시 assign_rack_location_after_inspection()이 같은 LPN의 기존
+   * row를 찾아 UPDATE하므로 앞선 도서의 등급·점수·랙 위치가 통째로 덮어써진다.
+   *
+   * 서버는 존·날짜별 max(순번)+1로 채번하며 UNIQUE 충돌 시 재시도한다. 실패하면
+   * 라벨을 발급하지 않고 예외를 던진다 — 잘못된 번호를 실물에 붙이는 것보다 낫다.
+   */
+  const issueLPN = async (isbnValue: string): Promise<string> => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/inventory/lpn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        isbn: isbnValue,
+        zone: (typeof window !== 'undefined' && localStorage.getItem('active_workstation_line')) || 'A',
+        worker_id: user?.employeeId || null,
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail?.detail || 'LPN 채번에 실패했습니다. 네트워크를 확인하세요.');
+    }
+    const json = await res.json();
+    if (!json?.lpn_barcode) throw new Error('서버가 LPN을 반환하지 않았습니다.');
+    return json.lpn_barcode;
   };
 
   // ---------------------------------------------------------------------------
@@ -302,11 +322,20 @@ export default function InboundScannerPage() {
             setFasttrackQty(1);
             setStep('PRINT_STICKER'); // 하단 패스트트랙 수량 카드 렌더링
           } else {
-            // 중고/반품 도서만 개별 LPN 채번 및 스티커 출력
-            setCurrentLpn(generateLPN());
+            // 중고/반품 도서만 개별 LPN 채번 및 스티커 출력.
+            // 서버 채번이므로 비동기다. 실패 시 라벨을 만들지 않고 스캔 단계에 머문다.
             setBookInfo(null);
             setIsLoadingBook(true);
             setStep('PRINT_STICKER');
+            try {
+              setCurrentLpn(await issueLPN(text));
+            } catch (e: any) {
+              alert(e?.message || 'LPN 채번 실패');
+              setCurrentLpn('');
+              setIsLoadingBook(false);
+              setStep('SCAN_BARCODE');
+              return;
+            }
           }
 
           // 백그라운드에서 알라딘 API 연동 도서 정보 조회
@@ -386,17 +415,14 @@ export default function InboundScannerPage() {
     }
   }, [step]);
 
-  // 뒤로가기 핸들러 (부착 미완료 시 LPN 채번 롤백 및 데이터 초기화)
+  // 뒤로가기 핸들러 (부착 미완료 시 화면 상태 초기화)
+  //
+  // [2026-08-06 수정] 종전에는 localStorage 카운터를 1 되돌려 번호를 재사용했다.
+  // 서버 채번으로 이관하면서 이 롤백은 제거한다. 발급된 LPN은 이미 DB에 선부착
+  // 등록(PENDING_INSPECTION)되어 있으므로, 되돌려 재사용하면 서로 다른 실물이 같은
+  // 번호를 갖게 된다. **결번은 정상이다** — 폐기된 라벨 번호를 재사용하면 추적성이 깨진다.
   const handleBack = () => {
     if (step === 'PRINT_STICKER') {
-      const today = new Date();
-      const dateStr = today.getFullYear().toString().slice(-2) + 
-                      ('0' + (today.getMonth() + 1)).slice(-2) + 
-                      ('0' + today.getDate()).slice(-2);
-      let seq = parseInt(localStorage.getItem(`lpn_seq_${dateStr}`) || '1', 10);
-      if (seq > 1) {
-        localStorage.setItem(`lpn_seq_${dateStr}`, String(seq - 1));
-      }
       setCurrentLpn('');
       setIsbn('');
       setBookInfo(null);
@@ -837,10 +863,18 @@ export default function InboundScannerPage() {
                     setFasttrackQty(1);
                     setStep('PRINT_STICKER');
                   } else {
-                    setCurrentLpn(generateLPN());
                     setBookInfo(null);
                     setIsLoadingBook(true);
                     setStep('PRINT_STICKER');
+                    try {
+                      setCurrentLpn(await issueLPN(inputVal));
+                    } catch (e: any) {
+                      alert(e?.message || 'LPN 채번 실패');
+                      setCurrentLpn('');
+                      setIsLoadingBook(false);
+                      setStep('SCAN_BARCODE');
+                      return;
+                    }
                   }
 
                   try {
