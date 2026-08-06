@@ -11,7 +11,7 @@ import { processImage } from '@/lib/image-processor';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { uploadQueueAtom } from '@/stores/atoms';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
-import Header from '@/components/layout/Header';
+import { getSystemSettings } from '@/lib/systemSettings';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { BrowserMultiFormatReader as ZXingBrowserReader } from '@zxing/browser';
 import { QRCodeSVG } from 'qrcode.react';
@@ -484,13 +484,12 @@ export default function InboundScannerPage() {
 
   return (
     /*
-      [수정 이력 2026-08-04] /inbound는 MainLayout을 쓰지 않아 body 기본색(다크에서 순수
-      검정)이 그대로 노출되어 관제 페이지(bg-gray-50 dark:bg-gray-950)와 배경이 달랐다.
-      동일 팔레트의 배경 래퍼를 추가해 통일.
+      [수정 이력 2026-08-06] 종전에는 이 페이지가 <Header />와 배경 래퍼를 직접 렌더했다
+      (/inbound에 layout.tsx가 없었기 때문). 이제 app/inbound/layout.tsx가 역할 적응형
+      셸(WORKER=모바일 셸+하단 탭바 / ADMIN=MainLayout)을 제공하므로 헤더·배경·스크롤
+      컨테이너는 셸에 위임하고 여기서는 콘텐츠만 렌더한다 (헤더 이중 렌더 방지).
     */
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-200">
-    <div className="space-y-6 pb-10 max-w-5xl mx-auto font-sans">
-      <Header />
+    <div className="space-y-6 pb-10 px-4 sm:px-0 pt-4 max-w-5xl mx-auto font-sans">
       {/*
         1. Top Banner Header (관제 표준 패턴)
         [수정 이력 2026-08-04] 다크 그라데이션 고정 배너가 라이트 모드에서 겉돌아
@@ -977,8 +976,13 @@ export default function InboundScannerPage() {
               </button>
             ) : bookInfo?.isRescan ? (
               <div className="flex gap-2 mt-2">
-                <button 
+                <button
                   onClick={async () => {
+                    // 시스템 설정에서 자동 인쇄를 끈 경우 WebUSB 연결 시도 없이 바로 촬영 단계로
+                    if (!getSystemSettings().autoPrintTrigger) {
+                      setStep('VISION_EVALUATION');
+                      return;
+                    }
                     setIsPrinting(true);
                     try {
                       const printer = new PrinterHelper();
@@ -1011,8 +1015,13 @@ export default function InboundScannerPage() {
                 </button>
               </div>
             ) : (
-              <button 
+              <button
                 onClick={async () => {
+                  // 시스템 설정에서 자동 인쇄를 끈 경우 WebUSB 연결 시도 없이 바로 촬영 단계로
+                  if (!getSystemSettings().autoPrintTrigger) {
+                    setStep('VISION_EVALUATION');
+                    return;
+                  }
                   setIsPrinting(true);
                   try {
                     const printer = new PrinterHelper();
@@ -1179,7 +1188,6 @@ export default function InboundScannerPage() {
           </div>
         )}
       </div>
-    </div>
     </div>
     </div>
   );
