@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import BookCover from "@/components/BookCover";
 import { adminAPI } from "@/lib/api";
+import { getSystemSettings, SETTINGS_CHANGE_EVENT } from "@/lib/systemSettings";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
 import { HitlImageModal } from "@/features/hitl/components/HitlImageModal";
 
@@ -201,6 +202,20 @@ export default function AdminHitlDashboard() {
   };
   const [tasks, setTasks] = useState<HitlTask[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // 시스템 설정의 HITL 대기열 경보 임계값 (설정 페이지에서 변경 시 실시간 반영)
+  const [alertThreshold, setAlertThreshold] = useState<number>(10);
+  useEffect(() => {
+    setAlertThreshold(getSystemSettings().hitlAlertThreshold);
+    const onSettingsChange = (e: Event) => {
+      const evt = e as CustomEvent<{ hitlAlertThreshold?: number }>;
+      if (evt.detail && Number.isFinite(evt.detail.hitlAlertThreshold)) {
+        setAlertThreshold(evt.detail.hitlAlertThreshold as number);
+      }
+    };
+    window.addEventListener(SETTINGS_CHANGE_EVENT, onSettingsChange);
+    return () => window.removeEventListener(SETTINGS_CHANGE_EVENT, onSettingsChange);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
   const [modalTask, setModalTask] = useState<HitlTask | null>(null);
@@ -469,17 +484,34 @@ export default function AdminHitlDashboard() {
         </div>
       </div>
 
+      {/* HITL 대기열 누적 경보 (시스템 설정의 임계값과 실연동) */}
+      {tasks.length >= alertThreshold && (
+        <div className="flex items-center gap-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 rounded-2xl px-5 py-3.5 shadow-xs animate-in fade-in slide-in-from-top-2">
+          <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 animate-pulse" />
+          <p className="text-xs font-bold text-rose-800 dark:text-rose-200">
+            HITL 승인 대기열 누적 경보 — 대기 <strong className="font-mono text-sm">{tasks.length}</strong>건이
+            설정 임계값(<strong className="font-mono">{alertThreshold}건</strong>)에 도달했습니다. 결재 지연 시 입고 리드타임에 영향을 줍니다.
+          </p>
+        </div>
+      )}
+
       {/* Summary Cards (검수 처리 내역 KPI 카드와 동일 패턴) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-1">
+        <div className={`bg-white dark:bg-gray-900 p-5 rounded-2xl border shadow-xs space-y-1 transition-colors ${
+          tasks.length >= alertThreshold
+            ? 'border-rose-300 dark:border-rose-800 ring-2 ring-rose-500/20'
+            : 'border-gray-200 dark:border-gray-800'
+        }`}>
           <div className="flex items-center justify-between text-xs font-extrabold text-gray-500 dark:text-gray-400">
             <span>검수 대기 총계</span>
-            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <AlertTriangle className={`w-4 h-4 ${tasks.length >= alertThreshold ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} />
           </div>
-          <p className="text-3xl font-black text-amber-600 dark:text-amber-400 font-mono">
+          <p className={`text-3xl font-black font-mono ${tasks.length >= alertThreshold ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>
             {tasks.length}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Supervisor 이관 - 관리자 결재 대기</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+            Supervisor 이관 - 관리자 결재 대기 (경보 기준 {alertThreshold}건)
+          </p>
         </div>
 
         <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-1">
@@ -730,6 +762,58 @@ export default function AdminHitlDashboard() {
                               <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium truncate" title={t.agent_logs?.reason || "Vision Agent 1차 감지 완료"}>
                                 {t.agent_logs?.reason || "Vision Agent 1차 감지 완료"}
                               </p>
+
+                              {/*
+                                [신설 2026-08-06] HITL 이관 근거를 검수자에게 노출한다.
+                                증거 대조 검증이 결함을 오탐으로 지목하면 Policy가 감점에서 제외하고,
+                                그 결과 감점이 0이 되면 Critic이 "결함 N건인데 감점 0점"으로 잡아
+                                여기로 보낸다. 이 맥락 없이 결함 목록과 점수만 보면 검수자는
+                                "결함 4건인데 왜 100점인가"를 판단할 수 없다.
+                              */}
+                              {(() => {
+                                const logs = t.agent_logs || {};
+                                const lines: { label: string; text: string; tone: string }[] = [];
+                                const vision: string = logs.vision_text || "";
+                                const policy: string = logs.policy_text || "";
+                                const critic: string = logs.critic_text || "";
+
+                                if (vision.includes("증거 대조 검증 반려")) {
+                                  lines.push({
+                                    label: "증거 대조",
+                                    text: vision.split("증거 대조 검증 반려 -")[1]?.trim() || vision,
+                                    tone: "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-900",
+                                  });
+                                }
+                                if (policy.includes("감점 제외")) {
+                                  const seg = policy.split("증거 대조 검증에서 오탐으로 지목되어 감점 제외:")[1];
+                                  lines.push({
+                                    label: "감점 제외",
+                                    text: (seg || "").split("|")[0].trim(),
+                                    tone: "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-900",
+                                  });
+                                }
+                                if (critic.includes("교차 검증 실패")) {
+                                  lines.push({
+                                    label: "이관 사유",
+                                    text: critic.split("불일치 감지:")[1]?.split(".")[0]?.trim() || critic,
+                                    tone: "text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900",
+                                  });
+                                }
+                                if (lines.length === 0) return null;
+
+                                return (
+                                  <div className="pt-1.5 space-y-1">
+                                    {lines.map((l) => (
+                                      <div
+                                        key={l.label}
+                                        className={`px-2 py-1 rounded-lg border text-[10px] leading-snug font-semibold ${l.tone}`}
+                                      >
+                                        <span className="font-black">{l.label}</span> · {l.text}
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })()}

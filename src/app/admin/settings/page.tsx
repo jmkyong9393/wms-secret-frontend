@@ -1,69 +1,73 @@
 'use client';
 
+/**
+ * 시스템 설정 관제 콘솔.
+ *
+ * [수정 이력 2026-08-05] 테마를 제외한 전 항목이 로컬 state 더미(저장 버튼 = 토스트만)였다.
+ * - "AI 검수 & Fast Track 임계값" 슬라이더 제거: MINT 95점은 UBCI S등급 경계와 결합된
+ *   파이프라인 정책 상수(프리즈 구역)라 런타임 변경 대상이 아니고, "BBox 신뢰도 하한
+ *   이관"은 실제 파이프라인에 존재하지 않는 가공 설정이었다. 실제 정책을 보여주는
+ *   읽기 전용 정책 뷰로 대체.
+ * - 자동 인쇄 트리거 / HITL 경보 임계값은 lib/systemSettings 저장소로 실제 영속화하고
+ *   /inbound(프린터 연결 시도), /admin/hitl(대기열 경보)이 소비한다.
+ * - 실시간 팝업 알림 음소거는 Header와 동일 키(nexus-notif-muted)를 공유한다.
+ */
+
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Settings, 
-  Cpu, 
-  Printer, 
-  Sun, 
-  Moon, 
-  BellRing, 
-  ShieldAlert, 
-  Save, 
-  CheckCircle2, 
-  Sliders, 
-  Volume2, 
-  Sparkles,
-  Zap
+import {
+  Settings, Cpu, Printer, Sun, Moon, BellRing, Save, CheckCircle2, Zap, ShieldAlert, Lock,
 } from 'lucide-react';
+import { getSystemSettings, saveSystemSettings } from '@/lib/systemSettings';
+
+/** 파이프라인 실제 정책 상수 (표시 전용 - 소스: wms-secret-backend/app/ai/agents) */
+const UBCI_GRADE_POLICY = [
+  { grade: 'S급 (MINT)', range: '95 ~ 100점', note: 'is_mint 판정 시 자동 매입/환불 (auto_refund_eligible)', color: 'text-emerald-700 dark:text-emerald-400' },
+  { grade: 'A급 (GOOD)', range: '85 ~ 94점', note: '자동 승인 입고', color: 'text-blue-700 dark:text-blue-400' },
+  { grade: 'B급 (NORMAL)', range: '65 ~ 84점', note: '자동 승인 입고 (등급 하향)', color: 'text-amber-700 dark:text-amber-400' },
+  { grade: 'C급 (REJECT)', range: '0 ~ 64점', note: '입고 반려 (반송/폐기)', color: 'text-rose-700 dark:text-rose-400' },
+];
+
+const HITL_ROUTING_POLICY = [
+  'UBCI 점수가 NORMAL/REJECT 경계선(58~66점) 구간에 들어온 경우',
+  'Critic Agent 반려로 재검수 루프가 2회를 초과한 경우',
+  'Vision Agent(GPT-4o) 판독 자체가 실패한 경우 (MINT 자동 승격 금지)',
+];
 
 export default function SystemSettingsPage() {
-  // 1. AI Threshold State
-  const [ubciThreshold, setUbciThreshold] = useState<number>(95);
-  const [confidenceThreshold, setConfidenceThreshold] = useState<number>(0.70);
-  const [showBboxDebug, setShowBboxDebug] = useState<boolean>(true);
-
-  // 2. Thermal Printer State
-  const [labelWidth, setLabelWidth] = useState<number>(50);
-  const [labelHeight, setLabelHeight] = useState<number>(30);
+  // 실연동 설정 (lib/systemSettings 영속화)
   const [autoPrintTrigger, setAutoPrintTrigger] = useState<boolean>(true);
-
-  // 3. Theme State (Light / Dark)
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
-
-  // 4. Alert & Sound State
   const [hitlAlertCount, setHitlAlertCount] = useState<number>(10);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-
+  // Header와 공유하는 실시간 팝업 알림 음소거 (nexus-notif-muted)
+  const [notifMuted, setNotifMuted] = useState<boolean>(false);
+  // 테마 (기존 실연동 유지)
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
 
-  // Sync initial theme from document & listen to real-time events
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('nexus-theme') === 'dark';
-      setIsDarkMode(isDark);
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-        document.body.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.body.classList.remove('dark');
-      }
+    if (typeof window === 'undefined') return;
+    const s = getSystemSettings();
+    setAutoPrintTrigger(s.autoPrintTrigger);
+    setHitlAlertCount(s.hitlAlertThreshold);
+    setNotifMuted(localStorage.getItem('nexus-notif-muted') === 'true');
 
-      const handleThemeEvent = (e: Event) => {
-        const customEvt = e as CustomEvent<{ isDark: boolean }>;
-        if (customEvt.detail && typeof customEvt.detail.isDark === 'boolean') {
-          setIsDarkMode(customEvt.detail.isDark);
-        }
-      };
-
-      window.addEventListener('nexus-theme-change', handleThemeEvent);
-      return () => window.removeEventListener('nexus-theme-change', handleThemeEvent);
+    const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('nexus-theme') === 'dark';
+    setIsDarkMode(isDark);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
     }
+
+    const handleThemeEvent = (e: Event) => {
+      const customEvt = e as CustomEvent<{ isDark: boolean }>;
+      if (customEvt.detail && typeof customEvt.detail.isDark === 'boolean') {
+        setIsDarkMode(customEvt.detail.isDark);
+      }
+    };
+    window.addEventListener('nexus-theme-change', handleThemeEvent);
+    return () => window.removeEventListener('nexus-theme-change', handleThemeEvent);
   }, []);
 
   const toggleTheme = (dark: boolean) => {
@@ -80,7 +84,19 @@ export default function SystemSettingsPage() {
     window.dispatchEvent(new CustomEvent('nexus-theme-change', { detail: { isDark: dark } }));
   };
 
+  const toggleNotifMute = () => {
+    const next = !notifMuted;
+    setNotifMuted(next);
+    localStorage.setItem('nexus-notif-muted', String(next));
+    // Header가 즉시 반영하도록 브로드캐스트 (Header에 동일 이벤트 리스너 존재)
+    window.dispatchEvent(new CustomEvent('nexus-notif-mute-change', { detail: { isMuted: next } }));
+  };
+
   const handleSave = () => {
+    saveSystemSettings({
+      autoPrintTrigger,
+      hitlAlertThreshold: Math.max(1, Math.floor(hitlAlertCount) || 10),
+    });
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
@@ -95,7 +111,7 @@ export default function SystemSettingsPage() {
             <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">시스템 설정 관제 콘솔</h1>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-            Nexus 멀티 에이전트 AI 비전 검수 임계값, 50×30mm 열전사 프린터 및 화면 라이트/다크 모드 통합 제어
+            화면 테마 · LPN 열전사 인쇄 · HITL 경보 임계값 제어 및 AI 검수 정책 상수 조회
           </p>
         </div>
 
@@ -105,7 +121,7 @@ export default function SystemSettingsPage() {
               <CheckCircle2 className="w-4 h-4" /> 설정 저장 완료!
             </span>
           )}
-          <Button 
+          <Button
             onClick={handleSave}
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-5 py-2 rounded-xl shadow-md flex items-center gap-2"
           >
@@ -117,7 +133,7 @@ export default function SystemSettingsPage() {
       {/* Grid Settings Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* 1. Theme & Display Settings */}
+        {/* 1. Theme & Display Settings (실연동) */}
         <Card className="border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-800 rounded-2xl">
           <CardHeader className="border-b border-gray-100 dark:border-gray-700/60 pb-4">
             <div className="flex items-center justify-between">
@@ -141,8 +157,8 @@ export default function SystemSettingsPage() {
                 type="button"
                 onClick={() => toggleTheme(false)}
                 className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${
-                  !isDarkMode 
-                    ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-bold shadow-xs' 
+                  !isDarkMode
+                    ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-bold shadow-xs'
                     : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                 }`}
               >
@@ -154,8 +170,8 @@ export default function SystemSettingsPage() {
                 type="button"
                 onClick={() => toggleTheme(true)}
                 className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${
-                  isDarkMode 
-                    ? 'border-indigo-500 bg-indigo-950/60 text-indigo-300 font-bold shadow-xs' 
+                  isDarkMode
+                    ? 'border-indigo-500 bg-indigo-950/60 text-indigo-300 font-bold shadow-xs'
                     : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                 }`}
               >
@@ -166,7 +182,7 @@ export default function SystemSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* 2. AI Vision & Fast Track Settings */}
+        {/* 2. AI 검수 정책 (읽기 전용 - 파이프라인 정책 상수 조회) */}
         <Card className="border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-800 rounded-2xl">
           <CardHeader className="border-b border-gray-100 dark:border-gray-700/60 pb-4">
             <div className="flex items-center justify-between">
@@ -175,61 +191,49 @@ export default function SystemSettingsPage() {
                   <Cpu className="w-5 h-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-base font-black text-gray-900 dark:text-white">AI 검수 & Fast Track 임계값</CardTitle>
-                  <CardDescription className="text-xs">UBCI 점수 및 5-Agent BBox 신뢰도 설정</CardDescription>
+                  <CardTitle className="text-base font-black text-gray-900 dark:text-white">AI 검수 정책 (읽기 전용)</CardTitle>
+                  <CardDescription className="text-xs">UBCI 등급 경계 및 HITL 자동 이관 규칙</CardDescription>
                 </div>
               </div>
-              <Badge variant="outline" className="font-mono text-xs font-bold text-blue-700 bg-blue-50 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-800">
-                AI CORE
+              <Badge variant="outline" className="font-mono text-xs font-bold text-blue-700 bg-blue-50 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                <Lock className="w-3 h-3" /> POLICY
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="pt-6 space-y-5">
-            {/* UBCI Score slider */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                  <Zap className="w-4 h-4 text-amber-500" /> MINT Fast Track 직행 UBCI 점수
-                </label>
-                <span className="text-xs font-mono font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-                  {ubciThreshold}점 이상
-                </span>
-              </div>
-              <input 
-                type="range" 
-                min="80" 
-                max="99" 
-                value={ubciThreshold} 
-                onChange={(e) => setUbciThreshold(Number(e.target.value))}
-                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-              />
-              <p className="text-[11px] text-gray-400">이 점수 이상 판정 건은 HITL을 건너뛰고 A-01-01 셀로 즉시 자동 입고됩니다.</p>
+          <CardContent className="pt-5 space-y-4">
+            <div className="space-y-1.5">
+              {UBCI_GRADE_POLICY.map((p) => (
+                <div key={p.grade} className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-700/40 rounded-lg border border-gray-100 dark:border-gray-700 text-xs">
+                  <span className={`font-black ${p.color}`}>{p.grade}</span>
+                  <span className="font-mono font-bold text-gray-700 dark:text-gray-300">{p.range}</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 text-right max-w-[45%]">{p.note}</span>
+                </div>
+              ))}
             </div>
 
-            {/* Bbox Confidence */}
-            <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                  HITL 수동 이관 BBox 신뢰도 하한선
-                </label>
-                <span className="text-xs font-mono font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
-                  {(confidenceThreshold * 100).toFixed(0)}% 미만 시 이관
-                </span>
-              </div>
-              <input 
-                type="range" 
-                min="0.50" 
-                max="0.90" 
-                step="0.05"
-                value={confidenceThreshold} 
-                onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
-                className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-              />
+            <div className="pt-1">
+              <p className="text-[11px] font-black text-gray-600 dark:text-gray-300 mb-1.5 flex items-center gap-1">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> HITL 관리자 결재 자동 이관 규칙 (Supervisor/Critic)
+              </p>
+              <ul className="space-y-1">
+                {HITL_ROUTING_POLICY.map((rule, i) => (
+                  <li key={i} className="text-[11px] text-gray-500 dark:text-gray-400 flex items-start gap-1.5">
+                    <span className="text-amber-500 font-black shrink-0">{i + 1}.</span>
+                    {rule}
+                  </li>
+                ))}
+              </ul>
             </div>
+
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed border-t border-gray-100 dark:border-gray-700 pt-2.5">
+              <Lock className="w-3 h-3 inline mr-0.5 -mt-0.5" />
+              위 임계값은 UBCI 등급 체계와 결합된 <strong>파이프라인 정책 상수(코드 프리즈 구역)</strong>로
+              관리되며 런타임 변경을 지원하지 않습니다. 변경이 필요하면 정책 개정 절차(명세서 갱신 → 코드 반영)를 따릅니다.
+            </p>
           </CardContent>
         </Card>
 
-        {/* 3. Thermal Printer Settings */}
+        {/* 3. Thermal Printer Settings (자동 인쇄 트리거 실연동) */}
         <Card className="border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-800 rounded-2xl">
           <CardHeader className="border-b border-gray-100 dark:border-gray-700/60 pb-4">
             <div className="flex items-center justify-between">
@@ -251,19 +255,22 @@ export default function SystemSettingsPage() {
             <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/40 rounded-xl border border-gray-200 dark:border-gray-700">
               <span className="text-xs font-bold text-gray-800 dark:text-gray-200">스티커 용지 규격</span>
               <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400">
-                {labelWidth}mm × {labelHeight}mm (203 DPI)
+                50mm × 30mm (203 DPI) — 고정 규격
               </span>
             </div>
 
             <div className="flex items-center justify-between pt-2">
               <div>
-                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">LPN 발급 즉시 열전사 자동 인쇄 트리거</p>
-                <p className="text-[11px] text-gray-400">LPN 생성 즉시 인쇄 대화상자(window.print)를 자동 호출합니다.</p>
+                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">LPN 발급 시 열전사 프린터(WebUSB) 인쇄 시도</p>
+                <p className="text-[11px] text-gray-400">
+                  끄면 /inbound 입고 검수에서 프린터 연결을 시도하지 않고 바로 촬영 단계로 진행합니다
+                  (프린터 미설치 현장·데모 환경용).
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setAutoPrintTrigger(!autoPrintTrigger)}
-                className={`w-12 h-6 rounded-full transition-colors relative p-0.5 ${
+                className={`w-12 h-6 rounded-full transition-colors relative p-0.5 shrink-0 ml-3 ${
                   autoPrintTrigger ? 'bg-emerald-600' : 'bg-gray-300 dark:bg-gray-600'
                 }`}
               >
@@ -275,7 +282,7 @@ export default function SystemSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* 4. Alert & Sound Notifications */}
+        {/* 4. Alert & Notifications (실연동) */}
         <Card className="border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-800 rounded-2xl">
           <CardHeader className="border-b border-gray-100 dark:border-gray-700/60 pb-4">
             <div className="flex items-center justify-between">
@@ -285,7 +292,7 @@ export default function SystemSettingsPage() {
                 </div>
                 <div>
                   <CardTitle className="text-base font-black text-gray-900 dark:text-white">WMS 관제 알림 & 경보</CardTitle>
-                  <CardDescription className="text-xs">HITL 대기열 경보 및 효과음 설정</CardDescription>
+                  <CardDescription className="text-xs">HITL 대기열 경보 임계값 및 실시간 팝업 제어</CardDescription>
                 </div>
               </div>
               <Badge variant="outline" className="font-mono text-xs font-bold text-amber-700 bg-amber-50 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-800">
@@ -293,18 +300,42 @@ export default function SystemSettingsPage() {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="pt-6 space-y-4">
+          <CardContent className="pt-6 space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">HITL 승인 대기열 누적 팝업 경보</p>
-                <p className="text-[11px] text-gray-400">{hitlAlertCount}건 이상 미처리 시 상단 알림 뱃지 강조</p>
+                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">HITL 승인 대기열 누적 경보 임계값</p>
+                <p className="text-[11px] text-gray-400">
+                  대기 건수가 {hitlAlertCount}건 이상이면 승인 대기(HITL) 화면 상단에 경보 배너를 강조합니다.
+                </p>
               </div>
               <input
                 type="number"
+                min={1}
                 value={hitlAlertCount}
                 onChange={(e) => setHitlAlertCount(Number(e.target.value))}
                 className="w-16 p-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs font-mono font-bold text-center"
               />
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
+              <div>
+                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">실시간 팝업 알림 (WMS / FDS 이벤트 스트림)</p>
+                <p className="text-[11px] text-gray-400">
+                  상단 종 아이콘의 음소거와 동일한 설정입니다. 끄면 실시간 토스트가 표시되지 않습니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleNotifMute}
+                className={`w-12 h-6 rounded-full transition-colors relative p-0.5 shrink-0 ml-3 ${
+                  !notifMuted ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+                title={notifMuted ? '알림 켜기' : '알림 끄기'}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform ${
+                  !notifMuted ? 'translate-x-6' : 'translate-x-0'
+                }`} />
+              </button>
             </div>
           </CardContent>
         </Card>
