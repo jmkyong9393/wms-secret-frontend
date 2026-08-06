@@ -6,6 +6,8 @@ import { useSetAtom } from 'jotai';
 import { Button } from '@/components/ui/button';
 import { CURRENT_USER_STORAGE_KEY, currentUserAtom } from '@/features/auth/store/authAtoms';
 import { login } from '@/features/auth/api/authService';
+import LoginFailureAlert from '@/features/auth/components/LoginFailureAlert';
+import { resolveLoginFailure, type LoginFailure } from '@/features/auth/utils/loginFailure';
 import {
   UserCheck,
   Sparkles,
@@ -19,6 +21,8 @@ export default function LoginPage() {
   const [employee_id, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  // 인라인 배너와 별개로, 실패 사유를 코드/조치와 함께 알림창으로 띄운다.
+  const [failure, setFailure] = useState<LoginFailure | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const setCurrentUser = useSetAtom(currentUserAtom);
@@ -33,10 +37,17 @@ export default function LoginPage() {
     e.preventDefault();
     if (!employee_id || !password) {
       setError('사번과 비밀번호를 입력해 주세요.');
+      setFailure({
+        code: 'CLIENT_EMPTY_INPUT',
+        title: '입력값이 비어 있습니다',
+        message: '사번과 비밀번호를 모두 입력해야 인증을 요청할 수 있습니다.',
+        severity: 'warning',
+      });
       return;
     }
 
     setError('');
+    setFailure(null);
     setLoading(true);
 
     try {
@@ -59,13 +70,16 @@ export default function LoginPage() {
       }
 
     } catch (err: any) {
-      console.error("Login Error:", err);
-      if (err.code === "ERR_NETWORK" || err.message?.includes("Network Error") || !err.response) {
-        setError("백엔드 서버 연결 실패! 서버가 실행 중인지 확인해 주세요.");
-      } else {
-        const msg = err.response?.data?.message || err.response?.data?.detail || '사번 또는 비밀번호가 올바르지 않습니다.';
-        setError(msg);
-      }
+      // [수정 이력] 종전에는 모든 실패를 문구 하나로 뭉개, 시도 제한(429)조차
+      // "비밀번호가 올바르지 않습니다"로 표시됐다. 이제 백엔드 error_code를 근거로
+      // 사유를 특정해 알림창과 인라인 배너에 함께 노출한다.
+      const resolved = resolveLoginFailure(err);
+      console.error(`[Login Failed] ${resolved.code}`, {
+        status: resolved.status,
+        body: err?.response?.data,
+      });
+      setFailure(resolved);
+      setError(resolved.message);
     } finally {
       setLoading(false);
     }
@@ -75,7 +89,10 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/30 flex items-center justify-center p-4 sm:p-6 lg:p-12 relative overflow-hidden font-sans text-gray-900 transition-colors duration-200">
-      
+
+      {/* 실패 사유 알림창 (사유 코드 + 조치 안내 포함) */}
+      <LoginFailureAlert failure={failure} onClose={() => setFailure(null)} />
+
       {/* Soft Light Ambient Glow Orbs */}
       <div className="absolute -top-40 -left-40 w-[600px] h-[600px] bg-blue-200/40 rounded-full blur-[140px] pointer-events-none animate-pulse"></div>
       <div className="absolute -bottom-40 -right-40 w-[600px] h-[600px] bg-indigo-200/40 rounded-full blur-[140px] pointer-events-none"></div>
@@ -137,9 +154,17 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center gap-2 animate-in fade-in">
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
-              {error}
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-start gap-2 animate-in fade-in">
+              <span className="w-2 h-2 mt-1 shrink-0 rounded-full bg-rose-500 animate-ping"></span>
+              <span className="min-w-0">
+                {error}
+                {failure && (
+                  <span className="block mt-0.5 font-mono text-[10px] text-rose-500/80">
+                    {failure.code}
+                    {failure.status ? ` · HTTP ${failure.status}` : ''}
+                  </span>
+                )}
+              </span>
             </div>
           )}
 
