@@ -1,5 +1,6 @@
 'use client';
 import { API_BASE_URL } from '@/lib/api-client';
+import { maskName } from '@/lib/privacy-mask';
 
 import Link from 'next/link';
 import React, { useState } from 'react';
@@ -264,15 +265,8 @@ export default function Header() {
   };
   const pageTitle = getPageTitle(pathname);
 
-  // ISMS-P 2.6.3 개인정보 표시제한 (가운데 글자 마스킹: 장*경, 홍*동)
-  const maskName = (name: string) => {
-    if (!name) return '사용자';
-    if (name.length <= 2) return name.charAt(0) + '*';
-    if (name.length === 3) {
-      return name.charAt(0) + '*' + name.charAt(2); // 가운데 글자 마스킹 (장*경)
-    }
-    return name.charAt(0) + '*'.repeat(name.length - 2) + name.charAt(name.length - 1);
-  };
+  // ISMS-P 2.6.3 개인정보 표시제한 규칙은 @/lib/privacy-mask 한 곳에서만 정의한다.
+  // (종전에는 이 컴포넌트에 인라인 구현이 박혀 있어, 다른 화면은 마스킹 없이 원본을 노출했다.)
 
   return (
     <header className="h-[clamp(3.75rem,6.5vh,5.5rem)] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-3 sm:px-6 lg:px-8 transition-colors duration-200">
