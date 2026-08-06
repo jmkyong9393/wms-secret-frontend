@@ -30,33 +30,41 @@ export function formatZone(zone?: string): string {
     .replace(/--+/g, '-');
 }
 
-/** UBCI 점수/등급 → 표기 등급 + 배지 클래스 (UBCI_Specification_v2.0.0.0 경계값) */
-export function gradeMeta(grade: string, ubciScore?: number | null): { display: string; badge: string } {
-  const g = (grade || '').toUpperCase();
-  const score = ubciScore !== undefined && ubciScore !== null ? ubciScore : 85;
+const GRADE_BADGE: Record<string, string> = {
+  MINT: 'bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800',
+  GOOD: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800',
+  NORMAL: 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
+  REJECT: 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800',
+};
 
-  if (score >= 95 || g.includes('MINT') || g === 'S') {
-    return {
-      display: 'MINT',
-      badge: 'bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800',
-    };
-  }
-  if (score >= 85 || g.includes('GOOD') || g.includes('A')) {
-    return {
-      display: 'GOOD',
-      badge: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800',
-    };
-  }
-  if (score >= 65 || g.includes('NORMAL') || g.includes('B')) {
-    return {
-      display: 'NORMAL',
-      badge: 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
-    };
-  }
-  return {
-    display: 'REJECT',
-    badge: 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800',
-  };
+/** 등급 문자열의 별칭 → 표준 등급. 부분 문자열 매칭을 쓰지 않기 위한 정확 매핑. */
+const GRADE_ALIAS: Record<string, string> = {
+  MINT: 'MINT', S: 'MINT',
+  GOOD: 'GOOD', A: 'GOOD',
+  NORMAL: 'NORMAL', B: 'NORMAL',
+  POOR: 'REJECT', REJECT: 'REJECT', C: 'REJECT',
+};
+
+/**
+ * UBCI 점수/등급 → 표기 등급 + 배지 클래스 (UBCI_Specification_v2.0.0.0 경계값).
+ *
+ * [2026-08-06 정정] 두 가지를 고쳤다.
+ *  1) `g.includes('A')`로 A급을 판정했는데 **'NORMAL'에도 'A'가 들어 있다.** 그래서
+ *     NORMAL 84점이 GOOD으로 표시됐다. 별칭 테이블로 정확히 매칭한다.
+ *  2) 점수와 등급 문자열이 어긋날 때 점수 조건이 먼저 걸려 등급 문자열이 무시됐다.
+ *     확정 등급(HITL 결재 등)이 있으면 그것이 정답이므로 등급을 우선한다 -
+ *     점수는 등급이 비어 있을 때의 폴백이다.
+ */
+export function gradeMeta(grade: string, ubciScore?: number | null): { display: string; badge: string } {
+  const g = (grade || '').toUpperCase().trim();
+
+  // NEW/NEW_FASTTRACK 등 중고 등급 체계 밖의 값은 점수 폴백으로 넘긴다.
+  const named = GRADE_ALIAS[g];
+  if (named) return { display: named, badge: GRADE_BADGE[named] };
+
+  const score = ubciScore ?? 85;
+  const display = score >= 95 ? 'MINT' : score >= 85 ? 'GOOD' : score >= 65 ? 'NORMAL' : 'REJECT';
+  return { display, badge: GRADE_BADGE[display] };
 }
 
 /** 'YYYY-MM-DD HH:mm:ss' 고정 표기 (이미 표준 포맷이면 그대로 반환해 JS 타임존 왜곡 방지) */

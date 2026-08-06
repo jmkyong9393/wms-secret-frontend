@@ -34,6 +34,38 @@ type DateFilter = 'ALL' | 'TODAY' | 'WEEK';
 
 const PAGE_SIZE = 10;
 
+/**
+ * 신품(Fast-Track) 도서의 LPN 자리에 표시할 문구.
+ * 신품은 사진 촬영·AI 검수를 건너뛰고 바코드만으로 즉시 입고되므로 LPN이 없다.
+ * 종전 문구는 'LPN 미발급 (신품)'이었으나, 모바일에서 두 줄로 깨지고 "미발급"이라는
+ * 부정 표현이 오류처럼 읽혀 '신품'으로 줄였다.
+ */
+const NEW_BOOK_LPN_LABEL = '신품';
+
+/**
+ * 서버 agent_logs의 결함 배열을 화면 모델로 변환한다.
+ *
+ * confidence는 서버가 0~1 실수로 준다. 종전 모달은 이 값을 그대로 "%"에 붙여
+ * `0.98%`로 표시했다 - 신뢰도 98%가 0.98%로 보이면 판독이 실패한 것처럼 읽힌다.
+ * 1을 넘는 값(이미 백분율)은 그대로 두어 양쪽 표기를 모두 받아낸다.
+ */
+function toInspectionDefects(raw: unknown): InspectionItem['defects_found'] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((d: Record<string, unknown>) => {
+    const c = Number(d.confidence ?? 0);
+    const parts: string[] = [];
+    if (d.ratio != null) parts.push(`면적 ${d.ratio}%`);
+    if (d.level != null) parts.push(`강도 ${d.level}단계`);
+    // 증거 대조 검증이 오탐으로 지목한 건은 감점에서 빠졌다는 사실을 같이 보여준다.
+    if (d.evidence_suspect) parts.push('증거 대조 결과 오탐 의심 (감점 제외)');
+    return {
+      reason_code: String(d.type ?? d.reason_code ?? 'UNKNOWN'),
+      description: String(d.description ?? (parts.length ? parts.join(' · ') : '상세 설명 없음')),
+      confidence: Math.round(c <= 1 ? c * 100 : c),
+    };
+  });
+}
+
 function kstNowStr(): string {
   const now = new Date();
   const kst = new Date(now.getTime() + (now.getTimezoneOffset() === 0 ? 9 * 3600 * 1000 : 0));
@@ -48,6 +80,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
   const [inspections, setInspections] = useState<InspectionItem[]>([]);
   const [selectedReportItem, setSelectedReportItem] = useState<InspectionItem | null>(null);
   const [activeImgIdx, setActiveImgIdx] = useState(0);
+  const [reportLoading, setReportLoading] = useState(false);
   const [zoomBook, setZoomBook] = useState<any | null>(null);
   const [activePrintData, setActivePrintData] = useState<LpnPrintData | null>(null);
 
@@ -72,7 +105,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
         if (!items?.length) return;
         const mapped: InspectionItem[] = items.map((it: any) => ({
           id: it.id,
-          lpn_barcode: it.lpn || (it.isNew ? 'LPN 미발급 (신품)' : `LPN-260803-${String(it.id).slice(-6).toUpperCase()}`),
+          lpn_barcode: it.lpn || (it.isNew ? NEW_BOOK_LPN_LABEL : `LPN-260803-${String(it.id).slice(-6).toUpperCase()}`),
           book: {
             title: it.title || '도서 정보 없음',
             author: it.author || '저자미상',
@@ -89,8 +122,10 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
             ? new Date(it.created_at).toISOString().replace('T', ' ').substring(0, 19)
             : kstNowStr(),
           ai_confidence: 98.5,
-          defects_found: [{ reason_code: 'DMG_NONE', description: 'AI 파이프라인 검수 완료 (자동 승인)', confidence: 0.98 }],
-          image_urls: it.cover_image_url ? [it.cover_image_url] : [],
+          // 결함 목록과 실촬영 이미지는 이 응답에 없다. 지어내지 않고 비워 두었다가
+          // 모달을 열 때 /inventory/{id}로 실제 판독 결과를 받아 채운다(openReport 참조).
+          defects_found: [],
+          image_urls: [],
         }));
         setInspections((prev) => {
           const existing = new Set(prev.map((i) => i.id));
@@ -211,12 +246,62 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
     exportToCSV(isMine ? `nexus_worker_inspection_audit_${workerId}` : 'admin_inspections_history', rows);
   };
 
+  // [2026-08-06] 종전에는 lpn_barcode 문자열에 '미발급'이 포함되는지로 신품을 판정했다.
+  // 표시 문구를 바꾸는 순간 판정이 깨지는 구조라, 라벨 간소화('LPN 미발급 (신품)' -> '신품')와
+  // 함께 문자열 의존을 끊는다. 등급 기반 판정을 우선하고, 라벨은 폴백으로만 본다.
   const isNewBook = (item: InspectionItem) =>
-    item.lpn_barcode.includes('미발급') || item.grade === 'NEW_FASTTRACK' || item.grade === 'NEW';
+    item.grade === 'NEW_FASTTRACK' ||
+    item.grade === 'NEW' ||
+    item.lpn_barcode === NEW_BOOK_LPN_LABEL;
 
-  const openReport = (item: InspectionItem) => {
+  /**
+   * 리포트 모달을 연다.
+   *
+   * [2026-08-06 수정] 종전에는 목록 행 객체를 그대로 모달에 넘겼다. 그런데 목록의
+   * `defects_found`/`ai_confidence`/`image_urls`는 available-books 응답에 없는 값이라
+   * **컴포넌트가 만들어낸 자리표시자**였다(모든 건이 "[DMG_NONE] 결함 없음, 신뢰도 0.98").
+   * 그래서 결함 4건으로 HITL 이관된 건도 "결함 없음 · 자동 승인"으로 보였고,
+   * 이미지도 실촬영 사진이 아니라 알라딘 표지 한 장이었다.
+   *
+   * 목록 전체(172건)에 대해 상세를 미리 받는 것은 낭비이므로, 모달을 열 때 그 한 건만
+   * `/inventory/{id}`로 조회해 실제 판독 결과로 덮어쓴다. 실패 시 목록 값으로 남되
+   * 자리표시자 결함은 비워서 "없는 결함이 있다고 말하는" 상태를 만들지 않는다.
+   */
+  const openReport = async (item: InspectionItem) => {
     setSelectedReportItem(item);
     setActiveImgIdx(0);
+
+    // 신품(Fast-Track)은 촬영·AI 검수를 거치지 않는다(ISBN 통권 관리). 조회할 판독
+    // 결과가 없으므로 요청을 보내지 않고, 모달이 그 사실을 명시하도록 비워 둔다.
+    if (isNewBook(item)) {
+      setSelectedReportItem({ ...item, defects_found: [], image_urls: [] });
+      return;
+    }
+
+    setReportLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/inventory/${encodeURIComponent(item.id)}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error(`detail ${res.status}`);
+      const d = await res.json();
+      const logs = d.agent_logs || {};
+      setSelectedReportItem({
+        ...item,
+        lpn_barcode: d.lpn_barcode || item.lpn_barcode,
+        ubci_score: d.ubci_score ?? item.ubci_score,
+        grade: d.grade || item.grade,
+        worker_id: d.inspector?.label || d.worker_id || item.worker_id,
+        image_urls: Array.isArray(d.image_urls) && d.image_urls.length ? d.image_urls : item.image_urls,
+        defects_found: toInspectionDefects(logs.defects),
+        ai_confidence: item.ai_confidence,
+      });
+    } catch (err) {
+      console.warn('검수 상세 조회 실패 - 자리표시자 결함은 표시하지 않는다', err);
+      setSelectedReportItem({ ...item, defects_found: [] });
+    } finally {
+      setReportLoading(false);
+    }
   };
 
   const openZoom = (item: InspectionItem) =>
@@ -387,7 +472,79 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
           </h2>
         </div>
 
-        <div className="overflow-x-auto">
+        {/*
+          [신설 2026-08-06] 모바일 전용 카드 목록.
+          현장 작업자는 스마트폰에서 이 화면을 보는데, 7컬럼 표는 가로 스크롤 없이는
+          읽을 수 없고 우측 "작업 기능" 버튼이 화면 밖으로 밀려 사실상 접근 불가였다.
+          좁은 화면에서는 표를 숨기고 카드로 세로 배치한다 (md 이상에서는 기존 표 유지).
+        */}
+        <div className="md:hidden space-y-2.5">
+          {paginatedInspections.length === 0 ? (
+            <p className="py-10 text-center text-gray-400 dark:text-gray-500 text-sm font-medium">
+              조건에 해당하는 검수 내역이 없습니다.
+            </p>
+          ) : (
+            paginatedInspections.map((item) => {
+              const isNew = isNewBook(item);
+              const meta = gradeMeta(item.grade, item.ubci_score);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => (isNew ? openZoom(item) : openReport(item))}
+                  className="w-full text-left bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-3 flex gap-3 active:scale-[0.99] transition-transform shadow-2xs"
+                >
+                  <BookCover
+                    src={item.book.cover_image_url}
+                    title={item.book.title}
+                    author={item.book.author}
+                    isbn={item.book.isbn}
+                    className="w-12 h-16 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="font-bold text-sm text-gray-900 dark:text-white line-clamp-2 leading-snug">
+                      {item.book.title}
+                    </p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 font-semibold truncate">
+                      {item.book.author} · {item.book.publisher}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {isNew ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                          <Sparkles className="w-3 h-3 text-indigo-500" /> 신품 Fast-Track
+                        </span>
+                      ) : (
+                        <>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold font-mono border ${meta.badge}`}>
+                            {meta.display} {item.ubci_score}점
+                          </span>
+                          {item.status === 'AUTO_APPROVED' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                              <CheckCircle2 className="w-3 h-3" /> 자동 승인
+                            </span>
+                          ) : item.status === 'HITL_PENDING' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                              <AlertTriangle className="w-3 h-3" /> 승인 대기
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300">
+                              <XCircle className="w-3 h-3" /> 반려
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <p className="text-[10px] font-mono text-gray-400 dark:text-gray-500 truncate pt-0.5">
+                      {item.lpn_barcode} · {item.inspected_at}
+                    </p>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           {/*
             [수정 이력 2026-08-04] table-fixed 상태에서 고정 폭 컬럼 합이 테이블 전체 폭과
             같아지면 폭 미지정인 "도서 정보" 컬럼이 0px로 붕괴해 내용이 옆 컬럼과 겹쳐 보였다.
@@ -417,7 +574,25 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                   const isNew = isNewBook(item);
                   const meta = gradeMeta(item.grade, item.ubci_score);
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors">
+                    // [2026-08-06] 행 전체를 탭하면 상세가 열린다.
+                    // 모바일(Worker 셸)에서는 표가 가로로 넘쳐 우측 "작업 기능" 버튼이
+                    // 화면 밖으로 밀려 사실상 접근 불가였다. 우측 버튼은 데스크톱용으로
+                    // 그대로 두고, 행 클릭이라는 넓은 타겟을 추가한다.
+                    // 중고=AI 검수 리포트 / 신품=도서 상세정보로 각각 연다.
+                    <tr
+                      key={item.id}
+                      onClick={() => (isNew ? openZoom(item) : openReport(item))}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          isNew ? openZoom(item) : openReport(item);
+                        }
+                      }}
+                      aria-label={`${item.book.title} 상세 보기`}
+                      className="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+                    >
                       <td className="py-4 px-4 font-mono font-black text-xs text-gray-900 dark:text-white">{item.lpn_barcode}</td>
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
@@ -477,7 +652,9 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                         )}
                       </td>
                       <td className="py-4 px-4 font-mono text-xs text-gray-500 dark:text-gray-400 text-center">{item.inspected_at}</td>
-                      <td className="py-4 px-4 text-right">
+                      {/* 행 클릭 핸들러가 붙어 있으므로, 버튼 클릭이 위로 전파되어
+                          엉뚱한 모달까지 함께 열리지 않도록 이 셀에서 차단한다. */}
+                      <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2">
                           {!isNew ? (
                             <>
@@ -591,11 +768,35 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                 </div>
               )}
 
+              {/* 신품은 검수 이력이 없는 것이 정상이다. 빈 결함 목록을 "결함 없음"으로
+                  보여주면 검수해서 깨끗했다는 뜻이 되므로, 경로 자체를 구분해 표기한다. */}
+              {isNewBook(selectedReportItem) ? (
+                <div className="p-4 rounded-xl border bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 space-y-1.5">
+                  <p className="text-sm font-black text-amber-900 dark:text-amber-200">
+                    Fast-Track 입고 — AI 검수 대상이 아닙니다
+                  </p>
+                  <p className="text-xs font-semibold text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
+                    신품은 공장 출하 상태가 동일해 개별 LPN을 발급하지 않고 ISBN 단위 수량으로
+                    관리합니다. 촬영·판독 단계를 거치지 않으므로 결함 목록과 스캔 이미지가 없습니다.
+                  </p>
+                  <p className="text-xs font-mono text-amber-700 dark:text-amber-400 pt-1">
+                    ISBN {selectedReportItem.book.isbn} · 입고 {selectedReportItem.inspected_at}
+                  </p>
+                </div>
+              ) : (
               <div className="space-y-2">
                 <h4 className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Vision Agent 결함 감지 내역 (공식 reason_code 분류)
                 </h4>
                 <div className="space-y-2">
+                  {reportLoading && (
+                    <p className="text-sm text-gray-400 dark:text-gray-500 py-3">판독 결과를 불러오는 중…</p>
+                  )}
+                  {!reportLoading && selectedReportItem.defects_found.length === 0 && (
+                    <div className="p-3.5 rounded-xl border bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                      검출된 결함이 없습니다.
+                    </div>
+                  )}
                   {selectedReportItem.defects_found.map((defect, idx) => {
                     const dm = REASON_CODE_MAP[defect.reason_code] || {
                       label: defect.reason_code,
@@ -618,6 +819,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                   })}
                 </div>
               </div>
+              )}
             </div>
 
             <div className="pt-3 border-t dark:border-gray-800 flex justify-end">
