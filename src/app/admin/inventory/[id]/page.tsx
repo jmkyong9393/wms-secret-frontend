@@ -206,6 +206,15 @@ export default function InventoryDetailPage() {
       confidence: c.confidence,
     }));
   const inspectionTime = data.date ? data.date.split(' ')[1] : 'KST';
+  // [수정 이력 2026-08-06] 타임라인 전 행이 검수 시각 하나로 찍히던 문제 - HITL 결재로 뒤늦게
+  // 생성되는 Report Agent 행은 결재 시점(agent_logs.report_generated_at)을 별도 표시한다.
+  // 재검수로 HITL에 재이관되면 이전 결재의 report_generated_at이 로그에 남아 있을 수 있으므로,
+  // Report Agent가 실제 실행된 경우에만 결재 시각을 쓴다 (미실행 행은 검수 시각 유지).
+  const reportGeneratedAt: string | null = logs.report_generated_at || null;
+  const stepTime = (node: string) =>
+    node === 'report_agent' && reportGeneratedAt && executedAgents.includes('report_agent')
+      ? reportGeneratedAt.split(' ')[1] || reportGeneratedAt
+      : inspectionTime;
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 font-sans bg-gray-50 dark:bg-gray-950 min-h-screen text-gray-900 dark:text-gray-100 transition-colors">
@@ -559,13 +568,19 @@ export default function InventoryDetailPage() {
                         {showYoloBoxes &&
                           currentYoloBoxes.map((box, i) => {
                             const { left, top, width, height } = bboxToPercent(box);
+                            // [수정 이력 2026-08-06] 라벨이 무조건 박스 바깥(-bottom-6/-top-6)에 그려져
+                            // 이미지 가장자리 결함은 overflow-hidden 컨테이너에 잘려 안 보였다.
+                            // 가장자리 근처(세로 8% 이내)면 박스 안쪽으로, 우측 절반이면 오른쪽
+                            // 앵커로 뒤집어 라벨이 항상 이미지 프레임 안에 있게 한다.
+                            const yoloLabelPos = top + height > 92 ? 'bottom-1' : '-bottom-6';
+                            const yoloLabelAnchor = left > 50 ? 'right-0' : 'left-0';
                             return (
                               <div
                                 key={`y-${i}`}
                                 className="absolute border-2 border-dashed border-amber-400 bg-amber-400/10 rounded z-10 group"
                                 style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
                               >
-                                <span className="absolute -bottom-6 left-0 bg-amber-500 text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-30">
+                                <span className={`absolute ${yoloLabelPos} ${yoloLabelAnchor} bg-amber-500 text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-30`}>
                                   YOLO 후보: {box.type}
                                   {box.confidence ? ` (${Math.round(box.confidence * 100)}%)` : ''}
                                 </span>
@@ -582,13 +597,16 @@ export default function InventoryDetailPage() {
                         {showVisionBoxes &&
                           currentBBoxes.map((box, bIdx) => {
                             const { left, top, width, height } = bboxToPercent(box);
+                            // 상단 8% 이내 박스는 라벨을 박스 안쪽(top-1)으로 내려 잘림 방지
+                            const visionLabelPos = top < 8 ? 'top-1' : '-top-6';
+                            const visionLabelAnchor = left > 50 ? 'right-0' : 'left-0';
                             return (
                               <div
                                 key={bIdx}
                                 className="absolute border-2 border-red-500 bg-red-500/25 rounded shadow-lg z-20"
                                 style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
                               >
-                                <span className="absolute -top-6 left-0 bg-red-600 text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap z-30">
+                                <span className={`absolute ${visionLabelPos} ${visionLabelAnchor} bg-red-600 text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap z-30`}>
                                   {box.label}
                                   {box.deduction ? ` -${box.deduction}점` : ''}
                                   {box.confidence ? ` (${Math.round(box.confidence * 100)}%)` : ''}
@@ -718,7 +736,7 @@ export default function InventoryDetailPage() {
                     const text = ran ? logs[step.logKey] : null;
                     return (
                       <div key={step.node} className="flex items-start gap-3 py-1 border-b border-gray-200/70 dark:border-gray-700/60 last:border-0">
-                        <span className="text-gray-400 dark:text-gray-500 font-mono text-[11px] min-w-[65px]">[{inspectionTime}]</span>
+                        <span className="text-gray-400 dark:text-gray-500 font-mono text-[11px] min-w-[65px]">[{stepTime(step.node)}]</span>
                         <span className={`font-bold min-w-[150px] ${ran ? 'text-purple-700 dark:text-purple-400' : 'text-gray-400 dark:text-gray-600'}`}>
                           {step.label} {step.icon}
                         </span>
