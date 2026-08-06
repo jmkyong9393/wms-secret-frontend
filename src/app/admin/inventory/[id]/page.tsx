@@ -219,7 +219,8 @@ export default function InventoryDetailPage() {
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 font-sans bg-gray-50 dark:bg-gray-950 min-h-screen text-gray-900 dark:text-gray-100 transition-colors">
       {/* Top Bar */}
-      <div className="flex items-center justify-between">
+      {/* [2026-08-06 모바일 대응] 좁은 화면에서 버튼 4개가 가로로 넘치던 것을 줄바꿈 허용으로 교체 */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <button
           onClick={() => router.back()}
           className="flex items-center text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white bg-white dark:bg-gray-900 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 shadow-2xs transition-colors cursor-pointer"
@@ -228,7 +229,7 @@ export default function InventoryDetailPage() {
           재고 목록으로 돌아가기
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {isNewBook ? (
             <span className="flex items-center px-4 py-2 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs font-black rounded-xl border border-blue-200 dark:border-blue-800">
               ⚡ 신품 Fast-track 입고 완료
@@ -270,9 +271,15 @@ export default function InventoryDetailPage() {
                 LPN 내부 조회가 나왔다. 내부 조회는 /lpn/[lpn]으로 분리했고 이 버튼은
                 이제 순수 고객 화면으로 직행한다.
               */}
+              {/*
+                [2026-08-06 모바일 대응] target="_blank" 제거.
+                모바일 브라우저는 링크로 여는 새 탭을 팝업으로 간주해 차단하는 경우가 있고,
+                그러면 "탭이 열렸다가 바로 닫히는" 것처럼 보인다(현장 실측 증상).
+                같은 탭 이동으로 바꾸면 Next Link의 클라이언트 라우팅이라 즉시 전환되고,
+                뒤로가기로 상세 화면 스크롤 위치까지 복원된다. 데스크톱에서도 손해가 없다.
+              */}
               <Link
                 href={`/certificate/${data.lpn_barcode}`}
-                target="_blank"
                 className="flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs cursor-pointer"
               >
                 <ShieldCheck className="w-4 h-4 mr-1.5" />
@@ -734,17 +741,24 @@ export default function InventoryDetailPage() {
                   {PIPELINE_STEPS.map((step) => {
                     const ran = executedAgents.includes(step.node);
                     const text = ran ? logs[step.logKey] : null;
+                    // [2026-08-06 모바일 대응] 종전에는 시각(min-w-65px) + 노드명(min-w-150px) +
+                    // 서술을 한 줄 flex로 배치했다. 좁은 화면에서는 앞 두 칸이 215px를 먼저
+                    // 점유해 서술 칸이 한 글자 폭까지 짜부라졌고, 긴 한국어 문장이 세로로
+                    // 한 자씩 흘러내렸다(실측). 모바일은 세로 스택, sm 이상에서만 가로 정렬한다.
+                    // min-w-0을 주지 않으면 flex 자식이 콘텐츠 최소폭 아래로 줄지 않아 여전히 넘친다.
                     return (
-                      <div key={step.node} className="flex items-start gap-3 py-1 border-b border-gray-200/70 dark:border-gray-700/60 last:border-0">
-                        <span className="text-gray-400 dark:text-gray-500 font-mono text-[11px] min-w-[65px]">[{stepTime(step.node)}]</span>
-                        <span className={`font-bold min-w-[150px] ${ran ? 'text-purple-700 dark:text-purple-400' : 'text-gray-400 dark:text-gray-600'}`}>
-                          {step.label} {step.icon}
-                        </span>
+                      <div key={step.node} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 py-1.5 border-b border-gray-200/70 dark:border-gray-700/60 last:border-0">
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-gray-400 dark:text-gray-500 font-mono text-[11px] sm:min-w-[65px]">[{stepTime(step.node)}]</span>
+                          <span className={`font-bold sm:min-w-[150px] ${ran ? 'text-purple-700 dark:text-purple-400' : 'text-gray-400 dark:text-gray-600'}`}>
+                            {step.label} {step.icon}
+                          </span>
+                        </div>
                         {ran ? (
-                          <span className={`leading-relaxed ${step.tone}`}>{text || '(서술 미기록)'}</span>
+                          <span className={`leading-relaxed min-w-0 break-words ${step.tone}`}>{text || '(서술 미기록)'}</span>
                         ) : (
                           // HITL로 조기 종료된 건은 Report Agent에 도달하지 않는다.
-                          <span className="text-gray-400 dark:text-gray-600 italic">
+                          <span className="text-gray-400 dark:text-gray-600 italic min-w-0 break-words">
                             미실행 — 이 건은 해당 단계에 도달하지 않았습니다 (HITL 이관 또는 조기 종료)
                           </span>
                         )}
