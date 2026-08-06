@@ -16,6 +16,7 @@ import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/
 import { BrowserMultiFormatReader as ZXingBrowserReader } from '@zxing/browser';
 import { QRCodeSVG } from 'qrcode.react';
 import { LpnPrintLabel } from '@/features/inbound/components/LpnPrintLabel';
+import { TRACK1_IMAGE_COUNT, TRACK1_SHOTS, shotAt, shotLabel } from '@/features/inbound/captureSequence';
 
 type Step = 'SELECT_TYPE' | 'SCAN_BARCODE' | 'PRINT_STICKER' | 'VISION_EVALUATION' | 'RESULT';
 type InboundType = 'NEW_FASTTRACK' | 'USED_RETURN_INSPECTION';
@@ -62,7 +63,10 @@ export default function InboundScannerPage() {
 
   // Multi-Capture State
   const [capturedImages, setCapturedImages] = useState<{ url: string, blob: Blob }[]>([]);
-  const [capturePhase, setCapturePhase] = useState<'FRONT' | 'BACK' | 'INNER'>('FRONT');
+  // 촬영 단계는 별도 state로 두지 않고 찍은 장수에서 파생시킨다.
+  // 종전에는 setCapturePhase를 촬영·초기화 지점마다 따로 호출해야 해서 한 군데만
+  // 빠뜨려도 안내 문구와 실제 장수가 어긋났다.
+  const currentShot = shotAt(capturedImages.length);
   
   const { videoRef, startCamera, stopCamera } = useCamera();
   const guideBoxRef = useRef<HTMLDivElement>(null);
@@ -401,7 +405,6 @@ export default function InboundScannerPage() {
     if (step === 'VISION_EVALUATION') {
       if (capturedImages.length > 0) {
         setCapturedImages([]);
-        setCapturePhase('FRONT');
       } else {
         setStep('PRINT_STICKER');
       }
@@ -411,7 +414,6 @@ export default function InboundScannerPage() {
       setIsbn('');
       setCurrentLpn('');
       setCapturedImages([]);
-      setCapturePhase('FRONT');
     }
   };
 
@@ -422,15 +424,20 @@ export default function InboundScannerPage() {
     }
     try {
       const result = await processImage(videoRef.current, guideBoxRef.current);
+      // 흔들림 판정은 **차단이 아니라 확인**이다. 라플라시안 분산은 피사체 질감에 따라
+      // 크게 흔들리는 지표라, 하드 차단으로 두면 선명한 사진인데도 빠져나갈 방법이
+      // 없는 상황이 생긴다(실제 발생). 판단은 눈으로 보는 작업자에게 맡긴다.
       if (result.isBlurred) {
-        alert("사진이 너무 흔들렸습니다. 다시 촬영해 주세요.");
-        return;
+        const useAnyway = window.confirm(
+          `흔들림이 의심됩니다 (선명도 ${result.blurScore.toFixed(0)}).\n` +
+          `[취소] 다시 촬영  /  [확인] 이대로 사용`
+        );
+        if (!useAnyway) return;
       }
-      
+
+
+      // 단계 전환은 capturedImages.length에서 파생되므로 별도 갱신이 필요 없다.
       setCapturedImages(prev => [...prev, { url: result.previewUrl, blob: result.blob }]);
-      
-      if (capturePhase === 'FRONT') setCapturePhase('BACK');
-      else if (capturePhase === 'BACK') setCapturePhase('INNER');
     } catch (e) {
       console.error(e);
     }
@@ -472,8 +479,8 @@ export default function InboundScannerPage() {
 
     window.addEventListener('keydown', onShutterKey);
     return () => window.removeEventListener('keydown', onShutterKey);
-    // takePhoto가 참조하는 capturePhase 최신 클로저 유지를 위해 의존성에 포함
-  }, [step, capturePhase, isAnalyzing]);
+    // takePhoto가 참조하는 최신 촬영 상태 클로저 유지를 위해 장수를 의존성에 포함
+  }, [step, capturedImages.length, isAnalyzing]);
 
   return (
     /*
@@ -494,7 +501,7 @@ export default function InboundScannerPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-full text-xs font-bold font-mono flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              INBOUND CONTROL CENTER v2.12.3.0
+              INBOUND CONTROL CENTER v2.12.4.0
             </span>
             <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">Real-time Vision AI & Fast-track Pipeline</span>
           </div>
@@ -706,9 +713,12 @@ export default function InboundScannerPage() {
             {/* 오버레이 및 뷰파인더 가이드 */}
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none pb-2 pt-12">
               {/* 바깥 영역을 어둡게 처리하기 위한 그림자 꼼수 */}
-              <div 
+              {/* 가이드박스 크기는 촬영 단계마다 다르다. processImage()가 이 박스 영역만
+                  도려내므로, 책등처럼 좁고 긴 피사체를 표지용 박스로 찍으면 배경이 대부분을
+                  차지해 결함이 상대적으로 작아진다. */}
+              <div
                 ref={guideBoxRef}
-                className="relative w-[90%] md:w-[75%] aspect-[1/1.45] max-h-[90%] border-4 border-dashed border-white/60 rounded-3xl flex items-center justify-center shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+                className={`relative ${currentShot.guideClass} max-h-[90%] border-4 border-dashed border-white/60 rounded-3xl flex items-center justify-center shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]`}
               >
                 
                 {/* 십자선 */}
@@ -717,9 +727,7 @@ export default function InboundScannerPage() {
 
                 {/* 툴팁 버블 */}
                 <div className="absolute -top-12 bg-gray-800/80 backdrop-blur-sm text-white text-sm font-bold px-5 py-2 rounded-full shadow-lg text-center whitespace-nowrap">
-                  {capturePhase === 'FRONT' && "1. 도서 정면(표지)을 촬영하세요"}
-                  {capturePhase === 'BACK' && "2. 도서 후면(뒷표지)을 촬영하세요"}
-                  {capturePhase === 'INNER' && "3. 내부 훼손 부위(모서리, 내지 등) 자유 촬영"}
+                  {currentShot.tip}
                 </div>
 
                 {isAnalyzing && (
@@ -735,7 +743,7 @@ export default function InboundScannerPage() {
             <div className="absolute bottom-4 left-4 right-4 z-20 flex space-x-2 overflow-x-auto pb-2">
               {capturedImages.map((img, idx) => (
                 <div key={idx} className="w-14 h-20 bg-slate-800 rounded-lg border-2 border-emerald-500 flex-shrink-0 flex items-center justify-center relative overflow-hidden">
-                  <span className="absolute top-1 text-[10px] font-bold text-white z-10 drop-shadow-md bg-black/40 px-1 rounded">{idx === 0 ? '정면' : idx === 1 ? '후면' : '내지'}</span>
+                  <span className="absolute top-1 text-[10px] font-bold text-white z-10 drop-shadow-md bg-black/40 px-1 rounded">{shotLabel(idx)}</span>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img.url} alt="capture" className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-white/10 pointer-events-none"></div>
@@ -781,7 +789,9 @@ export default function InboundScannerPage() {
                 placeholder="ISBN 또는 LPN (재촬영) 수동 입력"
                 value={isbn}
                 onChange={(e) => setIsbn(e.target.value)}
-                className="flex-1 border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
+                /* min-w-0: flex 자식의 기본 min-width는 auto라 내용 폭 아래로 줄지 않는다.
+                   이게 없으면 좁은 화면에서 입력창이 버튼을 밀어 버튼 글자가 세로로 접힌다. */
+                className="flex-1 min-w-0 border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
               />
               <button 
                 onClick={async () => {
@@ -848,8 +858,10 @@ export default function InboundScannerPage() {
                     setIsLoadingBook(false);
                   }
                 }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 rounded-xl font-bold transition-colors shadow-lg shadow-emerald-200 dark:shadow-none"
+                /* shrink-0 + whitespace-nowrap: 버튼이 글자 폭 아래로 눌리면 '조 회'로 접힌다 */
+                className="shrink-0 whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg shadow-emerald-200 dark:shadow-none flex items-center gap-1.5"
               >
+                <ScanLine className="w-4 h-4" />
                 조회
               </button>
             </div>
@@ -1031,8 +1043,14 @@ export default function InboundScannerPage() {
         {step === 'VISION_EVALUATION' && (
           <div className="space-y-4 pt-2 animate-in slide-in-from-right-4">
             <p className="text-center text-xs font-bold text-gray-600 dark:text-gray-300 mb-2">
-              정면 1장, 후면 1장, 훼손 부위 N장 촬영
+              {TRACK1_SHOTS.map((s) => s.short).join(' · ')} 필수 {TRACK1_IMAGE_COUNT}장 + 훼손 부위 N장
             </p>
+            {/* 남은 필수 컷을 명시한다. 버튼만 비활성화해 두면 왜 못 넘어가는지 알 수 없다. */}
+            {capturedImages.length < TRACK1_IMAGE_COUNT && (
+              <p className="text-center text-[11px] font-semibold text-amber-600 dark:text-amber-400 -mt-1 mb-1">
+                남은 필수 촬영: {TRACK1_SHOTS.slice(capturedImages.length).map((s) => s.short).join(', ')}
+              </p>
+            )}
             
             <div className="flex gap-2">
               <button 
@@ -1046,8 +1064,9 @@ export default function InboundScannerPage() {
 
               <button 
                 onClick={() => {
-                  if (capturedImages.length < 2) {
-                    alert("정면과 후면 최소 2장의 사진이 필요합니다.");
+                  if (capturedImages.length < TRACK1_IMAGE_COUNT) {
+                    const missing = TRACK1_SHOTS.slice(capturedImages.length).map((s) => s.short).join(', ');
+                    alert(`필수 ${TRACK1_IMAGE_COUNT}장이 필요합니다. 남은 촬영: ${missing}`);
                     return;
                   }
                   
@@ -1069,7 +1088,7 @@ export default function InboundScannerPage() {
                     book_metadata: bookInfo
                   });
                 }}
-                disabled={evaluateMutation.isPending || capturedImages.length < 2}
+                disabled={evaluateMutation.isPending || capturedImages.length < TRACK1_IMAGE_COUNT}
                 className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white py-4 rounded-xl font-bold flex flex-col items-center justify-center transition-all shadow-lg shadow-purple-200"
               >
                 <CheckCircle2 className="w-6 h-6 mb-1" />
@@ -1088,7 +1107,6 @@ export default function InboundScannerPage() {
                 setIsPrinting(false);
                 setIsAnalyzing(false);
                 setCapturedImages([]);
-                setCapturePhase('FRONT');
               }}
               className="w-full bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white py-4 rounded-xl font-bold flex items-center justify-center transition-all shadow-lg shadow-gray-300 dark:shadow-none"
             >

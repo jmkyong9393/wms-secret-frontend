@@ -26,6 +26,7 @@ import {
   PanelLeftOpen
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { WORKER_MENU_ITEMS } from './workerMenu';
 
 /**
  * 물류 프로세스 및 권한 단위별 사이드바 메뉴 그룹 정의
@@ -40,15 +41,12 @@ interface MenuGroup {
   }[];
 }
 
+// 항목 정의는 workerMenu.ts(SSOT)에서 가져온다. WorkerMobileShell의 하단 탭바가 같은
+// 목록을 쓰므로, 한쪽만 고쳐 메뉴가 어긋나는 일이 없도록 단일 출처로 묶었다.
 const WORKER_MENU_GROUPS: MenuGroup[] = [
   {
     title: '👷 현장 작업자 전용 메뉴',
-    items: [
-      { name: '도서 입고 검수 (카메라)', href: '/inbound', icon: Camera },
-      { name: '나의 검수 내역 (Worker)', href: '/inspections?scope=mine', icon: ShieldCheck },
-      { name: '출고 피킹 스캐너 (Worker)', href: '/worker/outbound', icon: Truck },
-      { name: '현장 재고 조회 (Worker)', href: '/inventory', icon: PackageSearch },
-    ],
+    items: WORKER_MENU_ITEMS.map(({ name, href, icon }) => ({ name, href, icon })),
   },
 ];
 
@@ -199,7 +197,7 @@ export default function Sidebar() {
                     <span className="text-gray-900 dark:text-white">Nexus</span>
                     <span className="text-blue-600 dark:text-blue-400">WMS</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono font-bold mt-0.5">Enterprise v2.12.3.0</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono font-bold mt-0.5">Enterprise v2.12.4.0</span>
                 </div>
               </div>
               <button
