@@ -1,6 +1,4 @@
 'use client';
-import { API_BASE_URL } from '@/lib/api-client';
-
 import React from 'react';
 import { useAtomValue } from 'jotai';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
@@ -39,31 +37,9 @@ import {
   Legend
 } from 'recharts';
 
-// Mock Recharts Data
-const volumeData = [
-  { date: '07-21', inbound: 1200, outbound: 980 },
-  { date: '07-22', inbound: 1450, outbound: 1100 },
-  { date: '07-23', inbound: 1300, outbound: 1250 },
-  { date: '07-24', inbound: 1680, outbound: 1400 },
-  { date: '07-25', inbound: 1900, outbound: 1550 },
-  { date: '07-26', inbound: 2100, outbound: 1800 },
-  { date: '07-27', inbound: 2450, outbound: 1980 },
-];
-
-const categoryData = [
-  { name: '소설/문학', count: 480, fill: '#6366f1' },
-  { name: 'IT/컴퓨터', count: 340, fill: '#10b981' },
-  { name: '경제/경영', count: 290, fill: '#f59e0b' },
-  { name: '자연과학', count: 160, fill: '#ec4899' },
-  { name: '만화/웹툰', count: 220, fill: '#8b5cf6' },
-];
-
-const ubciGradeDataDefault = [
-  { name: 'MINT (90~100점)', value: 58, color: '#10b981' },
-  { name: 'GOOD (75~89점)', value: 28, color: '#3b82f6' },
-  { name: 'NORMAL (60~74점)', value: 10, color: '#f59e0b' },
-  { name: 'REJECT (60점 미만)', value: 4, color: '#ef4444' },
-];
+// 차트 데이터는 전량 백엔드 실집계다. 조회에 실패하면 빈 배열로 두어 화면이
+// "데이터 없음"을 보이게 한다 - 목업 수치로 대체하면 실패가 정상처럼 보인다.
+// (종전 폴백은 등급 경계까지 90/75/60으로 적혀 있어 UBCI 규격 95/85/65와 어긋났다.)
 
 // Custom Recharts Tooltip Component for Pixel-Perfect Dark / Light Mode Support
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -89,23 +65,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function AdvancedDashboardPage() {
   const user = useAtomValue(currentUserAtom);
 
+  // 대시보드 API는 전부 인증이 필요하다. 토큰을 붙이는 apiClient로 호출해야 한다
+  // (맨 fetch로 부르면 401이 나고, 화면은 실패를 알리지 못한 채 0건으로 보인다).
   const { data: kpi } = useQuery({
     queryKey: ['dashboard-kpi'],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/v1/dashboard/kpi`);
-      if (!res.ok) return null;
-      return res.json();
-    },
+    queryFn: async () => (await apiClient.get('/api/v1/dashboard/kpi')).data,
     refetchInterval: 5000,
   });
 
   const { data: charts } = useQuery({
     queryKey: ['dashboard-charts'],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/v1/dashboard/charts`);
-      if (!res.ok) return null;
-      return res.json();
-    },
+    queryFn: async () => (await apiClient.get('/api/v1/dashboard/charts')).data,
     refetchInterval: 10000,
   });
 
@@ -122,15 +92,36 @@ export default function AdvancedDashboardPage() {
     staleTime: 10 * 60 * 1000,
   });
 
+  // 로그 비우기 기준 시각.
+  //
+  // 검수 로그의 원장은 return_jobs이고 이는 매입가 산정 근거이자 감사 대상이라 지우지 않는다.
+  // "비우기"는 이 브라우저에서 언제 이후 것만 볼지를 정하는 화면 설정이며, 서버에는
+  // `since`로만 전달된다.
+  const [logsClearedAt, setLogsClearedAt] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setLogsClearedAt(localStorage.getItem('dashboard_logs_cleared_at'));
+  }, []);
+
   const { data: recentLogs } = useQuery({
-    queryKey: ['dashboard-logs'],
-    queryFn: async () => (await apiClient.get('/api/v1/dashboard/logs')).data,
+    queryKey: ['dashboard-logs', logsClearedAt],
+    queryFn: async () => {
+      const params: Record<string, string | number> = { limit: 30 };
+      if (logsClearedAt) params.since = logsClearedAt;
+      return (await apiClient.get('/api/v1/dashboard/logs', { params })).data;
+    },
     refetchInterval: 10000,
   });
 
-  const ubciGradeData = charts?.ubci_grade_data || ubciGradeDataDefault;
-  const volumeDataChart = charts?.volume_data || volumeData;
-  const categoryDataChart = charts?.category_data || categoryData;
+  const clearLogs = () => {
+    const now = new Date().toISOString();
+    localStorage.setItem('dashboard_logs_cleared_at', now);
+    setLogsClearedAt(now);
+  };
+
+  const ubciGradeData = charts?.ubci_grade_data ?? [];
+  const volumeDataChart = charts?.volume_data ?? [];
+  const categoryDataChart = charts?.category_data ?? [];
 
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 font-sans min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-200">
@@ -285,7 +276,9 @@ export default function AdvancedDashboardPage() {
             <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-1">
               <PieIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> AI UBCI 품질 등급 비율
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">전체 입고 도서의 UBCI 상태 점수 분포입니다.</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              보유 중고 재고의 UBCI 등급 구성입니다. 신품 Fast-track은 무검수 입고라 제외됩니다.
+            </p>
 
             <div className="h-56 w-full relative">
               <ResponsiveContainer width="100%" height="100%">
@@ -333,9 +326,11 @@ export default function AdvancedDashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-purple-600 dark:text-purple-400" /> 5대 도서 카테고리별 재고 자산 보유 현황
+              <BarChart3 className="w-4 h-4 text-purple-600 dark:text-purple-400" /> 주요 카테고리별 재고 자산 보유 현황
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">창고 보관 랙(Zone A-E)에 적치된 장르별 재고 장수입니다.</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              보유 재고 수량을 카테고리별로 집계했습니다. 중고(검수 완료분)와 신품(Fast-track)을 나눠 표시합니다.
+            </p>
           </div>
           <Link href="/inventory" className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
             재고 관리 이동 <ArrowRight className="w-3.5 h-3.5" />
@@ -344,16 +339,15 @@ export default function AdvancedDashboardPage() {
 
         <div className="h-60 w-full">
           <ResponsiveContainer width="100%" height="100%">
+            {/* 중고/신품을 한 막대에 쌓아 카테고리별 총량과 구성비를 함께 읽는다. */}
             <BarChart data={categoryDataChart} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.3} />
               <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} />
-              <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} />
+              <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} allowDecimals={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" name="보유 수량 (권)" radius={[8, 8, 0, 0]}>
-                {categoryDataChart.map((entry: { name: string; count: number; fill: string }, index: number) => (
-                  <Cell key={`bar-${index}`} fill={entry.fill} />
-                ))}
-              </Bar>
+              <Legend wrapperStyle={{ fontSize: '12px' }} />
+              <Bar dataKey="used" stackId="stock" name="중고 (검수 완료)" fill="#6366f1" />
+              <Bar dataKey="new" stackId="stock" name="신품 (Fast-track)" fill="#10b981" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -444,23 +438,47 @@ export default function AdvancedDashboardPage() {
           <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <ScrollText className="w-4 h-4 text-blue-600 dark:text-blue-400" /> 실시간 검수 처리 로그
           </h3>
-          <span className="text-xs bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-full font-bold font-mono border border-blue-200 dark:border-blue-800">
-            10초 자동 갱신
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-full font-bold font-mono border border-blue-200 dark:border-blue-800">
+              최근 30건 · 10초 자동 갱신
+            </span>
+            {logsClearedAt && (
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem('dashboard_logs_cleared_at');
+                  setLogsClearedAt(null);
+                }}
+                className="text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+              >
+                전체 보기
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={clearLogs}
+              title="원장은 그대로 두고 이 화면의 표시만 비웁니다"
+              className="text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+            >
+              로그 비우기
+            </button>
+          </div>
         </div>
         <div className="space-y-1.5 max-h-56 overflow-y-auto font-mono text-xs">
           {(recentLogs || []).length === 0 ? (
-            <p className="text-center text-gray-400 py-4 font-bold font-sans">최근 처리 로그가 없습니다.</p>
+            <p className="text-center text-gray-400 py-4 font-bold font-sans">
+              {logsClearedAt ? '비운 이후 새로 처리된 검수 건이 없습니다.' : '최근 처리 로그가 없습니다.'}
+            </p>
           ) : (
-            (recentLogs as Array<{ id: string; transaction_type: string; book_title: string; condition_grade: string; date: string }>).map((log) => (
+            (recentLogs as Array<{ id: string; transaction_type: string; book_title: string | null; condition_grade: string | null; date: string | null }>).map((log) => (
               <div key={log.id} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/60 border-b border-gray-50 dark:border-gray-800/60 last:border-0">
                 <span className="text-gray-400 shrink-0">{(log.date || '').replace('T', ' ').substring(5, 19)}</span>
-                <span className="font-bold text-gray-800 dark:text-gray-200 truncate flex-1">{log.book_title}</span>
+                <span className="font-bold text-gray-800 dark:text-gray-200 truncate flex-1">{log.book_title || '도서 미지정'}</span>
                 <span className={`shrink-0 px-1.5 py-0.5 rounded font-black text-[10px] ${
                   log.transaction_type === 'HITL_PENDING'
                     ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
                     : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
-                }`}>{log.condition_grade}</span>
+                }`}>{log.condition_grade || '미산출'}</span>
               </div>
             ))
           )}

@@ -2,6 +2,7 @@
 import { API_BASE_URL } from '@/lib/api-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import MasterPagination from '@/components/common/MasterPagination';
 import Link from 'next/link';
 import {
   ShoppingCart,
@@ -80,6 +81,10 @@ export default function OrdersPickingPage() {
   const [cart, setCart] = useState<Record<string, number>>({}); // id -> qty
   const [customerName, setCustomerName] = useState<string>('교보문고 B2B 지점');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  const [insFilter, setInsFilter] = useState<'ALL' | 'ACTIVE' | 'SHIPPED'>('ALL');
+  const [insPage, setInsPage] = useState<number>(1);
+  const [insPageSize, setInsPageSize] = useState<number>(10);
 
   const fetchInstructions = useCallback(async () => {
     try {
@@ -162,7 +167,7 @@ export default function OrdersPickingPage() {
     }
   };
 
-  const filteredBooks = availableBooks.filter(b => {
+  const matchedBooks = availableBooks.filter(b => {
     if (!searchTerm) return true;
     const t = searchTerm.toLowerCase();
     return (b.title || '').toLowerCase().includes(t)
@@ -170,8 +175,31 @@ export default function OrdersPickingPage() {
       || (b.lpn || '').toLowerCase().includes(t);
   });
 
+  // 판매 가능 재고는 수천 건이라 전부 그리면 패널이 멈춘다. 카드를 한 화면 분량으로
+  // 자르고 나머지는 검색으로 좁히게 안내한다 - 장바구니에 담은 건은 화면 밖으로
+  // 밀려나도 계속 보이도록 앞에 고정한다.
+  const BOOK_RENDER_LIMIT = 60;
+  const visibleBooks = [
+    ...matchedBooks.filter(b => cart[b.id] !== undefined),
+    ...matchedBooks.filter(b => cart[b.id] === undefined),
+  ].slice(0, BOOK_RENDER_LIMIT);
+  const hiddenBookCount = matchedBooks.length - visibleBooks.length;
+
   const activeCount = instructions.filter(i => !['SHIPPED', 'CANCELLED'].includes(i.status)).length;
   const shippedCount = instructions.filter(i => i.status === 'SHIPPED').length;
+
+  // 지시서 목록: 상태 필터 + 페이지네이션
+  const visibleInstructions = instructions.filter(i =>
+    insFilter === 'ALL' ? true
+      : insFilter === 'SHIPPED' ? i.status === 'SHIPPED'
+      : !['SHIPPED', 'CANCELLED'].includes(i.status)
+  );
+  const insTotalPages = Math.max(1, Math.ceil(visibleInstructions.length / insPageSize));
+  const safeInsPage = Math.min(insPage, insTotalPages);
+  const pagedInstructions = visibleInstructions.slice(
+    (safeInsPage - 1) * insPageSize,
+    safeInsPage * insPageSize,
+  );
 
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 font-sans text-gray-900 dark:text-gray-100">
@@ -260,8 +288,13 @@ export default function OrdersPickingPage() {
             />
           </div>
 
+          <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500">
+            {matchedBooks.length.toLocaleString()}건 중 {visibleBooks.length}건 표시
+            {hiddenBookCount > 0 && ` · ${hiddenBookCount.toLocaleString()}건은 검색으로 좁혀주세요`}
+          </p>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto pr-1">
-            {filteredBooks.map(b => {
+            {visibleBooks.map(b => {
               const inCart = cart[b.id] !== undefined;
               const qty = cart[b.id] || 0;
               const maxStock = b.isNew ? (b.stock_qty || 1) : 1;
@@ -330,20 +363,44 @@ export default function OrdersPickingPage() {
             <ClipboardList className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             AI 피킹 지시서 목록
           </h3>
-          <button onClick={fetchInstructions} className="text-xs font-bold text-gray-400 hover:text-indigo-600 flex items-center gap-1 cursor-pointer">
-            <RefreshCcw className="w-3.5 h-3.5" /> 새로고침
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 상태 탭: 진행 중 건을 먼저 보게 하는 것이 현장 동선과 맞다 */}
+            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
+              {([
+                ['ALL', `전체 ${instructions.length}`],
+                ['ACTIVE', `진행 중 ${activeCount}`],
+                ['SHIPPED', `출고 완료 ${shippedCount}`],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => { setInsFilter(key); setInsPage(1); }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                    insFilter === key
+                      ? 'bg-white dark:bg-gray-900 text-indigo-700 dark:text-indigo-300 shadow-2xs'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button onClick={fetchInstructions} className="text-xs font-bold text-gray-400 hover:text-indigo-600 flex items-center gap-1 cursor-pointer">
+              <RefreshCcw className="w-3.5 h-3.5" /> 새로고침
+            </button>
+          </div>
         </div>
 
         {isLoading ? (
           <div className="py-10 text-center text-sm text-gray-400 font-bold">지시서 목록 로딩 중...</div>
-        ) : instructions.length === 0 ? (
+        ) : visibleInstructions.length === 0 ? (
           <div className="py-10 text-center text-sm text-gray-400 font-bold border border-dashed rounded-xl dark:border-gray-700">
-            발행된 피킹 지시서가 없습니다. 상단의 B2B 주문 시뮬레이션 또는 수동 주문 등록으로 시작하세요.
+            {instructions.length === 0
+              ? '발행된 피킹 지시서가 없습니다. 상단의 B2B 주문 시뮬레이션 또는 수동 주문 등록으로 시작하세요.'
+              : '이 상태에 해당하는 지시서가 없습니다.'}
           </div>
         ) : (
           <div className="space-y-2">
-            {instructions.map(ins => {
+            {pagedInstructions.map(ins => {
               const meta = STATUS_META[ins.status] || STATUS_META.PENDING;
               const isOpen = expandedId === ins.id;
               const isActive = !['SHIPPED', 'CANCELLED'].includes(ins.status);
@@ -450,6 +507,17 @@ export default function OrdersPickingPage() {
                 </div>
               );
             })}
+
+            <MasterPagination
+              currentPage={safeInsPage}
+              totalPages={insTotalPages}
+              totalEntries={visibleInstructions.length}
+              currentCount={pagedInstructions.length}
+              onPageChange={setInsPage}
+              pageSize={insPageSize}
+              onPageSizeChange={setInsPageSize}
+              pageSizeOptions={[5, 10, 15, 20]}
+            />
           </div>
         )}
       </div>

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCcw, PackageCheck, AlertTriangle, CheckCircle2, XCircle,
-  ScanSearch, Download, Bot, ShieldAlert, TrendingDown, Sparkles,
+  ScanSearch, Download, Bot, ShieldAlert, TrendingDown, Sparkles, Trash2,
 } from 'lucide-react';
 import { exportToCSV } from '@/lib/exportCsv';
 import { poAPI, OrderProposalCard, ProposalStatus } from '@/lib/api';
@@ -27,6 +27,19 @@ export default function PurchaseOrderPage() {
   const [scanning, setScanning] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
 
+  // 칸반은 컬럼마다 카드가 쌓이는 구조라 페이지도 컬럼별로 따로 센다.
+  // (한 컬럼만 30건이어도 나머지 두 컬럼까지 같이 넘어가면 조작이 어긋난다.)
+  const [pageByCol, setPageByCol] = useState<Record<string, number>>({});
+  const [pageSize, setPageSize] = useState(5);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) =>
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+
   const fetchProposals = useCallback(async () => {
     setLoading(true);
     try {
@@ -49,7 +62,7 @@ export default function PurchaseOrderPage() {
       const res = await poAPI.scanSafetyStock();
       alert(
         res.createdCount > 0
-          ? `[저재고 스캔 완료] 안전선(15권) 미만 도서 ${res.createdCount}건에 대해 AI 발주 제안이 생성되었습니다.`
+          ? `[저재고 스캔 완료] 안전 재고선 미만 도서 ${res.createdCount}건에 대해 AI 발주 제안이 생성되었습니다.`
           : '[저재고 스캔 완료] 새로 제안할 저재고 도서가 없습니다. (기존 대기 카드는 유지)'
       );
       await fetchProposals();
@@ -90,6 +103,34 @@ export default function PurchaseOrderPage() {
     } catch (err) {
       console.error(err);
       alert('기각 처리에 실패했습니다.');
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleBulk = async (
+    action: 'approve' | 'dismiss' | 'delete',
+    ids: string[],
+    confirmText: string,
+  ) => {
+    if (!ids.length) return;
+    if (!confirm(confirmText)) return;
+    setActingId('BULK');
+    try {
+      if (action === 'approve') await poAPI.approveProposals(ids);
+      else if (action === 'dismiss') await poAPI.dismissProposals(ids);
+      else {
+        const res = await poAPI.deleteProposals(ids);
+        if (res.skipped?.length) {
+          alert(`${res.deletedCount}건 삭제했습니다.
+결재 대기(승인 대기) 카드 ${res.skipped.length}건은 삭제할 수 없어 건너뛰었습니다 — 먼저 승인 또는 기각해주세요.`);
+        }
+      }
+      setSelected(new Set());
+      await fetchProposals();
+    } catch (err) {
+      console.error(err);
+      alert('일괄 처리에 실패했습니다.');
     } finally {
       setActingId(null);
     }
@@ -201,7 +242,15 @@ export default function PurchaseOrderPage() {
       {/* Kanban Board */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
         {COLUMNS.map(col => {
-          const cards = proposals.filter(p => p.status === col.key);
+          const allCards = proposals.filter(p => p.status === col.key);
+          const totalPages = Math.max(1, Math.ceil(allCards.length / pageSize));
+          const page = Math.min(pageByCol[col.key] ?? 1, totalPages);
+          const cards = allCards.slice((page - 1) * pageSize, page * pageSize);
+          const pageIds = cards.map(c => c.id);
+          const selectedHere = pageIds.filter(id => selected.has(id));
+          const allChecked = pageIds.length > 0 && selectedHere.length === pageIds.length;
+          const setPage = (n: number) => setPageByCol(prev => ({ ...prev, [col.key]: n }));
+
           return (
             <div key={col.key} className="bg-gray-50/80 dark:bg-gray-900/60 rounded-2xl border border-gray-200 dark:border-gray-800 p-4 space-y-3 min-h-[300px]">
               <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-800">
@@ -210,11 +259,67 @@ export default function PurchaseOrderPage() {
                   <p className="text-[10px] text-gray-400 dark:text-gray-500">{col.hint}</p>
                 </div>
                 <span className="px-2.5 py-1 bg-white dark:bg-gray-800 rounded-full text-xs font-bold font-mono border border-gray-200 dark:border-gray-700">
-                  {cards.length}
+                  {allCards.length}
                 </span>
               </div>
 
-              {cards.length === 0 && (
+              {/* 이 페이지 전체 선택 + 선택 건 일괄 처리 */}
+              {allCards.length > 0 && (
+                <div className="flex items-center justify-between gap-2 flex-wrap text-[11px]">
+                  <label className="flex items-center gap-1.5 font-bold text-gray-500 dark:text-gray-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allChecked}
+                      onChange={() =>
+                        setSelected(prev => {
+                          const next = new Set(prev);
+                          if (allChecked) pageIds.forEach(id => next.delete(id));
+                          else pageIds.forEach(id => next.add(id));
+                          return next;
+                        })
+                      }
+                      className="w-3.5 h-3.5 accent-blue-600 cursor-pointer"
+                    />
+                    이 페이지 전체
+                  </label>
+
+                  {selectedHere.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-black text-blue-600 dark:text-blue-400">{selectedHere.length}건</span>
+                      {col.key === 'PENDING' ? (
+                        <>
+                          <button
+                            onClick={() => handleBulk('approve', selectedHere, `선택한 ${selectedHere.length}건을 일괄 발주 승인할까요?
+승인 즉시 AUTO_PO 주문 생성 + Zone A 신품 입고가 집행됩니다.`)}
+                            disabled={actingId !== null}
+                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md cursor-pointer disabled:opacity-50"
+                          >
+                            일괄 승인
+                          </button>
+                          <button
+                            onClick={() => handleBulk('dismiss', selectedHere, `선택한 ${selectedHere.length}건을 일괄 기각할까요?`)}
+                            disabled={actingId !== null}
+                            className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold rounded-md border border-gray-200 dark:border-gray-700 cursor-pointer disabled:opacity-50"
+                          >
+                            일괄 기각
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleBulk('delete', selectedHere, `선택한 ${selectedHere.length}건을 보드에서 삭제할까요?
+결재 기록이 함께 사라지며 되돌릴 수 없습니다.`)}
+                          disabled={actingId !== null}
+                          className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-md cursor-pointer disabled:opacity-50"
+                        >
+                          삭제
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {allCards.length === 0 && (
                 <p className="text-xs text-gray-400 dark:text-gray-600 text-center py-10">카드가 없습니다</p>
               )}
 
@@ -223,8 +328,15 @@ export default function PurchaseOrderPage() {
                   key={card.id}
                   className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs p-4 space-y-2.5"
                 >
-                  {/* 카드 헤더: 트리거 + 긴급도 */}
+                  {/* 카드 헤더: 선택 + 트리거 + 긴급도 */}
                   <div className="flex items-center justify-between gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(card.id)}
+                      onChange={() => toggleSelect(card.id)}
+                      className="w-3.5 h-3.5 accent-blue-600 cursor-pointer shrink-0"
+                      title="일괄 처리 대상으로 선택"
+                    />
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
                       card.triggerType === 'INSPECTION_REJECT'
                         ? 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
@@ -305,16 +417,61 @@ export default function PurchaseOrderPage() {
                         </button>
                       </div>
                     ) : (
-                      <div className="text-right">
-                        <p className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">{card.decidedBy || '-'}</p>
-                        <p className="text-[9px] text-gray-300 dark:text-gray-600 font-mono">
-                          {card.decidedAt ? card.decidedAt.slice(0, 16).replace('T', ' ') : ''}
-                        </p>
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">{card.decidedBy || '-'}</p>
+                          <p className="text-[9px] text-gray-300 dark:text-gray-600 font-mono">
+                            {card.decidedAt ? card.decidedAt.slice(0, 16).replace('T', ' ') : ''}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleBulk('delete', [card.id], `'${card.title}' 카드를 보드에서 삭제할까요?
+결재 기록이 함께 사라지며 되돌릴 수 없습니다.`)}
+                          disabled={actingId !== null}
+                          title="보드에서 삭제"
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     )}
                   </div>
                 </div>
               ))}
+
+              {/* 컬럼 페이지네이션 (건수가 적으면 화살표를 숨기고 건수 선택만 남긴다) */}
+              {allCards.length > 0 && (
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-200 dark:border-gray-800 text-[11px] font-mono">
+                  <select
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setPageByCol({}); }}
+                    className="px-1.5 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md font-bold text-gray-600 dark:text-gray-300 cursor-pointer"
+                    title="한 페이지에 표시할 카드 수"
+                  >
+                    {[5, 10, 15, 20].map(n => <option key={n} value={n}>{n}개</option>)}
+                  </select>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setPage(Math.max(1, page - 1))}
+                        disabled={page === 1}
+                        className="px-2 py-1 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 font-black disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        &lt;
+                      </button>
+                      <span className="font-bold text-gray-500 dark:text-gray-400 px-1">{page} / {totalPages}</span>
+                      <button
+                        onClick={() => setPage(Math.min(totalPages, page + 1))}
+                        disabled={page === totalPages}
+                        className="px-2 py-1 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 font-black disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        &gt;
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

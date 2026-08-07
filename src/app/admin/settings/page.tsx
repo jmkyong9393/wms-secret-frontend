@@ -21,20 +21,9 @@ import {
   Settings, Cpu, Printer, Sun, Moon, BellRing, Save, CheckCircle2, Zap, ShieldAlert, Lock,
 } from 'lucide-react';
 import { getSystemSettings, saveSystemSettings } from '@/lib/systemSettings';
+// 정책 상수는 HITL 화면과 공유한다 (features/hitl/policy.ts 단일 정의)
+import { UBCI_GRADE_POLICY, HITL_ROUTING_POLICY } from '@/features/hitl/policy';
 
-/** 파이프라인 실제 정책 상수 (표시 전용 - 소스: wms-secret-backend/app/ai/agents) */
-const UBCI_GRADE_POLICY = [
-  { grade: 'S급 (MINT)', range: '95 ~ 100점', note: 'is_mint 판정 시 자동 매입/환불 (auto_refund_eligible)', color: 'text-emerald-700 dark:text-emerald-400' },
-  { grade: 'A급 (GOOD)', range: '85 ~ 94점', note: '자동 승인 입고', color: 'text-blue-700 dark:text-blue-400' },
-  { grade: 'B급 (NORMAL)', range: '65 ~ 84점', note: '자동 승인 입고 (등급 하향)', color: 'text-amber-700 dark:text-amber-400' },
-  { grade: 'C급 (REJECT)', range: '0 ~ 64점', note: '입고 반려 (반송/폐기)', color: 'text-rose-700 dark:text-rose-400' },
-];
-
-const HITL_ROUTING_POLICY = [
-  'UBCI 점수가 NORMAL/REJECT 경계선(58~66점) 구간에 들어온 경우',
-  'Critic Agent 반려로 재검수 루프가 2회를 초과한 경우',
-  'Vision Agent(GPT-4o) 판독 자체가 실패한 경우 (MINT 자동 승격 금지)',
-];
 
 export default function SystemSettingsPage() {
   // 실연동 설정 (lib/systemSettings 영속화)
@@ -202,11 +191,21 @@ export default function SystemSettingsPage() {
           </CardHeader>
           <CardContent className="pt-5 space-y-4">
             <div className="space-y-1.5">
+              {/* 등급·점수 열은 폭을 고정한다. justify-between으로 두면 설명 길이에 따라
+                  점수 열 위치가 행마다 달라져 세로로 어긋나 보인다. */}
               {UBCI_GRADE_POLICY.map((p) => (
-                <div key={p.grade} className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-700/40 rounded-lg border border-gray-100 dark:border-gray-700 text-xs">
+                <div
+                  key={p.grade}
+                  className="grid grid-cols-[7rem_5.5rem_1fr] items-start gap-2 p-2.5 bg-gray-50 dark:bg-gray-700/40 rounded-lg border border-gray-100 dark:border-gray-700 text-xs"
+                >
                   <span className={`font-black ${p.color}`}>{p.grade}</span>
-                  <span className="font-mono font-bold text-gray-700 dark:text-gray-300">{p.range}</span>
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 text-right max-w-[45%]">{p.note}</span>
+                  <span className="font-mono font-bold text-gray-700 dark:text-gray-300 tabular-nums">{p.range}</span>
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-snug">{p.quality}</p>
+                    <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold ${p.badge}`}>
+                      {p.action}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -217,9 +216,15 @@ export default function SystemSettingsPage() {
               </p>
               <ul className="space-y-1">
                 {HITL_ROUTING_POLICY.map((rule, i) => (
-                  <li key={i} className="text-[11px] text-gray-500 dark:text-gray-400 flex items-start gap-1.5">
+                  <li key={rule.code} className="text-[11px] text-gray-500 dark:text-gray-400 flex items-start gap-1.5">
                     <span className="text-amber-500 font-black shrink-0">{i + 1}.</span>
-                    {rule}
+                    <span className="min-w-0">
+                      <span className="font-bold text-gray-700 dark:text-gray-200">{rule.title}</span>
+                      <span className="ml-1.5 font-mono text-[10px] px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                        {rule.code}
+                      </span>
+                      <span className="block mt-0.5 leading-snug">{rule.detail}</span>
+                    </span>
                   </li>
                 ))}
               </ul>

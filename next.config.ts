@@ -54,11 +54,18 @@ export default withSentryConfig(nextConfig, {
   org: "wms-ai-platform",
   project: "frontend",
   widenClientFileUpload: true,
-  reactComponentAnnotation: {
-    enabled: true,
-  },
   tunnelRoute: "/monitoring",
   sourcemaps: { disable: true },
-  disableLogger: true,
-  automaticVercelMonitors: true,
+  // 아래 3개는 webpack 빌드 전용 옵션이라 최상위에 두면 deprecation 경고가 난다.
+  // (Turbopack 개발 서버에서는 적용되지 않고, 프로덕션 webpack 빌드에만 걸린다)
+  webpack: {
+    reactComponentAnnotation: {
+      enabled: true,
+    },
+    treeshake: {
+      // 구 disableLogger - 번들에서 Sentry 디버그 로깅을 제거한다
+      removeDebugLogging: true,
+    },
+    automaticVercelMonitors: true,
+  },
 });

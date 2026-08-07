@@ -28,17 +28,19 @@ export default function RecentInspectionsClient() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={task.previewUrl} alt="book" className="w-12 h-12 object-cover rounded-md border border-gray-200" />
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{task.id.replace('local_', 'REQ-')}</p>
-                  <p className="text-xs text-gray-500">UBCI 판독 대기 중</p>
+                  <p className="text-sm font-semibold text-gray-800">{task.title}</p>
+                  <p className="text-xs font-mono text-gray-500">{task.lpn}</p>
                 </div>
               </div>
               <div>
                 {task.status === 'COMPLETED' ? (
-                  <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">검수 완료</span>
+                  <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">{task.grade || '검수 완료'}</span>
+                ) : task.status === 'FAILED' ? (
+                  <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full">전송 실패</span>
                 ) : (
                   <span className="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded-full flex items-center">
                     <span className="w-2 h-2 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin mr-2" />
-                    분석 중
+                    {task.status === 'UPLOADING' ? '전송 중' : `분석 중 ${task.progress}%`}
                   </span>
                 )}
               </div>
