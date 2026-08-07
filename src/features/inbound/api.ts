@@ -1,30 +1,9 @@
 import { apiClient } from '@/lib/api-client';
-import { VisionEvaluationRequest, VisionEvaluationResponse, PrintStickerRequest, HistoryLog } from '@/features/inbound/types';
+import { PrintStickerRequest, HistoryLog } from '@/features/inbound/types';
 
-const BASE_URL = '/api/v1/inbound';
-
+// AI 검수 요청(POST /api/v1/inbound/evaluate)은 app/inbound/page.tsx의 evaluateMutation이
+// 단독으로 수행한다. 여기에 별도 진입점을 두면 큐 상태가 실제 요청과 어긋난다.
 export const inboundService = {
-  evaluateVisionGrade: async (data: VisionEvaluationRequest): Promise<VisionEvaluationResponse> => {
-    // const formData = new FormData();
-    // formData.append('image', data.imageFile);
-    // if (data.isbn) formData.append('isbn', data.isbn);
-    
-    // const response = await apiClient.post<VisionEvaluationResponse>(`${BASE_URL}/evaluate`, formData, {
-    //   headers: { 'Content-Type': 'multipart/form-data' }
-    // });
-    // return response.data;
-
-    return new Promise(resolve => setTimeout(() => {
-      resolve({
-        lpn: `LPN-${new Date().getTime().toString().slice(-6)}-A100`,
-        grade: 'S',
-        gradeName: 'S등급 (최상)',
-        confidence: 98.5,
-        analysisDetails: '스크래치 없음, 변색 없음, 모서리 손상 없음'
-      });
-    }, 1500));
-  },
-
   generateLpn: async (isbn: string, workerId?: string) => {
     // 백엔드 연동: ISBN을 보내고 LPN 번호 및 도서 정보 수신
     try {
@@ -40,12 +19,12 @@ export const inboundService = {
   },
 
   printLPNSticker: async (data: PrintStickerRequest): Promise<boolean> => {
-    // await apiClient.post(`${BASE_URL}/print`, data);
+    // await apiClient.post('/api/v1/inbound/print', data);
     return new Promise(resolve => setTimeout(() => resolve(true), 500));
   },
 
   getHistoryLogs: async (): Promise<HistoryLog[]> => {
-    // const response = await apiClient.get<HistoryLog[]>(`${BASE_URL}/history`);
+    // const response = await apiClient.get<HistoryLog[]>('/api/v1/inbound/history');
     // return response.data;
     
     let localData: any[] = [];
