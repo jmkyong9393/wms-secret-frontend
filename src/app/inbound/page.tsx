@@ -4,7 +4,7 @@ import { API_BASE_URL } from '@/lib/api-client';
 import { useState, useEffect, useRef } from 'react';
 import BookCover from '@/components/BookCover';
 import { useMutation } from '@tanstack/react-query';
-import { Camera, Flashlight, RefreshCcw, Keyboard, Package, CheckCircle2, ScanLine, Printer, ArrowRight, BookOpen, ChevronLeft, User, Zap } from 'lucide-react';
+import { Camera, Flashlight, RefreshCcw, Keyboard, Package, CheckCircle2, AlertTriangle, ScanLine, Printer, ArrowRight, BookOpen, ChevronLeft, User, Zap } from 'lucide-react';
 import { PrinterHelper } from '@/lib/printerHelper';
 import { useCamera } from '@/features/inbound/hooks/useCamera';
 import { processImage } from '@/lib/image-processor';
@@ -21,24 +21,12 @@ import { TRACK1_IMAGE_COUNT, TRACK1_SHOTS, shotAt, shotLabel } from '@/features/
 type Step = 'SELECT_TYPE' | 'SCAN_BARCODE' | 'PRINT_STICKER' | 'VISION_EVALUATION' | 'RESULT';
 type InboundType = 'NEW_FASTTRACK' | 'USED_RETURN_INSPECTION';
 
-type QueueItem = {
-  id: string; // job_id
-  lpn: string;
-  title: string;
-  status: 'ANALYZING' | 'COMPLETED';
-  progress?: number;
-  message?: string;
-  grade?: string;
-  timestamp: number;
-};
-
 export default function InboundScannerPage() {
   const [step, setStep] = useState<Step>('SELECT_TYPE');
   const [inboundType, setInboundType] = useState<InboundType>('NEW_FASTTRACK');
   const [isbn, setIsbn] = useState('');
   const [isPrinting, setIsPrinting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [currentLpn, setCurrentLpn] = useState('');
   const [bookInfo, setBookInfo] = useState<any | null>(null);
   const [selectedBook, setSelectedBook] = useState<any | null>(null);
@@ -70,8 +58,15 @@ export default function InboundScannerPage() {
   
   const { videoRef, startCamera, stopCamera } = useCamera();
   const guideBoxRef = useRef<HTMLDivElement>(null);
+  // 검수 큐는 전역 atom 하나만 쓴다. 화면 로컬 사본을 따로 두면 Header·대시보드가
+  // 보는 값과 어긋난다.
+  const uploadQueue = useAtomValue(uploadQueueAtom);
   const setUploadQueue = useSetAtom(uploadQueueAtom);
   const user = useAtomValue(currentUserAtom);
+
+  // 정상 완료 건은 5초 뒤 이 목록에서만 감춘다(집계에는 남는다).
+  const visibleQueue = uploadQueue.filter(t => !t.autoHidden);
+  const inFlightCount = uploadQueue.filter(t => t.status === 'UPLOADING' || t.status === 'ANALYZING').length;
 
   /**
    * LPN 채번 — 반드시 서버(POST /inventory/lpn)에서 받아온다.
@@ -115,8 +110,11 @@ export default function InboundScannerPage() {
   // ---------------------------------------------------------------------------
   // 사용자가 '촬영 완료'를 눌렀을 때, 백엔드의 응답 시간(네트워크 지연)을 기다리지 않고
   // 화면을 즉각적으로 전환(0초 지연)시키는 '낙관적 업데이트(Optimistic Update)' 기법을 적용합니다.
+  //
+  // 큐(uploadQueueAtom) 갱신도 전부 이 mutation이 담당한다. 화면 전환만 낙관적으로
+  // 앞당기고, 큐에 찍히는 상태는 요청·SSE의 실제 결과를 따른다.
   const evaluateMutation = useMutation({
-    mutationFn: async (data: { lpn: string, images: Blob[], book_metadata?: any }) => {
+    mutationFn: async (data: { lpn: string, images: Blob[], previewUrl: string, book_metadata?: any }) => {
       const getBase64 = (blob: Blob): Promise<string> => new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -133,31 +131,33 @@ export default function InboundScannerPage() {
       return res.json();
     },
     onMutate: async (newEvaluation) => {
-      // [핵심 로직] 낙관적 업데이트 발동 지점
-      // 서버 응답이 오기도 전에(심지어 요청이 실패할지도 모르지만) 무조건 성공했다고 '가정'하고,
-      // 임시 ID(tempJobId)를 발급하여 즉시 모바일 하단 작업 대기열(Queue)에 데이터를 밀어 넣습니다.
+      // 임시 ID(tempJobId)로 큐에 먼저 자리를 잡아 두고, 화면은 곧바로 다음 단계로 넘긴다.
+      // 상태는 '전송 중'이며, 완료로 바뀌는 시점은 서버 응답·SSE가 결정한다.
       const tempJobId = `temp-${Date.now()}`;
-      setQueue(prev => [...prev, {
+      setUploadQueue(prev => [...prev, {
         id: tempJobId,
         lpn: newEvaluation.lpn,
-        title: '클린 아키텍처',
-        status: 'ANALYZING',
+        title: newEvaluation.book_metadata?.title || '미등록 도서',
+        previewUrl: newEvaluation.previewUrl,
+        status: 'UPLOADING',
         progress: 0,
-        message: '대기 중...',
+        message: '전송 중...',
         timestamp: Date.now()
       }]);
-      
+
       // 카메라 뷰파인더 닫고, 즉시(0.001초만에) 다음 화면(RESULT)으로 전환하여 체감속도 극대화
-      setStep('RESULT'); 
+      setStep('RESULT');
       return { tempJobId };
     },
     onSuccess: (data, variables, context) => {
       // 2. 서버 통신이 '진짜로' 성공하면, 서버가 발급한 진짜 Job ID를 받아옴
       const { job_id, lpn } = data;
-      
-      // 앞서 가짜(tempJobId)로 그렸던 큐 데이터를 실제 job_id로 은밀하게 치환 (사용자는 눈치채지 못함)
-      setQueue(prev => prev.map(q => q.id === context?.tempJobId ? { ...q, id: job_id } : q));
-      
+
+      // 임시 ID로 잡아둔 자리를 실제 job_id로 치환하고 분석 대기 상태로 넘긴다.
+      setUploadQueue(prev => prev.map(q => q.id === context?.tempJobId
+        ? { ...q, id: job_id, status: 'ANALYZING' as const, message: '분석 대기 중...' }
+        : q));
+
       // -----------------------------------------------------------------------
       // [UX 렌더링 최적화 2] SSE (Server-Sent Events) 단방향 스트리밍 구독
       // -----------------------------------------------------------------------
@@ -168,22 +168,39 @@ export default function InboundScannerPage() {
       evtSource.onmessage = (event) => {
         // 서버에서 던져준 데이터("디코딩 중... 20%")를 실시간으로 UI 프로그레스 바에 반영
         const parsed = JSON.parse(event.data);
-        setQueue(prev => prev.map(q => {
-          if (q.id === job_id) {
+        // 워커는 파이프라인 실패도 progress 100으로 발행하며 grade에 'ERROR'를 담는다.
+        // 등급으로 취급하면 실패가 완료로 표시된다.
+        const isErrorGrade = parsed.grade === 'ERROR';
+        setUploadQueue(prev => prev.map(q => {
+          if (q.id !== job_id) return q;
+          if (isErrorGrade) {
             return {
               ...q,
               progress: parsed.progress,
-              message: parsed.message,
-              ...(parsed.grade ? { status: 'COMPLETED', grade: parsed.grade } : {})
+              status: 'FAILED' as const,
+              message: parsed.message || 'AI 파이프라인 오류'
             };
           }
-          return q;
+          return {
+            ...q,
+            progress: parsed.progress,
+            message: parsed.message,
+            ...(parsed.grade ? { status: 'COMPLETED' as const, grade: parsed.grade } : {})
+          };
         }));
-        
+
         // 100% 완료 시 연결을 끊고 불필요한 네트워크 리소스 낭비 방지
         if (parsed.progress === 100) {
           evtSource.close();
-          
+
+          // 100%인데 등급이 없으면 판정을 받지 못한 것이다. 완료로 올리지 않는다.
+          if (!parsed.grade) {
+            setUploadQueue(prev => prev.map(q => q.id === job_id
+              ? { ...q, status: 'FAILED' as const, message: parsed.message || '등급 미수신' }
+              : q));
+            return;
+          }
+
           // [추가] 모의 데이터 대신 실제 AI 등급 결과와 도서 정보를 Local Storage에 누적 저장
           const localEvals = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
           const newEval = { 
@@ -210,26 +227,34 @@ export default function InboundScannerPage() {
           }
           
           localStorage.setItem('local_evaluations', JSON.stringify(localEvals));
-          // 완료된 건 중 S/A 등급(정상)은 5초 뒤에 큐에서 스르륵 사라지도록 UX 처리.
-          // 반려나 예외 상황은 사용자가 직접 확인할 수 있게 사라지지 않음.
-          if (parsed.grade && (parsed.grade.includes('S') || parsed.grade.includes('A') || parsed.grade.includes('NORMAL') || parsed.grade.includes('MINT'))) {
+          // 완료된 건 중 S/A 등급(정상)은 5초 뒤 현장 촬영 화면 목록에서만 감춘다.
+          // 큐에서 지우지는 않는다 — Header·대시보드의 세션 집계가 근거를 잃는다.
+          // 반려나 예외 상황은 사용자가 직접 확인할 수 있게 계속 남는다.
+          if (!isErrorGrade && (parsed.grade.includes('S') || parsed.grade.includes('A') || parsed.grade.includes('NORMAL') || parsed.grade.includes('MINT'))) {
             setTimeout(() => {
-              setQueue(prev => prev.filter(q => q.id !== job_id));
+              setUploadQueue(prev => prev.map(q => q.id === job_id ? { ...q, autoHidden: true } : q));
             }, 5000);
           }
         }
       };
-      
+
       evtSource.onerror = (err) => {
         console.error("SSE Error:", err);
         evtSource.close();
+        // 진행률 수신이 끊기면 결과를 알 수 없다. ANALYZING으로 방치하면 대기열 건수가
+        // 영구히 남으므로 실패로 확정한다.
+        setUploadQueue(prev => prev.map(q => q.id === job_id && q.status === 'ANALYZING'
+          ? { ...q, status: 'FAILED' as const, message: '진행 상황 수신이 끊겼습니다' }
+          : q));
       };
     },
     onError: (err, newEvaluation, context) => {
-      // 3. 만약 서버 통신이 실패했다면(네트워크 단절 등), 
-      // 낙관적으로 그려버렸던 큐 아이템(tempJobId)을 롤백(삭제)시켜서 유저에게 에러를 알림
+      // 3. 서버 통신이 실패했다면(네트워크 단절 등) 큐 항목을 실패로 표시한다.
+      // 삭제하지 않는 이유는 작업자가 어떤 LPN을 다시 보내야 하는지 알아야 하기 때문이다.
       if (context?.tempJobId) {
-        setQueue(prev => prev.filter(q => q.id !== context.tempJobId));
+        setUploadQueue(prev => prev.map(q => q.id === context.tempJobId
+          ? { ...q, status: 'FAILED' as const, message: '전송 실패 — 재촬영이 필요합니다' }
+          : q));
       }
       alert("AI 판독 큐 전송에 실패했습니다. 다시 시도해주세요.");
     }
@@ -248,8 +273,19 @@ export default function InboundScannerPage() {
   // 실제 바코드(ISBN) 스캐닝 로직 (ZXing Browser)
   const codeReader = useRef<any>(null);
 
+  // 바코드 인식 처리 중복 방지 잠금.
+  //
+  // 스캔은 두 엔진(ZXing 콜백 + BarcodeDetector rAF 루프)이 동시에 돌고, 화면을
+  // SCAN_BARCODE로 되돌아올 때마다 새 세션이 시작된다. 세션 안의 지역 플래그로는
+  // 다른 세션의 중복 처리를 막지 못해, 한 번 스캔에 LPN이 여러 개 채번된 적이 있다.
+  // ref는 컴포넌트에 하나뿐이라 모든 세션·콜백이 같은 잠금을 공유한다.
+  const isHandlingScanRef = useRef(false);
+
   useEffect(() => {
     if (step === 'SCAN_BARCODE') {
+      // 스캔 화면에 들어올 때만 잠금을 푼다. 직전 스캔 처리가 끝났다는 뜻이다.
+      isHandlingScanRef.current = false;
+
       if (!codeReader.current) {
         const hints = new Map();
         hints.set(DecodeHintType.POSSIBLE_FORMATS, [
@@ -273,13 +309,16 @@ export default function InboundScannerPage() {
         if (!videoRef.current) return;
 
         const onSuccess = async (text: string) => {
-          if (!scanning) return;
+          if (!scanning || isHandlingScanRef.current) return;
+          // 잠금은 await 이전에 동기적으로 건다. 뒤에 비동기 채번이 있어서, 여기서
+          // 양보하면 남은 세션들이 그 사이에 같은 바코드를 함께 통과시킨다.
+          isHandlingScanRef.current = true;
           scanning = false;
           if (controlsRef) {
             controlsRef.stop();
             controlsRef = null;
           }
-          
+
           const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
           audio.play().catch(() => {});
 
@@ -356,7 +395,9 @@ export default function InboundScannerPage() {
 
         // 1. ZXing Browser 오픈소스 엔진 (최적화)
         try {
-          await codeReader.current?.decodeFromVideoElement(videoRef.current, (result: any, error: any, controls: any) => {
+          // 반환된 controls를 즉시 보관한다. 콜백 인자로만 받으면 바코드를 한 번도 못 읽고
+          // 화면을 벗어났을 때 정리 함수가 세션을 멈추지 못해 세션이 계속 쌓인다.
+          const controls = await codeReader.current?.decodeFromVideoElement(videoRef.current, (result: any, error: any, controls: any) => {
             controlsRef = controls;
             if (result && scanning) {
               const text = result.getText();
@@ -365,6 +406,12 @@ export default function InboundScannerPage() {
               }
             }
           });
+          controlsRef = controlsRef || controls;
+          // 대기 중 화면을 벗어났다면 정리 함수는 이미 지나갔다. 직접 멈춘다.
+          if (!scanning) {
+            controls?.stop();
+            controlsRef = null;
+          }
         } catch (err) {
           console.warn("ZXing decode error:", err);
         }
@@ -1113,21 +1160,11 @@ export default function InboundScannerPage() {
                     return;
                   }
                   
-                  // 백그라운드 큐 업로더에 작업 적재
-                  setUploadQueue(prev => [
-                    ...prev,
-                    ...capturedImages.map((img, i) => ({
-                      id: `local_${Date.now()}_${i}`,
-                      blob: img.blob,
-                      previewUrl: img.url,
-                      status: 'PENDING' as const,
-                    }))
-                  ]);
-
-                  // 낙관적 UI 진행
+                  // 전송 경로는 이 mutation 하나뿐이다. 큐 적재도 mutation이 담당한다.
                   evaluateMutation.mutate({
                     lpn: currentLpn,
                     images: capturedImages.map(img => img.blob),
+                    previewUrl: capturedImages[0].url,
                     book_metadata: bookInfo
                   });
                 }}
@@ -1166,28 +1203,34 @@ export default function InboundScannerPage() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">작업 진행 현황</h3>
           <span className="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1 rounded-full">
-            대기 {queue.filter(q => q.status === 'ANALYZING').length}건
+            대기 {inFlightCount}건
           </span>
         </div>
 
-        {queue.length === 0 ? (
+        {visibleQueue.length === 0 ? (
           <div className="py-6 flex justify-center items-center">
             <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">아직 촬영된 도서가 없습니다.</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {queue.map(item => (
+            {visibleQueue.map(item => {
+              const isInFlight = item.status === 'UPLOADING' || item.status === 'ANALYZING';
+              return (
               <div
                 key={item.id}
                 className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-500 ${
                   item.status === 'COMPLETED'
                     ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-100 dark:border-emerald-900'
-                    : 'bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700'
+                    : item.status === 'FAILED'
+                      ? 'bg-red-50 dark:bg-red-950/40 border-red-100 dark:border-red-900'
+                      : 'bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700'
                 }`}
               >
                 <div className="flex items-center space-x-3 w-1/2">
-                  {item.status === 'ANALYZING' ? (
+                  {isInFlight ? (
                     <RefreshCcw className="w-5 h-5 text-indigo-500 animate-spin flex-shrink-0" />
+                  ) : item.status === 'FAILED' ? (
+                    <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
                   ) : (
                     <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
                   )}
@@ -1197,7 +1240,7 @@ export default function InboundScannerPage() {
                   </div>
                 </div>
                 <div className="flex-1 flex flex-col items-end justify-center">
-                  {item.status === 'ANALYZING' ? (
+                  {isInFlight ? (
                     <div className="w-full max-w-[120px] text-right">
                       <div className="flex justify-between text-[10px] text-indigo-600 dark:text-indigo-300 font-bold mb-1">
                         <span className="truncate pr-1">{item.message || '대기 중...'}</span>
@@ -1212,13 +1255,20 @@ export default function InboundScannerPage() {
                     </div>
                   ) : (
                     <div className="flex flex-col items-end">
-                      <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-200 dark:bg-emerald-900 px-2 py-1 rounded shadow-sm whitespace-nowrap">{item.grade}</span>
+                      <span className={`text-xs font-bold px-2 py-1 rounded shadow-sm whitespace-nowrap ${
+                        item.status === 'FAILED'
+                          ? 'text-red-700 dark:text-red-300 bg-red-200 dark:bg-red-900'
+                          : 'text-emerald-700 dark:text-emerald-300 bg-emerald-200 dark:bg-emerald-900'
+                      }`}>
+                        {item.status === 'FAILED' ? '실패' : item.grade}
+                      </span>
                       {item.message && <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-right max-w-[120px] truncate" title={item.message}>{item.message}</span>}
                     </div>
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

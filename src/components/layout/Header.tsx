@@ -5,7 +5,7 @@ import { maskName } from '@/lib/privacy-mask';
 import Link from 'next/link';
 import React, { useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { uploadQueueAtom } from '@/stores/atoms';
+import { inFlightUploadCountAtom } from '@/stores/atoms';
 import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { Bell, BellOff, User, CloudUpload, CloudOff, Sun, Moon, VolumeX } from 'lucide-react';
@@ -59,7 +59,8 @@ function toNotificationItem(evt: any): NotificationItem {
 }
 
 export default function Header() {
-  const uploadQueue = useAtomValue(uploadQueueAtom);
+  // 전송·분석이 진행 중인 AI 검수 건수 (실패·완료 건 제외)
+  const pendingCount = useAtomValue(inFlightUploadCountAtom);
   // 사용자명·역할을 그대로 렌더하므로 하이드레이션 안전 훅을 쓴다 (Sidebar와 동일한 이유).
   const { user } = useHydratedUser();
   const logout = useLogout();
@@ -96,7 +97,6 @@ export default function Header() {
     }
     if (nextMute) setActiveToast(null);
   };
-  const pendingCount = uploadQueue.filter(t => t.status !== 'COMPLETED').length;
   // 실시간 AI Agent / FDS 알림.
   //
   // [수정 이력] 종전에는 여기에 더미 알림 4건("품질 검증 오류", "대체 발주 추천 생성",

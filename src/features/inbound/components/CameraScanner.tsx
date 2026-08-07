@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSetAtom } from 'jotai';
 import { useCamera } from '@/features/inbound/hooks/useCamera';
 import { processImage } from '@/lib/image-processor';
-import { uploadQueueAtom, UploadTask } from '@/stores/atoms';
 
+// 출고 피킹 촬영본을 받는 엔드포인트가 아직 없어 촬영 결과는 서버로 전송되지 않는다.
+// 입고 AI 검수 큐(uploadQueueAtom)에 적재하면 전송된 적 없는 건이 대기열 집계에 섞이므로
+// 적재하지 않는다.
 export default function CameraScanner() {
   const { videoRef, startCamera, stopCamera, error } = useCamera();
-  const setUploadQueue = useSetAtom(uploadQueueAtom);
   const [isProcessing, setIsProcessing] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -44,31 +44,20 @@ export default function CameraScanner() {
     setToastMsg(null);
     
     try {
-      // 1. 이미지 압축 및 흔들림 감지 연산 (클라이언트단)
+      // 이미지 압축 및 흔들림 감지 연산 (클라이언트단)
       const result = await processImage(videoRef.current);
-      
+
       if (result.isBlurred) {
         setToastMsg("⚠️ 사진이 너무 흔들렸습니다. 다시 촬영해 주세요.");
         setIsProcessing(false);
-        return; // 업로드 중단
+        return;
       }
 
-      // 2. 낙관적 UI를 위한 큐(Queue) 적재
-      const newTask: UploadTask = {
-        id: `local_${Date.now()}`,
-        blob: result.blob,
-        previewUrl: result.previewUrl,
-        status: 'PENDING',
-      };
-      
-      setUploadQueue((prev) => [...prev, newTask]);
-      
-      // 3. 셔터 이펙트 및 다음 촬영 유도
-      setToastMsg("✅ 촬영 완료! 백그라운드에서 업로드됩니다.");
-      
+      setToastMsg("✅ 촬영 완료 (현장 확인용 · 서버 전송 없음)");
+
       // Toast 자동 제거
       setTimeout(() => setToastMsg(null), 2000);
-      
+
     } catch (err) {
       console.error(err);
       setToastMsg("❌ 촬영 중 오류가 발생했습니다.");

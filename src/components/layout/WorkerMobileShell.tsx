@@ -18,7 +18,6 @@
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
-import { SessionAutoLogout } from '@/components/auth/SessionAutoLogout';
 import Header from './Header';
 import { WORKER_MENU_ITEMS, isWorkerMenuActive } from './workerMenu';
 
@@ -47,7 +46,7 @@ export default function WorkerMobileShell({
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden font-sans transition-colors duration-200">
-      <SessionAutoLogout />
+      {/* SessionAutoLogout은 루트 레이아웃에서 단일 마운트한다 (app/layout.tsx) */}
 
       {/* 알림·다크모드·사용자 메뉴는 공용 Header를 그대로 쓴다 (제목은 pathname 기반 자동) */}
       <div className="shrink-0">
