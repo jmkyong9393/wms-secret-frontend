@@ -28,6 +28,19 @@ export const adminAPI = {
     const res = await apiClient.post<HitlReinspectResult>(`/api/v1/admin/hitl/${jobId}/re-inspect`);
     return res.data;
   },
+  /**
+   * 재검수 결과 조회용. re-inspect는 Celery 큐에 등록만 하고 즉시 반환하므로
+   * (실제 파이프라인은 십수 초 뒤 끝난다) 결과는 이 엔드포인트로 폴링해서 받는다.
+   */
+  getInspectionResult: async (jobId: string) => {
+    const res = await apiClient.get<{
+      id: string;
+      ubci_score: number | null;
+      grade?: string;
+      agent_logs?: Record<string, unknown>;
+    }>(`/api/v1/inventory/${jobId}`);
+    return res.data;
+  },
 };
 
 // --- app/domains/inventory/router.py 응답 타입 ---
@@ -142,6 +155,14 @@ export const poAPI = {
   },
   dismissProposals: async (proposal_ids: string[]) => {
     const res = await apiClient.post<ProposalDecisionResult>("/api/v1/po/proposals/dismiss", { proposal_ids });
+    return res.data;
+  },
+  /** 결재가 끝난 카드만 삭제된다. PENDING 카드는 서버가 거부하고 skipped로 돌려준다. */
+  deleteProposals: async (proposal_ids: string[]) => {
+    const res = await apiClient.post<{ deletedCount: number; skipped: string[] }>(
+      "/api/v1/po/proposals/delete",
+      { proposal_ids },
+    );
     return res.data;
   },
   scanSafetyStock: async () => {

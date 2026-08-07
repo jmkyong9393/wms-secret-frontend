@@ -18,7 +18,6 @@ import MasterPagination from '@/components/common/MasterPagination';
 import BookCover from '@/components/BookCover';
 import BookCoverModal from '@/components/BookCoverModal';
 import { exportToCSV } from '@/lib/exportCsv';
-import { adminAPI } from '@/lib/api';
 import { useAtomValue } from 'jotai';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
 import {
@@ -41,6 +40,26 @@ const PAGE_SIZE = 10;
  * 부정 표현이 오류처럼 읽혀 '신품'으로 줄였다.
  */
 const NEW_BOOK_LPN_LABEL = '신품';
+
+/** LPN이 아직 부여되지 않은 검수 건의 표기. 번호를 지어내지 않는다. */
+const LPN_UNISSUED_LABEL = 'LPN 미부여';
+
+/** UBCI 점수 표기. 판정 전이라 값이 없으면 기본 점수를 넣지 않고 미산출로 적는다. */
+const scoreText = (score: number | null | undefined) => (score == null ? '미산출' : `${score}점`);
+
+/**
+ * `return_jobs.status` → 화면 상태.
+ *
+ * 원장은 파이프라인 진행 상태를, 화면은 결재 관점(자동승인/결재대기/반려)을 쓴다.
+ * 아직 판정이 끝나지 않은 진행 중 상태(PENDING, PROCESSING 등)는 사람이 손댈 곳이
+ * 결재 대기이므로 HITL_PENDING으로 모은다.
+ */
+function toInspectionStatus(raw: string | null | undefined): InspectionItem['status'] {
+  const s = (raw || '').toUpperCase();
+  if (s === 'APPROVED' || s === 'COMPLETED' || s === 'AUTO_APPROVED') return 'AUTO_APPROVED';
+  if (s === 'REJECTED' || s === 'FAILED') return 'REJECTED';
+  return 'HITL_PENDING';
+}
 
 /**
  * 서버 agent_logs의 결함 배열을 화면 모델로 변환한다.
@@ -66,12 +85,6 @@ function toInspectionDefects(raw: unknown): InspectionItem['defects_found'] {
   });
 }
 
-function kstNowStr(): string {
-  const now = new Date();
-  const kst = new Date(now.getTime() + (now.getTimezoneOffset() === 0 ? 9 * 3600 * 1000 : 0));
-  return kst.toISOString().replace('T', ' ').substring(0, 19);
-}
-
 export function InspectionDataTable({ role, scope }: { role: StockRole; scope: 'ALL' | 'MINE' }) {
   const isMine = scope === 'MINE';
   const currentUser = useAtomValue(currentUserAtom);
@@ -92,103 +105,60 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
   // 이 페이지 안의 [전체|내 검수만] 토글이 그 역할을 흡수했다 (ADMIN 뷰 전용).
   const [mineOnly, setMineOnly] = useState(false);
 
-  // 1) 검수 완료 이력 (available-books 기반)
+  // 검수 처리 이력.
+  //
+  // 원장은 `return_jobs`다 — 검수 파이프라인이 실제로 처리한 건만 기록된다.
+  // 판매 가능 재고(available-books)는 "지금 팔 수 있는 물건" 목록이지 검수 이력이 아니므로
+  // 이 화면의 소스가 될 수 없다. 백엔드가 점수·등급·담당자를 null로 내려주면 null 그대로
+  // 두고 화면에서 미산출로 표기한다.
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/v1/orders/available-books`, {
+        const qs = new URLSearchParams({ limit: '200' });
+        if (isMine && workerId) qs.set('worker_id', workerId);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/returns/inspections?${qs}`, {
           cache: 'no-store',
           headers: { 'Cache-Control': 'no-cache' },
         });
         if (!res.ok) return;
-        const items = await res.json();
-        if (!items?.length) return;
-        const mapped: InspectionItem[] = items.map((it: any) => ({
-          id: it.id,
-          lpn_barcode: it.lpn || (it.isNew ? NEW_BOOK_LPN_LABEL : `LPN-260803-${String(it.id).slice(-6).toUpperCase()}`),
-          book: {
-            title: it.title || '도서 정보 없음',
-            author: it.author || '저자미상',
-            publisher: it.publisher || '출판사미상',
-            isbn: it.isbn || '-',
-            base_price: it.listPrice || 15000,
-            cover_image_url: it.cover_image_url || '',
-          },
-          ubci_score: it.ubciScore ?? (it.isNew ? 100 : 85),
-          grade: it.isNew ? 'NEW_FASTTRACK' : it.conditionGrade || 'GOOD',
-          status: 'AUTO_APPROVED',
-          worker_id: workerId,
-          inspected_at: it.created_at
-            ? new Date(it.created_at).toISOString().replace('T', ' ').substring(0, 19)
-            : kstNowStr(),
-          ai_confidence: 98.5,
-          // 결함 목록과 실촬영 이미지는 이 응답에 없다. 지어내지 않고 비워 두었다가
-          // 모달을 열 때 /inventory/{id}로 실제 판독 결과를 받아 채운다(openReport 참조).
-          defects_found: [],
-          image_urls: [],
-        }));
-        setInspections((prev) => {
-          const existing = new Set(prev.map((i) => i.id));
-          return [...prev, ...mapped.filter((i) => !existing.has(i.id))];
-        });
-      } catch (err) {
-        console.warn('Failed to fetch inspection items from backend API', err);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+        const payload = await res.json();
+        const items: any[] = payload?.items ?? [];
 
-  // 2) HITL 승인 대기 건 병합 (Worker 개인 뷰 전용)
-  useEffect(() => {
-    if (!isMine) return;
-    (async () => {
-      try {
-        if (!adminAPI?.getPendingHitlTasks) return;
-        const data = await adminAPI.getPendingHitlTasks();
-        if (!Array.isArray(data) || !data.length) return;
-        const realItems: InspectionItem[] = data.map((item: any) => {
-          const raw = item.created_at ? new Date(item.created_at) : new Date();
-          const kst = new Date(raw.getTime() + (raw.getTimezoneOffset() === 0 ? 9 * 3600 * 1000 : 0));
-          const score = item.ubci_score ?? 65;
-          const defects =
-            item.agent_logs?.defects?.length > 0
-              ? item.agent_logs.defects.map((d: any) => ({
-                  reason_code: d.type || 'DMG_INT_DOODLE',
-                  description: d.description || `${d.type} 감점`,
-                  confidence: d.confidence ? Math.round(d.confidence * 100) : 96.8,
-                }))
-              : [{ reason_code: 'DMG_INT_DOODLE', description: 'AI 판독 결함 상세 미기재', confidence: 96.8 }];
-          return {
-            id: `insp-${item.id}`,
-            lpn_barcode: item.agent_logs?.lpn_barcode || `LPN-${String(item.id).substring(0, 4).toUpperCase()}`,
+        setInspections(
+          items.map((it) => ({
+            id: it.job_id,
+            lpn_barcode: it.lpn_barcode || LPN_UNISSUED_LABEL,
             book: {
-              title: item.book_title || '도서 정보 없음',
-              author: '-',
-              publisher: '-',
-              isbn: item.isbn || '-',
-              base_price: 0,
-              cover_image_url: item.cover_image_url || '',
+              title: it.book?.title || '도서 정보 없음',
+              author: it.book?.author || '-',
+              publisher: it.book?.publisher || '-',
+              isbn: it.book?.isbn || '-',
+              base_price: it.book?.base_price ?? 0,
+              cover_image_url: it.book?.cover_image_url || '',
             },
-            ubci_score: score,
-            grade: gradeMeta('', score).display,
-            status: 'HITL_PENDING' as const,
-            worker_id: workerId,
-            inspected_at: kst.toISOString().replace('T', ' ').substring(0, 19),
-            ai_confidence: 96.8,
-            defects_found: defects,
-            image_urls: item.image_urls?.length ? item.image_urls : [],
-          };
-        });
-        setInspections((prev) => {
-          const existing = new Set(prev.map((i) => i.id));
-          return [...realItems.filter((i) => !existing.has(i.id)), ...prev];
-        });
-      } catch (e) {
-        console.error('Failed to fetch HITL pending items:', e);
+            ubci_score: it.ubci_score ?? null,
+            grade: it.grade ?? null,
+            confirmed_grade: it.confirmed_grade ?? null,
+            status: toInspectionStatus(it.status),
+            // 검수 담당자는 등급을 확정한 주체다. 조회자 사번(workerId)을 쓰면
+            // 누가 보느냐에 따라 담당자가 바뀐다.
+            worker_id: it.inspector_label || '등급 미확정',
+            inspected_at: it.updated_at || it.created_at || '',
+            // 결함별 판독 신뢰도의 평균. 결함이 없으면 근거가 없어 null이다.
+            ai_confidence: it.avg_defect_confidence != null ? Math.round(it.avg_defect_confidence * 1000) / 10 : null,
+            // 결함 상세와 실촬영 이미지는 목록 응답에 없다. 모달을 열 때
+            // /inventory/{id}로 실제 판독 결과를 받아 채운다(openReport 참조).
+            defects_found: [],
+            image_urls: [],
+          })),
+        );
+      } catch (err) {
+        console.warn('검수 처리 이력 조회 실패', err);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMine]);
+  }, [isMine, workerId]);
 
   const filteredInspections = useMemo(() => {
     return inspections.filter((i) => {
@@ -237,10 +207,10 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
       도서명: i.book.title,
       저자: i.book.author,
       ISBN: i.book.isbn,
-      UBCI점수: i.ubci_score,
+      UBCI점수: i.ubci_score ?? '미산출',
       등급: i.grade,
       판정상태: i.status,
-      AI신뢰도: `${i.ai_confidence}%`,
+      AI신뢰도: i.ai_confidence != null ? `${i.ai_confidence}%` : '미기록',
       검수일시: i.inspected_at,
     }));
     exportToCSV(isMine ? `nexus_worker_inspection_audit_${workerId}` : 'admin_inspections_history', rows);
@@ -516,7 +486,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                       ) : (
                         <>
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold font-mono border ${meta.badge}`}>
-                            {meta.display} {item.ubci_score}점
+                            {meta.display} {scoreText(item.ubci_score)}
                           </span>
                           {item.status === 'AUTO_APPROVED' ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
@@ -619,7 +589,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                           </span>
                         ) : (
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold font-mono border ${meta.badge}`}>
-                            {meta.display} ({item.ubci_score}점)
+                            {meta.display} ({scoreText(item.ubci_score)})
                           </span>
                         )}
                       </td>
@@ -647,8 +617,10 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                           <span className="text-slate-500 dark:text-slate-400 font-bold text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                             스킵 (Fast-Track)
                           </span>
-                        ) : (
+                        ) : item.ai_confidence != null ? (
                           `${item.ai_confidence}%`
+                        ) : (
+                          <span className="text-slate-400 dark:text-slate-500 font-normal">미기록</span>
                         )}
                       </td>
                       <td className="py-4 px-4 font-mono text-xs text-gray-500 dark:text-gray-400 text-center">{item.inspected_at}</td>
@@ -729,7 +701,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                   <p className="text-base text-gray-900 dark:text-white font-black mt-0.5">{selectedReportItem.book.title}</p>
                 </div>
                 <span className="text-xl font-black text-blue-700 dark:text-blue-300 font-mono">
-                  {gradeMeta(selectedReportItem.grade, selectedReportItem.ubci_score).display} ({selectedReportItem.ubci_score}점)
+                  {gradeMeta(selectedReportItem.grade, selectedReportItem.ubci_score).display} ({scoreText(selectedReportItem.ubci_score)})
                 </span>
               </div>
 
