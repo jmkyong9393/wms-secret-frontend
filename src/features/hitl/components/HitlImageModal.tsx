@@ -6,9 +6,25 @@ import { Button } from "@/components/ui/button";
 import { bboxToPercent } from "@/features/inspection/utils/inspectionImageService";
 import type { HitlTask } from "@/features/hitl/types/hitl";
 
+/**
+ * 검수자가 화면에서 고친 판정. 인덱스는 agent_logs의 배열 기준이며, 결재 제출 시
+ * 그대로 백엔드로 넘어가 감점이 재산정된다(admin/router.py의 BBox 편집 반영 블록).
+ */
+export interface BBoxEdits {
+  /** 오탐으로 판단해 감점에서 뺄 결함 (agent_logs.defects 인덱스) */
+  excluded: number[];
+  /** AI가 놓쳤으나 실제 결함으로 채택할 후보 (agent_logs.yolo_candidates 인덱스) */
+  adopted: number[];
+}
+
+export const EMPTY_BBOX_EDITS: BBoxEdits = { excluded: [], adopted: [] };
+
 interface HitlImageModalProps {
   task: HitlTask | null;
   onClose: () => void;
+  /** 편집 기능을 쓰려면 두 prop을 함께 넘긴다. 없으면 읽기 전용으로 동작한다. */
+  edits?: BBoxEdits;
+  onEditsChange?: (next: BBoxEdits) => void;
 }
 
 /** 파이프라인 노드별 서술 표시 정의 (agent_logs 키와 1:1) */
@@ -45,7 +61,7 @@ function bboxesForIndex(rawList: any[], idx: number, imageUrl: string): any[] {
   return out;
 }
 
-export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
+export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImageModalProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [showOverlay, setShowOverlay] = useState(true);
   // WBF YOLO 사전탐지 후보 레이어. Vision 확정 결함과 별도로 껐다 켠다 - 결재자가
@@ -60,10 +76,44 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
   // Vision Agent가 "도서 미식별"로 판정한 컷은 기본으로 숨긴다 (증거 보존을 위해 토글로 열람 가능)
   const [hideInvalid, setHideInvalid] = useState(true);
 
+  const editable = Boolean(edits && onEditsChange);
+  const cur: BBoxEdits = edits ?? EMPTY_BBOX_EDITS;
+  const toggle = (list: number[], i: number) =>
+    list.includes(i) ? list.filter((x) => x !== i) : [...list, i];
+  const toggleExcluded = (i: number) =>
+    onEditsChange?.({ ...cur, excluded: toggle(cur.excluded, i) });
+  const toggleAdopted = (i: number) =>
+    onEditsChange?.({ ...cur, adopted: toggle(cur.adopted, i) });
+
   if (!task) return null;
 
   const images = task.image_urls && task.image_urls.length > 0 ? task.image_urls : [];
-  const rawList: any[] = task.agent_logs?.defect_coordinates || [];
+  // defect_coordinates에는 오탐 표식이 없다. 같은 결함의 판정 메타(evidence_suspect,
+  // conf_copied_from_candidate)는 defects 쪽에 있으므로 좌표로 맞춰 합쳐 준다.
+  // 이 표식이 없으면 **증거 대조가 반려한 건도 확정 결함과 똑같이** 빨간 실선으로 보여,
+  // 결재자가 이미 기각된 판독을 근거로 결재하게 된다.
+  const defectsMeta: any[] = Array.isArray(task.agent_logs?.defects) ? task.agent_logs.defects : [];
+  const metaIndexFor = (b: any) =>
+    defectsMeta.findIndex(
+      (d) =>
+        d?.bbox &&
+        Number(d.bbox.xmin) === Number(b.xmin) &&
+        Number(d.bbox.ymin) === Number(b.ymin) &&
+        Number(d.bbox.xmax) === Number(b.xmax) &&
+        Number(d.bbox.ymax) === Number(b.ymax)
+    );
+  const rawList: any[] = (task.agent_logs?.defect_coordinates || []).map((b: any) => {
+    const mi = metaIndexFor(b);
+    const m = mi >= 0 ? defectsMeta[mi] : null;
+    return m
+      ? {
+          ...b,
+          defectIndex: mi,
+          evidence_suspect: m.evidence_suspect,
+          conf_copied_from_candidate: m.conf_copied_from_candidate,
+        }
+      : b;
+  });
   const logs: Record<string, any> = task.agent_logs || {};
   const agentEntries = AGENT_LOG_STEPS.filter((s) => typeof logs[s.key] === "string" && logs[s.key].trim().length > 0);
 
@@ -87,8 +137,10 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
   const YOLO_DISPLAY_CONF = 0.4;
   const yoloCandidates: any[] = Array.isArray(logs.yolo_candidates) ? logs.yolo_candidates : [];
   const allYoloBoxes = yoloCandidates
-    .filter((c) => Number(c?.image_index ?? 0) === effIdx && c?.bbox)
-    .map((c) => ({
+    .map((c, candIndex) => ({ c, candIndex }))
+    .filter(({ c }) => Number(c?.image_index ?? 0) === effIdx && c?.bbox)
+    .map(({ c, candIndex }) => ({
+      candIndex,
       xmin: c.bbox.xmin,
       ymin: c.bbox.ymin,
       xmax: c.bbox.xmax,
@@ -206,22 +258,31 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                     // (admin/inventory/[id] 상세 페이지 오버레이와 동일 규칙).
                     const yoloLabelPos = top + height > 92 ? "bottom-1" : "-bottom-6";
                     const yoloLabelAnchor = left > 50 ? "right-0" : "left-0";
+                    // AI가 채택하지 않은 후보를 검수자가 실제 결함으로 승격시킬 수 있다.
+                    // (AI 미탐을 사람이 메우는 경로 - 제외의 반대 방향)
+                    const adopted = cur.adopted.includes(box.candIndex);
                     return (
                       <div
                         key={`y-${idx}`}
-                        className={`absolute border-2 border-dashed rounded pointer-events-none z-10 ${
-                          box.isLowConf
-                            ? "border-gray-400/70 bg-gray-400/5"
-                            : "border-amber-400 bg-amber-400/10"
-                        }`}
+                        onClick={editable ? () => toggleAdopted(box.candIndex) : undefined}
+                        title={editable ? (adopted ? "클릭하면 채택 취소" : "클릭하면 결함으로 채택") : undefined}
+                        className={[
+                          "absolute border-2 rounded z-10",
+                          editable ? "cursor-pointer" : "pointer-events-none",
+                          adopted
+                            ? "border-solid border-red-500 bg-red-500/25 shadow-lg"
+                            : box.isLowConf
+                              ? "border-dashed border-gray-400/70 bg-gray-400/5"
+                              : "border-dashed border-amber-400 bg-amber-400/10",
+                        ].join(" ")}
                         style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
                       >
                         <span
                           className={`absolute ${yoloLabelPos} ${yoloLabelAnchor} text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap ${
-                            box.isLowConf ? "bg-gray-500/90" : "bg-amber-500"
+                            adopted ? "bg-red-600" : box.isLowConf ? "bg-gray-500/90" : "bg-amber-500"
                           }`}
                         >
-                          {box.isLowConf ? "저신뢰 후보" : "YOLO 후보"}: {box.type}
+                          {adopted ? "검수자 채택" : box.isLowConf ? "저신뢰 후보" : "YOLO 후보"}: {box.type}
                           {box.confidence ? ` (${Math.round(box.confidence * 100)}%)` : ""}
                         </span>
                       </div>
@@ -239,10 +300,42 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                     const visionLabelPos = top < 8 ? "top-1" : "-top-6";
                     const visionLabelAnchor = left > 50 ? "right-0" : "left-0";
 
+                    // 증거 대조가 반려했거나 확신도를 제보에서 베낀 판독은 '확정'이 아니다.
+                    // 회색 점선으로 낮춰 그려 확정 결함(빨강 실선)과 한눈에 구분되게 한다.
+                    const suspect = Boolean(box.evidence_suspect || box.conf_copied_from_candidate);
+                    // 검수자가 직접 제외한 결함. AI 판정(suspect)과 구분해서 보여야
+                    // "누가 뺐는지"가 화면에서 드러난다.
+                    const di = box.defectIndex;
+                    const excluded = typeof di === "number" && cur.excluded.includes(di);
+                    const clickable = editable && typeof di === "number";
                     return (
                       <div
                         key={idx}
-                        className="absolute border-2 border-red-500 bg-red-500/30 rounded shadow-lg animate-pulse pointer-events-none"
+                        onClick={clickable ? () => toggleExcluded(di) : undefined}
+                        title={
+                          [
+                            // Policy가 이 감점을 어떻게 산정했는지(부위 합산 / 면적 구간 /
+                            // 가중치)를 그대로 보여준다. 숫자만 보여주면 결재자가 왜 그
+                            // 점수인지 확인할 방법이 없다.
+                            box.deduction_note,
+                            clickable
+                              ? excluded
+                                ? "클릭하면 감점에 다시 포함"
+                                : "클릭하면 감점에서 제외"
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join("\n") || undefined
+                        }
+                        className={[
+                          "absolute rounded",
+                          clickable ? "cursor-pointer" : "pointer-events-none",
+                          excluded
+                            ? "border-2 border-dashed border-slate-500 bg-slate-500/10 opacity-60"
+                            : suspect
+                              ? "border-2 border-dashed border-gray-400 bg-gray-400/15"
+                              : "border-2 border-red-500 bg-red-500/30 shadow-lg animate-pulse",
+                        ].join(" ")}
                         style={{
                           left: `${left}%`,
                           top: `${top}%`,
@@ -250,8 +343,38 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                           height: `${height}%`,
                         }}
                       >
-                        <span className={`absolute ${visionLabelPos} ${visionLabelAnchor} bg-red-600 text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap z-10`}>
+                        {/* 신뢰도를 함께 노출한다. 검수자가 "이 판독을 믿을지"를 판단하는
+                            1차 근거인데 종전에는 라벨만 보여, 낮은 신뢰도의 오탐과 확실한
+                            결함이 화면에서 구분되지 않았다(YOLO 후보 오버레이에는 이미 있었다). */}
+                        <span
+                          className={`absolute ${visionLabelPos} ${visionLabelAnchor} ${
+                            suspect ? "bg-gray-500" : "bg-red-600"
+                          } text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap z-10`}
+                        >
                           {label}
+                          {/* 감점은 유형에 따라 건당이 아니라 부위 묶음으로 산정된다
+                              (모서리 마모: 부위 N곳 합산 / 수험서 낙서: -15점 Cap).
+                              종전에는 그룹 감점을 상자마다 그대로 찍어, 마모 5건에
+                              "-5점"이 5번 떠 총 -25점처럼 읽혔다(실제 감점 -7점). */}
+                          {typeof box.deduction === "number"
+                            ? box.deduction_scope === "group"
+                              ? ` 묶음 -${box.deduction}점`
+                              : box.deduction_scope === "excluded"
+                                ? " 감점 제외"
+                                : ` -${box.deduction}점`
+                            : ""}
+                          {typeof box.confidence === "number"
+                            ? ` (${Math.round(box.confidence * 100)}%${
+                                box.conf_source === "vlm" ? " 추정" : ""
+                              })`
+                            : ""}
+                          {box.evidence_suspect ? " · 오탐 의심(감점 제외)" : ""}
+                          {box.conf_flat_selfreported
+                            ? " · 확신도 미산출"
+                            : box.conf_copied_from_candidate
+                              ? " · 판독 미검증"
+                              : ""}
+                          {excluded ? " · 검수자 제외" : ""}
                         </span>
                       </div>
                     );
@@ -446,10 +569,22 @@ export function HitlImageModal({ task, onClose }: HitlImageModalProps) {
                   )}
                   <span>이미지 <strong className="text-gray-900 dark:text-white">{shownIdx.length > 0 ? navPos + 1 : 0}</strong> / {shownIdx.length}{invalidSet.size > 0 && hideInvalid ? ` (미식별 ${invalidSet.size}컷 제외)` : ""}</span>
                 </div>
-                {task.ubci_score !== undefined && (
-                  <div className="mt-1 text-blue-600 dark:text-blue-400 font-bold">
-                    UBCI 점수: <span className="text-sm">{task.ubci_score}</span>점
+                {/* 증거 대조가 판독을 전건 기각하면 감점이 0이 되어 산식상 100점이 나오지만,
+                    그것은 "무결점"이 아니라 "판정 못 함"이다. 점수를 그대로 띄우면 5곳이
+                    검출된 책이 화면에서 만점으로 보인다(실측: LPN-260806-A001). */}
+                {logs.score_unverified ? (
+                  <div className="mt-1 text-amber-600 dark:text-amber-400 font-bold">
+                    UBCI 점수: <span className="text-sm">판정 보류</span>
+                    <span className="ml-1 font-normal text-[11px]">
+                      (증거 대조 전건 반려 — 관리자 확인 필요)
+                    </span>
                   </div>
+                ) : (
+                  task.ubci_score !== undefined && (
+                    <div className="mt-1 text-blue-600 dark:text-blue-400 font-bold">
+                      UBCI 점수: <span className="text-sm">{task.ubci_score}</span>점
+                    </div>
+                  )
                 )}
               </div>
             </div>
