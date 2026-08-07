@@ -35,6 +35,7 @@ const GRADE_BADGE: Record<string, string> = {
   GOOD: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800',
   NORMAL: 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
   REJECT: 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800',
+  검수대기: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600',
 };
 
 /** 등급 문자열의 별칭 → 표준 등급. 부분 문자열 매칭을 쓰지 않기 위한 정확 매핑. */
@@ -48,22 +49,25 @@ const GRADE_ALIAS: Record<string, string> = {
 /**
  * UBCI 점수/등급 → 표기 등급 + 배지 클래스 (UBCI_Specification_v2.0.0.0 경계값).
  *
- * [2026-08-06 정정] 두 가지를 고쳤다.
- *  1) `g.includes('A')`로 A급을 판정했는데 **'NORMAL'에도 'A'가 들어 있다.** 그래서
- *     NORMAL 84점이 GOOD으로 표시됐다. 별칭 테이블로 정확히 매칭한다.
- *  2) 점수와 등급 문자열이 어긋날 때 점수 조건이 먼저 걸려 등급 문자열이 무시됐다.
- *     확정 등급(HITL 결재 등)이 있으면 그것이 정답이므로 등급을 우선한다 -
- *     점수는 등급이 비어 있을 때의 폴백이다.
+ * 확정 등급 문자열이 있으면 그것이 정답이다(HITL 결재 등). 점수는 등급이 비어 있을
+ * 때만 쓰는 폴백이며, 둘 다 없으면 '검수대기'로 표기한다 — 검수하지 않은 품목에
+ * 기본 점수를 씌워 등급을 지어내지 않는다.
  */
-export function gradeMeta(grade: string, ubciScore?: number | null): { display: string; badge: string } {
+export function gradeMeta(
+  // 등급은 검수 전(PENDING)이나 판독 보류 시 null로 내려온다.
+  grade: string | null | undefined,
+  ubciScore?: number | null,
+): { display: string; badge: string } {
   const g = (grade || '').toUpperCase().trim();
 
   // NEW/NEW_FASTTRACK 등 중고 등급 체계 밖의 값은 점수 폴백으로 넘긴다.
   const named = GRADE_ALIAS[g];
   if (named) return { display: named, badge: GRADE_BADGE[named] };
 
-  const score = ubciScore ?? 85;
-  const display = score >= 95 ? 'MINT' : score >= 85 ? 'GOOD' : score >= 65 ? 'NORMAL' : 'REJECT';
+  if (ubciScore == null) return { display: '검수대기', badge: GRADE_BADGE['검수대기'] };
+
+  const display =
+    ubciScore >= 95 ? 'MINT' : ubciScore >= 85 ? 'GOOD' : ubciScore >= 65 ? 'NORMAL' : 'REJECT';
   return { display, badge: GRADE_BADGE[display] };
 }
 

@@ -114,11 +114,16 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
 
       if (gradeFilter !== 'ALL' && gradeMeta(item.grade, item.ubci_score).display !== gradeFilter) return false;
 
-      const score = item.ubci_score ?? 85;
-      if (ubciScoreFilter === '90_PLUS' && score < 95) return false;
-      if (ubciScoreFilter === '80_PLUS' && (score < 85 || score >= 95)) return false;
-      if (ubciScoreFilter === '60_PLUS' && (score < 65 || score >= 85)) return false;
-      if (ubciScoreFilter === 'UNDER_60' && score >= 65) return false;
+      // 점수 구간 필터. 점수가 없는 품목(검수 전)은 어떤 구간에도 속하지 않으므로
+      // 기본 점수를 씌워 끼워 넣지 않고 제외한다.
+      if (ubciScoreFilter !== 'ALL') {
+        const score = item.ubci_score;
+        if (score == null) return false;
+        if (ubciScoreFilter === '90_PLUS' && score < 95) return false;
+        if (ubciScoreFilter === '80_PLUS' && (score < 85 || score >= 95)) return false;
+        if (ubciScoreFilter === '60_PLUS' && (score < 65 || score >= 85)) return false;
+        if (ubciScoreFilter === 'UNDER_60' && score >= 65) return false;
+      }
 
       const kstToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
       if (dateFilter === 'TODAY' && !item.date.includes(kstToday)) return false;
@@ -646,7 +651,9 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                           </span>
                         ) : (
                           <span className={`inline-flex items-center px-4 py-2 rounded-full text-xs font-black border shadow-2xs ${meta.badge}`}>
-                            {meta.display} (UBCI: {item.ubci_score ?? 85}점)
+                            {/* 점수가 없으면 기본값을 채우지 않고 미산출로 표기한다. */}
+                            {meta.display} (UBCI: {item.ubci_score ?? '미산출'}
+                            {item.ubci_score != null ? '점' : ''})
                           </span>
                         )}
                       </td>

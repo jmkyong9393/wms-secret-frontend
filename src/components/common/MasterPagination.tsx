@@ -8,7 +8,13 @@ interface MasterPaginationProps {
   totalEntries: number;
   currentCount: number;
   onPageChange: (page: number) => void;
+  /** 페이지당 표시 건수. onPageSizeChange와 함께 넘길 때만 선택 UI가 나타난다. */
+  pageSize?: number;
+  onPageSizeChange?: (size: number) => void;
+  pageSizeOptions?: number[];
 }
+
+const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 15, 20, 50];
 
 export default function MasterPagination({
   currentPage,
@@ -16,6 +22,9 @@ export default function MasterPagination({
   totalEntries,
   currentCount,
   onPageChange,
+  pageSize,
+  onPageSizeChange,
+  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
 }: MasterPaginationProps) {
   const [jumpPageInput, setJumpPageInput] = useState('');
 
@@ -46,11 +55,31 @@ export default function MasterPagination({
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-gray-100 dark:border-gray-800 text-xs">
-      {/* Left Entries Counter */}
-      <p className="text-gray-500 dark:text-gray-400 font-mono">
-        Showing <strong className="text-gray-900 dark:text-white font-bold">{currentCount}</strong> of{' '}
-        <strong className="text-gray-900 dark:text-white font-bold">{totalEntries}</strong> entries
-      </p>
+      {/* Left Entries Counter + 페이지당 건수 */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <p className="text-gray-500 dark:text-gray-400 font-mono">
+          Showing <strong className="text-gray-900 dark:text-white font-bold">{currentCount}</strong> of{' '}
+          <strong className="text-gray-900 dark:text-white font-bold">{totalEntries}</strong> entries
+        </p>
+        {pageSize !== undefined && onPageSizeChange && (
+          <label className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 font-bold">
+            <span className="whitespace-nowrap">페이지당</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                onPageSizeChange(Number(e.target.value));
+                // 건수를 바꾸면 총 페이지 수가 달라지므로 첫 장으로 되돌린다.
+                onPageChange(1);
+              }}
+              className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-xs font-black text-indigo-900 dark:text-indigo-200 outline-none focus:border-indigo-600 cursor-pointer"
+            >
+              {pageSizeOptions.map((n) => (
+                <option key={n} value={n}>{n}건</option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
 
       {/* Right Controls Container */}
       <div className="flex items-center gap-1.5 flex-wrap justify-center font-mono">
