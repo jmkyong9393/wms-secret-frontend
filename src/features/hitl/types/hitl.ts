@@ -36,6 +36,10 @@ export interface HitlOverrideRequest {
   reasonComment: string;
   defectCoordinates: DefectCoordinate[];
   reviewDurationMs: number;
+  /** 검수자가 화면에서 감점 제외한 결함 (agent_logs.defects 인덱스) */
+  excludedDefectIndexes?: number[];
+  /** 검수자가 결함으로 채택한 YOLO 후보 (agent_logs.yolo_candidates 인덱스) */
+  adoptedCandidateIndexes?: number[];
 }
 
 export interface BulkOverridePayload {

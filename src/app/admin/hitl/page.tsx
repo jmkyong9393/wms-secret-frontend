@@ -11,7 +11,8 @@ import {
   Sliders,
   Sparkles,
   Bot,
-  Shield as ShieldIcon
+  Shield as ShieldIcon,
+  ShieldAlert
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,9 @@ import BookCover from "@/components/BookCover";
 import { adminAPI } from "@/lib/api";
 import { getSystemSettings, SETTINGS_CHANGE_EVENT } from "@/lib/systemSettings";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
-import { HitlImageModal } from "@/features/hitl/components/HitlImageModal";
+import { HitlImageModal, EMPTY_BBOX_EDITS, type BBoxEdits } from "@/features/hitl/components/HitlImageModal";
+// 관리자 설정의 읽기 전용 정책 뷰와 같은 정의를 쓴다 (features/hitl/policy.ts)
+import { UBCI_GRADE_POLICY, HITL_ROUTING_POLICY } from "@/features/hitl/policy";
 
 const DECISION_OPTIONS = [
   { value: "APPROVE_NORMAL", label: "정상 승인 (입고)" },
@@ -130,45 +133,96 @@ export default function AdminHitlDashboard() {
       title: titleStr,
       step: 1,
       logs: [
-        `[${new Date().toLocaleTimeString()}] 🚀 Multi-Agent AI 비전 재검수 파이프라인 트리거 시작...`,
-        `[${new Date().toLocaleTimeString()}] 🔬 [Detector] 검수 촬영 이미지 텐서 로딩 및 YOLO 3-Model(WBF) Ensemble 디텍션 추론 중...`
+        // 이 시점에 확실한 사실은 "요청을 보냈다"뿐이다. 워커가 아직 작업을 집지도
+        // 않았는데 "Detector 추론 중"이라고 쓰면 화면이 없는 사실을 말하게 된다.
+        // 실제 단계별 서술은 파이프라인이 끝난 뒤 agent_logs에서 가져온다.
+        `[${new Date().toLocaleTimeString()}] 재검수 요청 전송...`,
       ],
       isDone: false,
     });
 
     try {
-      // 백엔드 재검수 엔드포인트는 Celery 큐에 등록만 하고 {status, message, job_id}만 즉시
-      // 반환한다 (agent_logs/ubci_score는 비동기 파이프라인 완료 후에나 나오는 값이라
-      // 이 응답엔 애초에 포함되지 않는다) - 아래는 큐 등록 직후 화면에 보여줄 진행 메시지다.
+      // 재검수는 Celery 비동기다. 큐 등록 응답에는 판독 결과가 없으므로(십수 초 뒤 완료),
+      // 등록 직후에는 "진행 중"만 보여주고 **실제 결과가 DB에 반영되면 그때 렌더**한다.
+      //
+      // [2026-08-06 수정] 종전에는 여기서 `const logs = {}`(빈 객체)와 `const score = 75`를
+      // 두고 `logs?.x || 폴백`으로 문자열을 만들었다. logs가 비어 있으니 다섯 줄 전부 고정
+      // 문구였고 점수도 상수였다 - 화면 전체가 연출이었다. 게다가 등록 즉시 step:5, isDone:true로
+      // "완료"를 선언해, 실제 파이프라인이 17초 뒤 내놓은 결과(예: UBCI 100, HITL 유지)와
+      // 무관하게 영원히 "UBCI 75점"을 말했다.
+      const t = () => new Date().toLocaleTimeString();
       await adminAPI.triggerAiReinspection(jobId);
-      const logs: Record<string, string | undefined> = {};
-      const score = 75;
-      const timeNow = new Date().toLocaleTimeString();
 
-      const visionMsg = logs?.vision_text || `GPT-4o VLM 표지/속지 스캔 이미지 2차 검증 & GPT-4o-mini 예비 감점 산출 완료`;
-      const policyMsg = logs?.policy_text || `사내 WMS 최우선 룰 적용 (B2B 타사 정책 교차 평가) ➔ UBCI ${score}점 도출`;
-      const criticMsg = logs?.critic_text || `Critic Agent 파이프라인 검증 ➔ 전 과정 프로세스 무결성 확인 완공`;
-      const reportMsg = logs?.report_text || `📜 [디지털 WMS 품질 검수 보증서] ➔ UBCI ${score}점 검수 보증서 발급 완료`;
-      const humanMsg = logs?.human_node_text || `Human Node (HITL) ➔ 관리자 수동 개입 대기 및 오버라이드 폼 연동 완료`;
-      const summaryMsg = logs?.report_text || logs?.policy_text || `사내 WMS 수석 룰 연산 완료. UBCI ${score}점 입고 승인 추천`;
+      setActiveReinspectionTask((prev) =>
+        prev && prev.id === jobId
+          ? { ...prev, step: 2, logs: [...prev.logs, `[${t()}] ⏳ 큐 등록 완료 - 파이프라인 실행을 기다리는 중...`] }
+          : prev
+      );
 
-      setActiveReinspectionTask({
-        id: jobId,
-        lpn: lpnStr,
-        title: titleStr,
-        step: 5,
-        isDone: true,
-        logs: [
-          `[${timeNow}] 🚀 백엔드 LangGraph Multi-Agent 실시간 추론 연산 완료`,
-          `[${timeNow}] 👁️ [Vision Agent] ${visionMsg}`,
-          `[${timeNow}] ⚖️ [Policy Agent] ${policyMsg}`,
-          `[${timeNow}] 🛡️ [Critic Agent] ${criticMsg}`,
-          `[${timeNow}] 📋 [Report Agent] ${reportMsg}`,
-          `[${timeNow}] 👤 [Human Node (HITL)] ${humanMsg}`,
-          `[${timeNow}] 💬 [Report Agent] "${summaryMsg}" DB 반영 완료!`,
-        ],
-      });
+      // --- 결과 폴링 ---
+      const POLL_MS = 2000;
+      const MAX_WAIT_MS = 120000;
+      const startedAt = Date.now();
+      let result: Awaited<ReturnType<typeof adminAPI.getInspectionResult>> | null = null;
 
+      while (Date.now() - startedAt < MAX_WAIT_MS) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        try {
+          const cur = await adminAPI.getInspectionResult(jobId);
+          const lg = (cur?.agent_logs || {}) as Record<string, string | undefined>;
+          // 재검수가 끝나면 Policy/Report 서술이 채워진다. 둘 다 없으면 아직 실행 중이다.
+          if (lg.policy_text || lg.report_text) {
+            result = cur;
+            break;
+          }
+        } catch {
+          // 일시적 조회 실패는 무시하고 다음 주기에 재시도한다.
+        }
+      }
+
+      if (!result) {
+        setActiveReinspectionTask((prev) =>
+          prev && prev.id === jobId
+            ? {
+                ...prev,
+                isDone: true,
+                logs: [...prev.logs, `[${t()}] ⚠️ 제한 시간(2분) 내에 결과가 반영되지 않았습니다. 목록을 새로고침해 확인하세요.`],
+              }
+            : prev
+        );
+        return;
+      }
+
+      const logs = (result.agent_logs || {}) as Record<string, string | undefined>;
+      const score = result.ubci_score;
+      const scoreStr = typeof score === "number" ? `UBCI ${score}점` : "UBCI 점수 보류";
+      // 실제 서술만 싣는다. 없는 단계는 줄 자체를 만들지 않는다 - 문구를 지어내지 않기 위해서다.
+      const realLines: Array<[string, string | undefined]> = [
+        ["🔬 [Detector]", logs.detector_text],
+        ["👁️ [Vision Agent]", logs.vision_text],
+        ["⚖️ [Policy Agent]", logs.policy_text],
+        ["🛡️ [Critic Agent]", logs.critic_text],
+        ["🧭 [Supervisor]", logs.supervisor_rationale],
+        ["💬 [Report Agent]", logs.report_text],
+      ];
+      const summaryMsg = logs.report_text || logs.policy_text || scoreStr;
+
+      setActiveReinspectionTask((prev) =>
+        prev && prev.id === jobId
+          ? {
+              ...prev,
+              step: 5,
+              isDone: true,
+              logs: [
+                ...prev.logs,
+                `[${t()}] ✅ 파이프라인 완료 - ${scoreStr}`,
+                ...realLines.filter(([, v]) => v && v.trim()).map(([tag, v]) => `[${t()}] ${tag} ${v}`),
+              ],
+            }
+          : prev
+      );
+
+      const timeNow = t();
       setPipelineLogs((prev) => [
         {
           time: timeNow,
@@ -218,7 +272,11 @@ export default function AdminHitlDashboard() {
   }, []);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
+  // 결재 규칙 패널. 매번 펼쳐 두면 목록이 밀려나므로 기본은 접어 둔다.
+  const [showPolicy, setShowPolicy] = useState(false);
   const [modalTask, setModalTask] = useState<HitlTask | null>(null);
+  // 결재 건별 BBox 채택/제외. 모달을 닫아도 유지되어야 제출까지 이어진다.
+  const [bboxEdits, setBboxEdits] = useState<Record<string, BBoxEdits>>({});
   const [approvalToast, setApprovalToast] = useState<string | null>(null);
 
   // 각 row별 선택 및 설정 상태
@@ -234,7 +292,17 @@ export default function AdminHitlDashboard() {
     try {
       const data = await adminAPI.getPendingHitlTasks();
       const list = data || [];
-      setTasks(list);
+      // 재검수를 누르면 백엔드가 status를 PENDING으로 바꿔 큐에 넣는다. 이 목록은
+      // HITL_REQUIRED만 조회하므로 그 사이 해당 도서가 목록에서 통째로 사라졌다가
+      // 파이프라인이 끝나면 다시 나타난다 - 결재자에게는 "누르니까 사라졌다"로 보인다.
+      // 데이터가 늦게 오는 문제가 아니라서 새로고침으로는 해결되지 않는다(오히려 더 빨리
+      // 사라진다). 재검수 중인 건은 직전 목록의 행을 그대로 붙잡아 둔다.
+      setTasks((prev) => {
+        if (reinspectingIds.size === 0) return list;
+        const returned = new Set(list.map((t: HitlTask) => t.id));
+        const pinned = prev.filter((t) => reinspectingIds.has(t.id) && !returned.has(t.id));
+        return pinned.length > 0 ? [...pinned, ...list] : list;
+      });
 
       // 개별 라우별 initial state 미리 매핑
       const initDecisions: Record<string, string> = {};
@@ -402,6 +470,9 @@ export default function AdminHitlDashboard() {
         reasonComment: comment,
         defectCoordinates: task.agent_logs?.defect_coordinates || [],
         reviewDurationMs: Math.floor((Date.now() - pageEnterTime.current)),
+        // 검수자가 고친 판정. 백엔드가 이 목록으로 감점을 재산정한다.
+        excludedDefectIndexes: bboxEdits[id]?.excluded ?? [],
+        adoptedCandidateIndexes: bboxEdits[id]?.adopted ?? [],
       });
     }
 
@@ -535,6 +606,76 @@ export default function AdminHitlDashboard() {
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">도서명 / ISBN / Task ID 키워드 필터</p>
         </div>
+      </div>
+
+      {/* 결재 규칙 안내 — 이 대기열에 왜 올라왔는지와 무엇을 먼저 볼지 */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
+        <button
+          type="button"
+          onClick={() => setShowPolicy((v) => !v)}
+          className="w-full flex items-center justify-between gap-2 p-5 cursor-pointer"
+        >
+          <span className="flex items-center gap-2 text-sm font-extrabold text-gray-800 dark:text-gray-100">
+            <ShieldAlert className="w-4 h-4 text-amber-500" />
+            HITL 결재 규칙 · UBCI 등급 기준
+          </span>
+          <span className="text-xs font-bold text-gray-400 dark:text-gray-500">
+            {showPolicy ? '접기 ▲' : '펼치기 ▼'}
+          </span>
+        </button>
+
+        {showPolicy && (
+          <div className="px-5 pb-5 space-y-4">
+            <div>
+              <p className="text-[11px] font-black text-gray-600 dark:text-gray-300 mb-2">
+                자동 이관 규칙 (Supervisor / Critic)
+              </p>
+              <ul className="space-y-2">
+                {HITL_ROUTING_POLICY.map((rule, i) => (
+                  <li
+                    key={rule.code}
+                    className="flex items-start gap-2 text-[11px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2.5 border border-gray-100 dark:border-gray-800"
+                  >
+                    <span className="text-amber-500 font-black shrink-0">{i + 1}.</span>
+                    <span className="min-w-0">
+                      <span className="font-bold text-gray-700 dark:text-gray-200">{rule.title}</span>
+                      <span className="ml-1.5 font-mono text-[10px] px-1 py-0.5 rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                        {rule.code}
+                      </span>
+                      <span className="block mt-1 leading-snug">{rule.detail}</span>
+                      <span className="block mt-1 leading-snug text-blue-600 dark:text-blue-400 font-medium">
+                        → {rule.reviewHint}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-black text-gray-600 dark:text-gray-300 mb-2">
+                UBCI 등급 기준 (확정 등급 선택 시 참고)
+              </p>
+              <div className="space-y-1.5">
+                {UBCI_GRADE_POLICY.map((p) => (
+                  <div
+                    key={p.grade}
+                    className="grid grid-cols-[7rem_5.5rem_1fr] items-start gap-2 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-800 text-xs"
+                  >
+                    <span className={`font-black ${p.color}`}>{p.grade}</span>
+                    <span className="font-mono font-bold text-gray-700 dark:text-gray-300 tabular-nums">{p.range}</span>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-snug">{p.quality}</p>
+                      <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold ${p.badge}`}>
+                        {p.action}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Control & Toolbar */}
@@ -692,9 +833,13 @@ export default function AdminHitlDashboard() {
                     <tr
                       key={t.id}
                       className={`transition-colors ${
-                        isSelected 
-                          ? "bg-blue-50/40 dark:bg-blue-950/40" 
-                          : "hover:bg-gray-50/80 dark:hover:bg-gray-800/50"
+                        // 재검수 중 붙잡아 둔 행. 목록에서 사라지지는 않지만 지금 값이
+                        // 갱신 전이라는 사실은 드러나야 한다.
+                        reinspectingIds.has(t.id)
+                          ? "bg-purple-50/50 dark:bg-purple-950/30 animate-pulse"
+                          : isSelected
+                            ? "bg-blue-50/40 dark:bg-blue-950/40"
+                            : "hover:bg-gray-50/80 dark:hover:bg-gray-800/50"
                       }`}
                     >
                       <td className="p-3 text-center">
@@ -1009,7 +1154,14 @@ export default function AdminHitlDashboard() {
 
       {/* HITL Image BBox Modal */}
       {modalTask && (
-        <HitlImageModal task={modalTask} onClose={() => setModalTask(null)} />
+        <HitlImageModal
+          task={modalTask}
+          onClose={() => setModalTask(null)}
+          edits={bboxEdits[String(modalTask.id)] ?? EMPTY_BBOX_EDITS}
+          onEditsChange={(next) =>
+            setBboxEdits((prev) => ({ ...prev, [String(modalTask.id)]: next }))
+          }
+        />
       )}
 
       {/* Multi-Agent AI Re-inspection Live Modal */}
@@ -1049,8 +1201,11 @@ export default function AdminHitlDashboard() {
                   { step: 1, label: "Vision 👁️", desc: "VLM 2차검증+4o-mini예비" },
                   { step: 2, label: "Policy ⚖️", desc: "사내WMS룰+B2B평가" },
                   { step: 3, label: "Critic 🛡️", desc: "프로세스/루프검증" },
-                  { step: 4, label: "Report 📋", desc: "디지털품질보증서" },
-                  { step: 5, label: "HITL 👤", desc: "관리자오버라이드" },
+                  // HITL이 Report보다 앞이다. Supervisor가 HITL로 이관하면 그래프는
+                  // human_node에서 끝나고, 보증서(Report)는 관리자 결재가 확정된 뒤에야
+                  // 생성된다. 종전 순서(Report → HITL)는 실제 흐름과 반대였다.
+                  { step: 4, label: "HITL 👤", desc: "관리자결재" },
+                  { step: 5, label: "Report 📋", desc: "디지털품질보증서" },
                 ].map((s) => {
                   const isActive = activeReinspectionTask.step >= s.step;
                   const isCurrent = activeReinspectionTask.step === s.step;
