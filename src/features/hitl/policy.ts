@@ -56,6 +56,41 @@ export const UBCI_GRADE_POLICY: UbciGradePolicy[] = [
   },
 ];
 
+/**
+ * UBCI 점수 → 등급 (2026-08-08 신설).
+ *
+ * HITL 결재 폼의 처분/등급 기본값을 여기서 산정한다 - 종전에는 AI가 실제로 낸 점수와
+ * 무관하게 모든 행이 처분 "등급 하향 승인" · 목표 등급 "B"로 초기화됐다("B"는
+ * GRADE_OPTIONS/백엔드 ConditionGradeEnum 어디에도 없는 값이라 클램프도 안 먹었다).
+ * 경계값은 models/wms.py UBCI_GRADE_SCORE_BANDS와 반드시 같게 유지한다(정본은 백엔드).
+ */
+export function gradeFromUbciScore(
+  score: number | null | undefined
+): 'MINT' | 'GOOD' | 'NORMAL' | 'REJECT' | null {
+  if (typeof score !== 'number' || Number.isNaN(score)) return null;
+  if (score >= 95) return 'MINT';
+  if (score >= 85) return 'GOOD';
+  if (score >= 65) return 'NORMAL';
+  return 'REJECT';
+}
+
+/**
+ * 점수 기반 추천 등급에 대응하는 기본 처분.
+ *
+ * 등급별 조치는 위 UBCI_GRADE_POLICY.action에 이미 명시되어 있다 - MINT/GOOD는
+ * "입고 승인"(감가 없음 → 정상 승인), NORMAL은 "감가 입고 승인"(→ 등급 하향 승인),
+ * REJECT는 "입고 반려"다. 두 문서가 서로 다른 기준을 말하면 안 되므로 그 표를 그대로 따른다.
+ *
+ * REJECT를 "등급 하향 승인"으로 잘못 기본값 잡으면 랙 배정이 Zone E 격리로 안 가고
+ * 정상 재고 편입 경로를 타 버린다(admin/router.py는 decision이 REJECT로 시작해야
+ * 반려 처리를 한다) - 등급과 처분의 매핑을 반드시 지켜야 하는 이유다.
+ */
+export function defaultDecisionForGrade(grade: string | null): string {
+  if (grade === 'REJECT') return 'REJECT_RETURN';
+  if (grade === 'MINT' || grade === 'GOOD') return 'APPROVE_NORMAL';
+  return 'APPROVE_DOWNGRADE'; // NORMAL 및 미산출(null) 폴백
+}
+
 export interface HitlRoutingRule {
   /** 파이프라인이 남기는 reason_code. 코드가 없는 규칙은 판정 노드 이름을 쓴다. */
   code: string;

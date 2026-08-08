@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { X, ChevronLeft, ChevronRight, Eye, BookOpen, AlertCircle, Bot, ScanSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { bboxToPercent } from "@/features/inspection/utils/inspectionImageService";
@@ -10,14 +10,30 @@ import type { HitlTask } from "@/features/hitl/types/hitl";
  * 검수자가 화면에서 고친 판정. 인덱스는 agent_logs의 배열 기준이며, 결재 제출 시
  * 그대로 백엔드로 넘어가 감점이 재산정된다(admin/router.py의 BBox 편집 반영 블록).
  */
+export interface EditedBbox {
+  xmin: number;
+  ymin: number;
+  xmax: number;
+  ymax: number;
+}
+
 export interface BBoxEdits {
   /** 오탐으로 판단해 감점에서 뺄 결함 (agent_logs.defects 인덱스) */
   excluded: number[];
   /** AI가 놓쳤으나 실제 결함으로 채택할 후보 (agent_logs.yolo_candidates 인덱스) */
   adopted: number[];
+  /** 검수자가 드래그로 직접 고친 결함 좌표 (agent_logs.defects 인덱스, 0~1000 상대좌표) */
+  edited: Record<number, EditedBbox>;
 }
 
-export const EMPTY_BBOX_EDITS: BBoxEdits = { excluded: [], adopted: [] };
+export const EMPTY_BBOX_EDITS: BBoxEdits = { excluded: [], adopted: [], edited: {} };
+
+/** 리사이즈 핸들 4개의 위치 키. 드래그 중 어느 모서리를 끄는지 구분한다. */
+type HandleCorner = "nw" | "ne" | "sw" | "se";
+
+const clampCoord = (v: number) => Math.max(0, Math.min(1000, Math.round(v)));
+/** 드래그로 박스가 한 점으로 찌그러져 사라지는 것을 막는 최소 폭/높이 (0~1000 기준). */
+const MIN_BBOX_GAP = 10;
 
 interface HitlImageModalProps {
   task: HitlTask | null;
@@ -84,6 +100,89 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
     onEditsChange?.({ ...cur, excluded: toggle(cur.excluded, i) });
   const toggleAdopted = (i: number) =>
     onEditsChange?.({ ...cur, adopted: toggle(cur.adopted, i) });
+
+  // --- BBox 좌표 드래그 편집 (2026-08-08) ---
+  // 새 라이브러리(react-konva 등) 없이 기존 % 기반 div 오버레이에 리사이즈 핸들 4개만
+  // 얹는다. 드래그 중에는 로컬 state(liveDrag)로만 미리보기하고, 마우스를 떼는 순간에만
+  // 부모(cur.edited)로 커밋한다 - 매 mousemove마다 부모 state를 갱신하면 상위 컴포넌트
+  // 전체가 리렌더되어 드래그가 버벅인다.
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [liveDrag, setLiveDrag] = useState<{ defectIndex: number; bbox: EditedBbox } | null>(null);
+  const dragStateRef = useRef<{ defectIndex: number; corner: HandleCorner; startBbox: EditedBbox } | null>(null);
+  // 이벤트 리스너를 마운트 시 한 번만 붙이기 위해 최신 값을 ref로 미러링한다
+  // (매 렌더마다 리스너를 떼고 다시 붙이면 드래그 중 손실이 생길 수 있다).
+  const liveDragRef = useRef(liveDrag);
+  liveDragRef.current = liveDrag;
+  const curRef = useRef(cur);
+  curRef.current = cur;
+  const onEditsChangeRef = useRef(onEditsChange);
+  onEditsChangeRef.current = onEditsChange;
+
+  const applyDrag = useCallback((clientX: number, clientY: number) => {
+    const st = dragStateRef.current;
+    const imgEl = imgRef.current;
+    if (!st || !imgEl) return;
+    const rect = imgEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const px = clampCoord(((clientX - rect.left) / rect.width) * 1000);
+    const py = clampCoord(((clientY - rect.top) / rect.height) * 1000);
+    let { xmin, ymin, xmax, ymax } = st.startBbox;
+    if (st.corner === "nw") {
+      xmin = Math.min(px, xmax - MIN_BBOX_GAP);
+      ymin = Math.min(py, ymax - MIN_BBOX_GAP);
+    } else if (st.corner === "ne") {
+      xmax = Math.max(px, xmin + MIN_BBOX_GAP);
+      ymin = Math.min(py, ymax - MIN_BBOX_GAP);
+    } else if (st.corner === "sw") {
+      xmin = Math.min(px, xmax - MIN_BBOX_GAP);
+      ymax = Math.max(py, ymin + MIN_BBOX_GAP);
+    } else {
+      xmax = Math.max(px, xmin + MIN_BBOX_GAP);
+      ymax = Math.max(py, ymin + MIN_BBOX_GAP);
+    }
+    setLiveDrag({ defectIndex: st.defectIndex, bbox: { xmin, ymin, xmax, ymax } });
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragStateRef.current) return;
+      applyDrag(e.clientX, e.clientY);
+    };
+    const onUp = () => {
+      const st = dragStateRef.current;
+      const live = liveDragRef.current;
+      if (st && live) {
+        const c = curRef.current;
+        onEditsChangeRef.current?.({
+          ...c,
+          edited: { ...c.edited, [live.defectIndex]: live.bbox },
+        });
+      }
+      dragStateRef.current = null;
+      setLiveDrag(null);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [applyDrag]);
+
+  const startDrag = (di: number, corner: HandleCorner, original: EditedBbox) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const start = cur.edited[di] ?? original;
+    dragStateRef.current = { defectIndex: di, corner, startBbox: start };
+    setLiveDrag({ defectIndex: di, bbox: start });
+  };
+
+  /** 편집(드래그 중 미리보기 또는 커밋된 edited)이 있으면 그 좌표로, 없으면 원본 그대로. */
+  const effectiveBbox = (di: number | undefined, original: EditedBbox): EditedBbox => {
+    if (typeof di !== "number") return original;
+    if (liveDrag && liveDrag.defectIndex === di) return liveDrag.bbox;
+    return cur.edited[di] ?? original;
+  };
 
   if (!task) return null;
 
@@ -240,6 +339,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                 title="클릭하여 고화질 2.5X 정밀 확대보기"
               >
                 <img
+                  ref={imgRef}
                   src={currentImageUrl}
                   alt={`defect-${effIdx}`}
                   onError={() => setImgError(true)}
@@ -294,7 +394,18 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                     // [수정 이력] 좌표계를 값 크기로 추측(xmin>1이면 1000, ...)하던 로직을 제거했다.
                     // xmin이 0인 결함은 스케일이 100으로 잘못 잡히는 등 좌표가 어긋났다.
                     // 백엔드가 coord_space를 명시해 내려주므로 공용 유틸이 그대로 환산한다.
-                    const { left, top, width, height } = bboxToPercent(box);
+                    // 검수자가 직접 제외한 결함. AI 판정(suspect)과 구분해서 보여야
+                    // "누가 뺐는지"가 화면에서 드러난다.
+                    const di = box.defectIndex;
+                    // 드래그로 고친 좌표(또는 드래그 중 미리보기)가 있으면 그걸로 그린다 -
+                    // 원본 AI 좌표가 아니라 "지금 확정된" 위치를 화면과 제출값이 항상 같이 본다.
+                    const effBox = effectiveBbox(di, {
+                      xmin: Number(box.xmin),
+                      ymin: Number(box.ymin),
+                      xmax: Number(box.xmax),
+                      ymax: Number(box.ymax),
+                    });
+                    const { left, top, width, height } = bboxToPercent({ ...box, ...effBox });
                     const label = box.label || box.type || `결함 #${idx + 1}`;
                     // 상단 8% 이내 박스는 라벨을 박스 안쪽으로 내려 잘림 방지
                     const visionLabelPos = top < 8 ? "top-1" : "-top-6";
@@ -303,11 +414,12 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                     // 증거 대조가 반려했거나 확신도를 제보에서 베낀 판독은 '확정'이 아니다.
                     // 회색 점선으로 낮춰 그려 확정 결함(빨강 실선)과 한눈에 구분되게 한다.
                     const suspect = Boolean(box.evidence_suspect || box.conf_copied_from_candidate);
-                    // 검수자가 직접 제외한 결함. AI 판정(suspect)과 구분해서 보여야
-                    // "누가 뺐는지"가 화면에서 드러난다.
-                    const di = box.defectIndex;
                     const excluded = typeof di === "number" && cur.excluded.includes(di);
                     const clickable = editable && typeof di === "number";
+                    // 리사이즈 핸들은 제외되지 않은 확정 결함에만 붙인다 - 제외된 박스는
+                    // 감점 계산에서 이미 빠졌으니 좌표를 고쳐도 의미가 없다.
+                    const resizable = clickable && !excluded;
+                    const wasEdited = typeof di === "number" && Boolean(cur.edited[di]);
                     return (
                       <div
                         key={idx}
@@ -321,7 +433,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                             clickable
                               ? excluded
                                 ? "클릭하면 감점에 다시 포함"
-                                : "클릭하면 감점에서 제외"
+                                : "클릭하면 감점에서 제외 · 모서리를 드래그하면 영역 수정"
                               : null,
                           ]
                             .filter(Boolean)
@@ -334,7 +446,9 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                             ? "border-2 border-dashed border-slate-500 bg-slate-500/10 opacity-60"
                             : suspect
                               ? "border-2 border-dashed border-gray-400 bg-gray-400/15"
-                              : "border-2 border-red-500 bg-red-500/30 shadow-lg animate-pulse",
+                              : wasEdited
+                                ? "border-2 border-solid border-sky-500 bg-sky-500/25 shadow-lg"
+                                : "border-2 border-red-500 bg-red-500/30 shadow-lg animate-pulse",
                         ].join(" ")}
                         style={{
                           left: `${left}%`,
@@ -343,12 +457,34 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                           height: `${height}%`,
                         }}
                       >
+                        {resizable &&
+                          (["nw", "ne", "sw", "se"] as HandleCorner[]).map((corner) => (
+                            <span
+                              key={corner}
+                              onMouseDown={startDrag(di, corner, {
+                                xmin: Number(box.xmin),
+                                ymin: Number(box.ymin),
+                                xmax: Number(box.xmax),
+                                ymax: Number(box.ymax),
+                              })}
+                              onClick={(e) => e.stopPropagation()}
+                              title="드래그해서 결함 영역 수정"
+                              className={[
+                                "absolute w-2.5 h-2.5 rounded-full bg-white z-20 shadow",
+                                wasEdited ? "border-2 border-sky-600" : "border-2 border-red-600",
+                                corner === "nw" ? "-left-1 -top-1 cursor-nwse-resize" : "",
+                                corner === "ne" ? "-right-1 -top-1 cursor-nesw-resize" : "",
+                                corner === "sw" ? "-left-1 -bottom-1 cursor-nesw-resize" : "",
+                                corner === "se" ? "-right-1 -bottom-1 cursor-nwse-resize" : "",
+                              ].join(" ")}
+                            />
+                          ))}
                         {/* 신뢰도를 함께 노출한다. 검수자가 "이 판독을 믿을지"를 판단하는
                             1차 근거인데 종전에는 라벨만 보여, 낮은 신뢰도의 오탐과 확실한
                             결함이 화면에서 구분되지 않았다(YOLO 후보 오버레이에는 이미 있었다). */}
                         <span
                           className={`absolute ${visionLabelPos} ${visionLabelAnchor} ${
-                            suspect ? "bg-gray-500" : "bg-red-600"
+                            suspect ? "bg-gray-500" : wasEdited ? "bg-sky-600" : "bg-red-600"
                           } text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap z-10`}
                         >
                           {label}
@@ -375,6 +511,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                               ? " · 판독 미검증"
                               : ""}
                           {excluded ? " · 검수자 제외" : ""}
+                          {wasEdited ? " · 검수자 영역 수정" : ""}
                         </span>
                       </div>
                     );

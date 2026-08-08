@@ -29,7 +29,7 @@ import { getSystemSettings, SETTINGS_CHANGE_EVENT } from "@/lib/systemSettings";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
 import { HitlImageModal, EMPTY_BBOX_EDITS, type BBoxEdits } from "@/features/hitl/components/HitlImageModal";
 // 관리자 설정의 읽기 전용 정책 뷰와 같은 정의를 쓴다 (features/hitl/policy.ts)
-import { UBCI_GRADE_POLICY, HITL_ROUTING_POLICY } from "@/features/hitl/policy";
+import { UBCI_GRADE_POLICY, HITL_ROUTING_POLICY, gradeFromUbciScore, defaultDecisionForGrade } from "@/features/hitl/policy";
 
 const DECISION_OPTIONS = [
   { value: "APPROVE_NORMAL", label: "정상 승인 (입고)" },
@@ -71,6 +71,15 @@ const REASON_CODE_MAP: Record<string, { label: string; category: string; color: 
   DMG_INT_DISCOLOR: { label: '내지 황변/변색', category: '내부 훼손', color: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800' },
   FP_SHADOW: { label: '그림자 오탐', category: '오탐 방어', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
   FP_GLARE: { label: '빛 반사 오탐', category: '오탐 방어', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
+  // [2026-08-08 추가] app/ai/agents/__init__.py DEFECT_TRANSLATION_MAP에는 있지만
+  // 여기 빠져 있던 실제 결함 코드. 없으면 칩이 한글 라벨 없이 원시 코드로 표시된다.
+  DMG_EXT_SCRATCH: { label: '표지 긁힘/스크래치', category: '외부 손상', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
+  DMG_EXT_STICKER: { label: '스티커/바코드 자국', category: '외부 손상', color: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800' },
+  DMG_EDGE_WEAR: { label: '모서리 마모', category: '외부 손상', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
+  DMG_SPINE_CRACK: { label: '책등 갈라짐', category: '외부 손상', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
+  DMG_BINDING_LOOSE: { label: '제본 벌어짐', category: '외부 손상', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
+  DMG_SIGNATURE: { label: '측면 서명/이름', category: '내부 훼손', color: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
+  DMG_STAMP: { label: '도서관/장서인 도장', category: '내부 훼손', color: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
   // Supervisor가 사유 코드 없이 이관한 건은 백엔드가 이 상태 코드를 내려준다.
   // 매핑이 없으면 원시 코드가 그대로 노출되어 다른 관제 화면과 이질적으로 보였다.
   AWAITING_HUMAN_REVIEW: { label: '관리자 판독 대기', category: 'HITL 이관', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
@@ -337,16 +346,41 @@ export default function AdminHitlDashboard() {
         return "DMG_INT_DOODLE";
       };
 
+      // [2026-08-08 신설] agent_logs.reason_code/primary_reason_code(CRITIC_INTEGRITY_VIOLATION,
+      // SCORE_BOUNDARY, NO_VALID_IMAGE_HITL, CRITIC_RETRY_EXCEEDED 등)는 "왜 HITL로 이관됐는가"를
+      // 나타내는 파이프라인 라우팅 코드이지, primaryReasonCode가 요구하는 결함 분류 코드
+      // (DMG_EXT_CRUSH 등)가 아니다. 그런데도 종전 기본값 로직은 이 라우팅 코드를 그대로
+      // primaryReasonCode에 흘려보내, 검수자가 손대지 않고 제출하면 "우리가 실제로 검증한
+      // 결함"이 아니라 "이관 사유"가 사유 코드로 저장됐다. 실제로 Vision/YOLO가 확정한
+      // agent_logs.defects[]에서 가장 비중이 큰(감점 기준) 결함 유형을 대표 사유로 쓴다.
+      const getPrimaryDefectReason = (t: HitlTask): string | null => {
+        const defects: any[] = Array.isArray(t.agent_logs?.defects) ? t.agent_logs.defects : [];
+        const candidates = defects.filter(
+          (d) => d && typeof d.type === "string" && d.type && !d.hitl_excluded && !d.evidence_suspect
+        );
+        if (candidates.length === 0) return null;
+        candidates.sort(
+          (a, b) =>
+            Number(b.applied_deduction ?? b.preliminary_deduction ?? 0) -
+            Number(a.applied_deduction ?? a.preliminary_deduction ?? 0)
+        );
+        return candidates[0].type;
+      };
+
       list.forEach((t: HitlTask) => {
-        initDecisions[t.id] = t.agent_logs?.suggested_decision || "APPROVE_DOWNGRADE";
-        initGrades[t.id] = t.agent_logs?.suggested_grade || "B";
-        // AWAITING_HUMAN_REVIEW는 이관 상태 코드일 뿐 결함 사유가 아니므로, 결재 폼
-        // 기본값으로 세팅하지 않고 결함 서술 기반 추론으로 폴백한다 (그대로 제출되면
-        // primaryReasonCode에 상태 코드가 기록되는 문제).
-        const rawCode = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code;
-        initReasons[t.id] = (rawCode && rawCode !== "AWAITING_HUMAN_REVIEW")
-          ? rawCode
-          : getDefaultReason(t.agent_logs?.defect_description || "");
+        // [2026-08-08] AI가 이미 산출한 UBCI 점수(t.ubci_score)를 등급 경계에 대입해
+        // 처분/목표등급 기본값을 추천한다. suggested_grade/suggested_decision이 있으면
+        // (파이프라인이 명시적으로 내려준 값) 그쪽을 우선한다.
+        const scoreGrade = gradeFromUbciScore(t.ubci_score);
+        const recommendedGrade = t.agent_logs?.suggested_grade || scoreGrade || "NORMAL";
+        initDecisions[t.id] =
+          t.agent_logs?.suggested_decision || defaultDecisionForGrade(recommendedGrade);
+        initGrades[t.id] = recommendedGrade;
+        // 실제로 검증된 결함(agent_logs.defects) 중 감점 비중이 가장 큰 유형을 사유
+        // 기본값으로 쓴다. defects가 비어 있는 건(NO_VALID_IMAGE_HITL 등 판독 자체가 없던
+        // 경우)만 예전 서술 기반 추론으로 폴백한다.
+        initReasons[t.id] =
+          getPrimaryDefectReason(t) || getDefaultReason(t.agent_logs?.defect_description || "");
         initComments[t.id] = t.human_issue_notes || "관리자 검수 오버라이드";
       });
 
@@ -454,7 +488,7 @@ export default function AdminHitlDashboard() {
       if (!task) continue;
 
       const decision = decisions[id] || "APPROVE_DOWNGRADE";
-      const targetGrade = grades[id] || "B";
+      const targetGrade = grades[id] || "NORMAL";
       const rawReason = reasons[id];
       const reasonList: string[] = Array.isArray(rawReason)
         ? (rawReason as any)
@@ -473,6 +507,10 @@ export default function AdminHitlDashboard() {
         // 검수자가 고친 판정. 백엔드가 이 목록으로 감점을 재산정한다.
         excludedDefectIndexes: bboxEdits[id]?.excluded ?? [],
         adoptedCandidateIndexes: bboxEdits[id]?.adopted ?? [],
+        editedBboxes: Object.entries(bboxEdits[id]?.edited ?? {}).map(([index, bbox]) => ({
+          index: Number(index),
+          ...bbox,
+        })),
       });
     }
 
