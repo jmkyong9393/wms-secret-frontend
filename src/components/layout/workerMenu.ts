@@ -1,4 +1,4 @@
-import { Camera, PackageSearch, ShieldCheck, Truck } from 'lucide-react';
+import { Camera, MessageSquare, PackageSearch, ShieldCheck, Truck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /**
@@ -23,6 +23,7 @@ export const WORKER_MENU_ITEMS: WorkerMenuItem[] = [
   { name: '나의 검수 내역 (Worker)', shortName: '검수내역', href: '/inspections?scope=mine', icon: ShieldCheck },
   { name: '출고 피킹 스캐너 (Worker)', shortName: '피킹', href: '/worker/outbound', icon: Truck },
   { name: '현장 재고 조회 (Worker)', shortName: '재고조회', href: '/inventory', icon: PackageSearch },
+  { name: '게시판', shortName: '게시판', href: '/board', icon: MessageSquare },
 ];
 
 /** 현재 경로가 해당 메뉴 항목인지 판정. href에 쿼리가 붙는 항목이 있어 경로만 비교한다. */

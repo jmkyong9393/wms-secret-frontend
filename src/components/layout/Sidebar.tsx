@@ -22,7 +22,8 @@ import {
   ShieldCheck,
   Boxes,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  MessageSquare
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { WORKER_MENU_ITEMS } from './workerMenu';
@@ -96,6 +97,12 @@ function getMenuGroups(hitlPendingCount: number): MenuGroup[] {
         { name: '시스템 설정', href: '/admin/settings', icon: Settings },
       ],
     },
+    {
+      title: '📢 게시판',
+      items: [
+        { name: '게시판', href: '/board', icon: MessageSquare },
+      ],
+    },
   ];
 }
 
@@ -154,6 +161,7 @@ export default function Sidebar() {
     '📦 재고 & 출고 프로세스': true,
     '🤖 SCM & 자동 발주': true,
     '👥 권한 & 시스템 관리': true,
+    '📢 게시판': true,
     '👷 현장 작업자 전용 메뉴': true,
   });
 
@@ -207,7 +215,7 @@ export default function Sidebar() {
                     <span className="text-gray-900 dark:text-white">Nexus</span>
                     <span className="text-blue-600 dark:text-blue-400">WMS</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono font-bold mt-0.5">Enterprise v2.12.5.0</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono font-bold mt-0.5">Enterprise v2.14.0.0</span>
                 </div>
               </div>
               <button
