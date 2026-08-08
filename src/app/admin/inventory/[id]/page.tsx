@@ -9,6 +9,7 @@ import { ArrowLeft, Printer, ShieldCheck, MapPin, Tag, UserCheck, Package, Exter
 
 import BookCover from '@/components/BookCover';
 import { LpnPrintLabel, LpnLabelData } from '@/features/inbound/components/LpnPrintLabel';
+import { labelsAPI } from '@/lib/api';
 import {
   resolveInspectionImages,
   resolveDefectCoordinates,
@@ -88,6 +89,7 @@ export default function InventoryDetailPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activePrintData, setActivePrintData] = useState<LpnLabelData | null>(null);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [selectedImgIdx, setSelectedImgIdx] = useState<number>(0);
   const [isReinspecting, setIsReinspecting] = useState<boolean>(false);
   // AI 판독 오버레이 표시 여부. Vision 확정 결함과 YOLO 사전탐지 후보를 각각 껐다 켤 수 있다
@@ -247,7 +249,7 @@ export default function InventoryDetailPage() {
                 className="flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs cursor-pointer"
               >
                 <Printer className="w-4 h-4 mr-1.5" />
-                50x30mm 라벨 인쇄
+                50x31mm 라벨 인쇄
               </button>
 
               <button
@@ -772,17 +774,43 @@ export default function InventoryDetailPage() {
         )}
       </div>
 
-      {/* LPN Print Label Modal */}
+      {/* LPN Print Label Modal — 실제 인쇄는 백엔드 /labels/print를 거쳐 LAN 라벨 프린터로 직접 전송된다 */}
       {activePrintData && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-xl space-y-4 border border-transparent dark:border-gray-800">
             <LpnPrintLabel data={activePrintData} />
-            <button
-              onClick={() => setActivePrintData(null)}
-              className="w-full py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold rounded-xl text-xs cursor-pointer"
-            >
-              닫기
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  if (!activePrintData) return;
+                  setIsPrinting(true);
+                  try {
+                    const result = await labelsAPI.printLpn(activePrintData.lpn_barcode);
+                    if (result.skipped) {
+                      alert('라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).');
+                    } else if (!result.sent && !result.queued) {
+                      alert('라벨 전송에 실패했습니다.');
+                    }
+                  } catch (e) {
+                    console.error(e);
+                    alert('라벨 프린터 통신 중 오류가 발생했습니다. 프린터 전원/LAN 연결을 확인해주세요.');
+                  } finally {
+                    setIsPrinting(false);
+                  }
+                }}
+                disabled={isPrinting}
+                className="flex-1 flex items-center justify-center py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold rounded-xl text-xs cursor-pointer"
+              >
+                <Printer className="w-4 h-4 mr-1.5" />
+                {isPrinting ? '전송 중...' : '라벨 프린터로 인쇄'}
+              </button>
+              <button
+                onClick={() => setActivePrintData(null)}
+                className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold rounded-xl text-xs cursor-pointer"
+              >
+                닫기
+              </button>
+            </div>
           </div>
         </div>
       )}
