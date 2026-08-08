@@ -40,6 +40,8 @@ export interface HitlOverrideRequest {
   excludedDefectIndexes?: number[];
   /** 검수자가 결함으로 채택한 YOLO 후보 (agent_logs.yolo_candidates 인덱스) */
   adoptedCandidateIndexes?: number[];
+  /** 검수자가 드래그로 직접 고친 결함 좌표 (agent_logs.defects 인덱스, 0~1000 상대좌표) */
+  editedBboxes?: { index: number; xmin: number; ymin: number; xmax: number; ymax: number }[];
 }
 
 export interface BulkOverridePayload {
