@@ -74,7 +74,8 @@ export default function WorkerMobileShell({
           safe-area-inset-bottom으로 iOS 홈 인디케이터에 가리지 않게 한다. */}
       <nav
         aria-label="작업자 메뉴"
-        className="shrink-0 grid grid-cols-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 pb-[env(safe-area-inset-bottom)]"
+        className="shrink-0 grid bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 pb-[env(safe-area-inset-bottom)]"
+        style={{ gridTemplateColumns: `repeat(${WORKER_MENU_ITEMS.length}, minmax(0, 1fr))` }}
       >
         {WORKER_MENU_ITEMS.map((item) => {
           const active = isWorkerMenuActive(pathname, item.href);
