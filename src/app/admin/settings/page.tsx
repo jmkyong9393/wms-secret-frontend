@@ -248,7 +248,7 @@ export default function SystemSettingsPage() {
                 </div>
                 <div>
                   <CardTitle className="text-base font-black text-gray-900 dark:text-white">열전사 프린터 & 라벨 규격</CardTitle>
-                  <CardDescription className="text-xs">LPN 50×30mm 스티커 라벨 인쇄 파라미터</CardDescription>
+                  <CardDescription className="text-xs">LPN 50×31mm 스티커 라벨 인쇄 파라미터</CardDescription>
                 </div>
               </div>
               <Badge variant="outline" className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800">
@@ -260,15 +260,15 @@ export default function SystemSettingsPage() {
             <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/40 rounded-xl border border-gray-200 dark:border-gray-700">
               <span className="text-xs font-bold text-gray-800 dark:text-gray-200">스티커 용지 규격</span>
               <span className="text-xs font-mono font-black text-emerald-600 dark:text-emerald-400">
-                50mm × 30mm (203 DPI) — 고정 규격
+                50mm × 31mm (203 DPI) — 고정 규격
               </span>
             </div>
 
             <div className="flex items-center justify-between pt-2">
               <div>
-                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">LPN 발급 시 열전사 프린터(WebUSB) 인쇄 시도</p>
+                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">LPN 발급 시 LAN 라벨 프린터 자동 인쇄 시도</p>
                 <p className="text-[11px] text-gray-400">
-                  끄면 /inbound 입고 검수에서 프린터 연결을 시도하지 않고 바로 촬영 단계로 진행합니다
+                  끄면 /inbound 입고 검수에서 프린터 전송을 시도하지 않고 바로 촬영 단계로 진행합니다
                   (프린터 미설치 현장·데모 환경용).
                 </p>
               </div>

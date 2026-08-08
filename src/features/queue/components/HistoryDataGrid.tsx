@@ -9,6 +9,7 @@ import { HistoryLog } from '@/features/inbound/types';
 import * as xlsx from 'xlsx';
 import { BBoxImageRenderer } from '@/components/ui/BBoxImageRenderer';
 import { QRCodeSVG } from 'qrcode.react';
+import { labelsAPI } from '@/lib/api';
 
 export default function HistoryDataGrid() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -84,39 +85,19 @@ export default function HistoryDataGrid() {
     }
   };
 
-  const handlePrintQRCode = () => {
+  const handlePrintQRCode = async () => {
     if (!selectedBook?.lpn) return;
-    const svgElement = document.getElementById('lpn-qr-code');
-    if (!svgElement) return;
-
-    const printWindow = window.open('', '', 'width=400,height=400');
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Print LPN Tag</title>
-          <style>
-            body { font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-            .lpn-text { font-size: 24px; font-weight: bold; margin-bottom: 20px; }
-            @media print {
-              @page { size: auto; margin: 0mm; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="lpn-text">${selectedBook.lpn}</div>
-          ${svgElement.outerHTML}
-          <script>
-            setTimeout(() => {
-              window.print();
-              window.close();
-            }, 250);
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    try {
+      const result = await labelsAPI.printLpn(selectedBook.lpn);
+      if (result.skipped) {
+        alert('라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).');
+      } else if (!result.sent && !result.queued) {
+        alert('라벨 전송에 실패했습니다.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('라벨 프린터 통신 중 오류가 발생했습니다. 프린터 전원/LAN 연결을 확인해주세요.');
+    }
   };
 
   // Dummy action handlers

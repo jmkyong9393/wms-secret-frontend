@@ -3,7 +3,7 @@ import { API_BASE_URL } from '@/lib/api-client';
 
 import { useState, useEffect } from 'react';
 import { Printer, RefreshCcw, Search, Barcode, CheckCircle } from 'lucide-react';
-import { PrinterHelper } from '@/lib/printerHelper';
+import { labelsAPI } from '@/lib/api';
 
 type LpnRecord = {
   lpn_barcode: string;
@@ -44,17 +44,15 @@ export default function LpnDashboardPage() {
   const handlePrint = async (lpn: string) => {
     setIsPrinting(lpn);
     try {
-      const printer = new PrinterHelper();
-      const connected = await printer.connect();
-      if (connected) {
-        await printer.printLpnTag(lpn, "도서 라벨 재출력");
-        await printer.disconnect();
-      } else {
-        alert("Xprinter 연결에 실패했습니다 (WebUSB 권한 확인).");
+      const result = await labelsAPI.printLpn(lpn);
+      if (result.skipped) {
+        alert("라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).");
+      } else if (!result.sent && !result.queued) {
+        alert("라벨 전송에 실패했습니다.");
       }
     } catch (e) {
       console.error(e);
-      alert("출력 중 오류가 발생했습니다.");
+      alert("라벨 프린터 통신 중 오류가 발생했습니다. 프린터 전원/LAN 연결을 확인해주세요.");
     } finally {
       setIsPrinting(null);
     }

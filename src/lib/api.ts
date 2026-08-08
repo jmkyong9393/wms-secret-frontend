@@ -143,6 +143,28 @@ interface ProposalScanResult {
   created: { proposalId: string; title: string; currentStock: number; proposedQuantity: number; urgency: string }[];
 }
 
+// --- app/domains/labels/router.py (/labels/print) 응답 타입 ---
+// Xprinter XP-423B Raw TCP 직결 출력. 브라우저 window.print()/WebUSB를 대체하는
+// 단일 인쇄 경로 — LAN 라벨 프린터가 등록된 이후로는 모든 LPN 라벨 인쇄가 여기를 거친다.
+
+interface LabelPrintResult {
+  sent: boolean;
+  skipped: boolean;
+  queued: boolean;
+  bytes_sent: number;
+  zpl: string;
+}
+
+export const labelsAPI = {
+  printLpn: async (lpn: string) => {
+    const res = await apiClient.post<LabelPrintResult>("/api/v1/labels/print", {
+      lpn,
+      mode: "LPN",
+    });
+    return res.data;
+  },
+};
+
 export const poAPI = {
   getProposals: async (status?: ProposalStatus) => {
     const query = status ? `?status=${status}` : "";

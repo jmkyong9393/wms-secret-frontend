@@ -23,10 +23,10 @@ export const LpnPrintLabel: React.FC<LpnPrintLabelProps> = ({ data }) => {
   // Real working QR code payload for smartphone camera scanning -> opens digital certificate
   const qrPayload = `http://localhost:3000/certificate/${data.lpn_barcode}`;
 
-  // 50x30mm 열전사 프린터 규격 (가로형)
+  // 50x31mm 열전사 프린터 규격 (가로형)
   const containerStyle: React.CSSProperties = {
     width: '50mm',
-    height: '30mm',
+    height: '31mm',
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'center',
@@ -93,7 +93,7 @@ export const LpnPrintLabel: React.FC<LpnPrintLabelProps> = ({ data }) => {
         {`
           @media print {
             @page {
-              size: 50mm 30mm;
+              size: 50mm 31mm;
               margin: 0;
             }
             body * {
@@ -112,7 +112,7 @@ export const LpnPrintLabel: React.FC<LpnPrintLabelProps> = ({ data }) => {
       </style>
       <div id="lpn-print-section" style={containerStyle}>
         <div style={qrContainerStyle}>
-          {/* 동적 인코딩 50x30mm QR 코드 */}
+          {/* 동적 인코딩 50x31mm QR 코드 */}
           <QRCodeSVG value={qrPayload} size={62} marginSize={0} />
         </div>
         <div style={textContainerStyle}>
