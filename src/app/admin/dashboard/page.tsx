@@ -120,6 +120,10 @@ export default function AdvancedDashboardPage() {
   };
 
   const ubciGradeData = charts?.ubci_grade_data ?? [];
+  // [수정 이력] 종전에는 이 값이 "86%" 문자열로 하드코딩되어 실데이터와 무관하게 항상
+  // 같았다. 등급 비율(pct)도 프론트가 value(실개수)에 그대로 "%"를 붙여 617%처럼
+  // 표시됐다 - 총합 대비 비율은 백엔드가 계산해 pct 필드로 내려준다(charts/router.py).
+  const ubciMintGoodPct = charts?.ubci_mint_good_pct;
   const volumeDataChart = charts?.volume_data ?? [];
   const categoryDataChart = charts?.category_data ?? [];
 
@@ -132,7 +136,7 @@ export default function AdvancedDashboardPage() {
             <span className="px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-bold font-mono flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> EXECUTIVE MASTER DASHBOARD
             </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">v2.12.5.0 Recharts High-Tech Edition</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">v2.14.0.0 Recharts High-Tech Edition</span>
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">
             📊 최고 관리자 종합 통계 관제 대시보드
@@ -300,20 +304,24 @@ export default function AdvancedDashboardPage() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-2xl font-black text-gray-900 dark:text-white font-mono">86%</span>
+                <span className="text-2xl font-black text-gray-900 dark:text-white font-mono">
+                  {ubciMintGoodPct != null ? `${ubciMintGoodPct}%` : '—'}
+                </span>
                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">MINT+GOOD</span>
               </div>
             </div>
           </div>
 
           <div className="space-y-1.5 pt-2 border-t dark:border-gray-800 text-xs">
-            {ubciGradeData.map((item: { name: string; value: number; color: string }) => (
+            {ubciGradeData.map((item: { name: string; value: number; pct?: number; color: string }) => (
               <div key={item.name} className="flex justify-between items-center">
                 <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
                   {item.name}
                 </span>
-                <span className="font-bold font-mono text-gray-900 dark:text-white">{item.value}%</span>
+                <span className="font-bold font-mono text-gray-900 dark:text-white">
+                  {item.value.toLocaleString()}건 ({item.pct ?? 0}%)
+                </span>
               </div>
             ))}
           </div>
