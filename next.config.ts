@@ -22,7 +22,8 @@ const nextConfig: NextConfig = {
   //
   // trycloudflare 퀵 터널은 실행할 때마다 서브도메인이 바뀌므로 와일드카드로 잡는다.
   // dev 전용 설정이라 production 빌드/배포에는 영향이 없다.
-  allowedDevOrigins: ["*.trycloudflare.com"],
+  // 같은 공유기 LAN에서 스마트폰으로 접속해 테스트할 때도 위와 동일한 이유로 필요하다.
+  allowedDevOrigins: ["*.trycloudflare.com", "192.168.0.5"],
 
   // [2026-08-06] API를 프론트와 같은 오리진으로 프록시한다.
   //
