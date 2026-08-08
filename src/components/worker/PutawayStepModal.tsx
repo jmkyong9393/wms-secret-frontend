@@ -1,4 +1,5 @@
 'use client';
+// [미사용/확장예정] 적치(putaway) 단계 모달. 랙 배정 흐름에 연결할 수 있다.
 
 import React, { useState } from 'react';
 import { X, CheckCircle2, MapPin, PackageCheck, AlertCircle } from 'lucide-react';

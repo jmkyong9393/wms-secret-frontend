@@ -1,3 +1,5 @@
+// [미사용/확장예정] WebUSB 라벨 프린터 직결. 백엔드 ZPL 경로의 폴백으로 쓸 수 있다.
+// VENDOR_ID는 예시값이므로 실제 장비 확인 후 교체해야 한다.
 /**
  * WebUSB API Wrapper for Xprinter XP-423B (Thermal Label Printer)
  * 이 헬퍼 클래스는 브라우저의 WebUSB API를 통해 로컬에 USB로 연결된 Xprinter와 직접 통신합니다.

@@ -1,4 +1,5 @@
 'use client';
+// [미사용/확장예정] 작업자 피킹 체크리스트. 피킹 지시서 도메인은 활성 상태다.
 
 import React, { useState } from 'react';
 import { PackageSearch, CheckCircle, MapPin, Search } from 'lucide-react';
