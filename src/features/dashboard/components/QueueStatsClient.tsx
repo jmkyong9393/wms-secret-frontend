@@ -1,4 +1,5 @@
 'use client';
+// [미사용/확장예정] 업로드 큐 통계 위젯. uploadQueueAtom은 입고 화면에서 사용 중이다.
 
 import { useMemo } from 'react';
 import { useAtomValue } from 'jotai';

@@ -1,4 +1,5 @@
 'use client';
+// [미사용/확장예정] 최근 검수 목록 위젯 (업로드 큐 기반).
 
 import { useMemo } from 'react';
 import { useAtomValue } from 'jotai';
