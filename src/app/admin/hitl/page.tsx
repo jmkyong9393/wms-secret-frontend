@@ -187,7 +187,15 @@ export default function AdminHitlDashboard() {
       // 문구였고 점수도 상수였다 - 화면 전체가 연출이었다. 게다가 등록 즉시 step:5, isDone:true로
       // "완료"를 선언해, 실제 파이프라인이 17초 뒤 내놓은 결과(예: UBCI 100, HITL 유지)와
       // 무관하게 영원히 "UBCI 75점"을 말했다.
+      //
+      // [2026-08-10 수정] "policy_text/report_text가 있으면 완료"만으로는 이전 시도(예: 크레딧
+      // 소진으로 실패한 재검수)의 잔여 텍스트를 새 실행 완료로 오인한다 - 재트리거 2초 만에
+      // 옛 실패 로그를 "완료"로 표시해, 새 요청이 OpenAI에 도달하기도 전에 화면이 끝났다고
+      // 말했다(실측: 크레딧 충전 후에도 사용량 $0). 트리거 전 스냅샷을 기준선으로 잡아,
+      // 그 값과 달라졌을 때만 완료로 판단한다.
       const t = () => new Date().toLocaleTimeString();
+      const baseline = await adminAPI.getInspectionResult(jobId).catch(() => null);
+      const baselineLogs = JSON.stringify(baseline?.agent_logs || {});
       await adminAPI.triggerAiReinspection(jobId);
 
       setActiveReinspectionTask((prev) =>
@@ -207,8 +215,10 @@ export default function AdminHitlDashboard() {
         try {
           const cur = await adminAPI.getInspectionResult(jobId);
           const lg = (cur?.agent_logs || {}) as Record<string, string | undefined>;
-          // 재검수가 끝나면 Policy/Report 서술이 채워진다. 둘 다 없으면 아직 실행 중이다.
-          if (lg.policy_text || lg.report_text) {
+          // 재검수가 끝나면 Policy/Report 서술이 채워진다. 단, 이전 시도의 잔여 값과
+          // 완전히 같으면(=기준선과 동일) 새 실행이 아직 반영 안 된 것이므로 계속 기다린다.
+          const changed = JSON.stringify(lg) !== baselineLogs;
+          if ((lg.policy_text || lg.report_text) && changed) {
             result = cur;
             break;
           }
