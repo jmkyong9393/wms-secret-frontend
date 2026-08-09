@@ -769,6 +769,49 @@ export default function InventoryDetailPage() {
                   })}
                 </div>
               )}
+
+              {/*
+                [2026-08-09 신설] 1차 파이프라인 판독과 HITL 재검증을 같은 타임라인에 섞으면
+                안 된다 - policy_text를 재산정 결과로 덮어쓰면 1차 판독 근거가 사라진다.
+                logs.hitl_revalidation은 별도 필드라 여기 독립 섹션으로만 존재하며,
+                BBox 편집이 있었던 건에만 생긴다(편집 없는 단순 승인은 재검증 자체가 없음).
+              */}
+              {logs.hitl_revalidation && (
+                <div className="bg-sky-50/70 dark:bg-sky-950/30 p-4 rounded-xl text-xs space-y-2.5 border border-sky-200 dark:border-sky-800">
+                  <div className="flex items-center gap-2 font-bold text-sky-800 dark:text-sky-300">
+                    <span>🧑‍⚖️ HITL 재검증 (BBox 편집 후 2차)</span>
+                    <span className="font-mono text-[10px] text-sky-600 dark:text-sky-400">
+                      {logs.hitl_revalidation.revalidated_at?.split('T')[1]?.slice(0, 8) || ''} · {logs.hitl_revalidation.revalidated_by}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 py-1 border-b border-sky-200/70 dark:border-sky-800/60">
+                    <span className="font-bold sm:min-w-[150px] text-amber-700 dark:text-amber-300">Policy Agent 📜</span>
+                    <span className="leading-relaxed min-w-0 break-words text-amber-700 dark:text-amber-300">
+                      {logs.hitl_revalidation.policy_text
+                        ? `${logs.hitl_revalidation.policy_text} (재산정 ${logs.hitl_revalidation.policy_score}점)`
+                        : logs.hitl_revalidation.policy_error
+                          ? `재산정 실패: ${logs.hitl_revalidation.policy_error}`
+                          : '(서술 미기록)'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 py-1">
+                    <span className="font-bold sm:min-w-[150px] text-emerald-700 dark:text-emerald-400">Critic Stage A 🛡️</span>
+                    {logs.hitl_revalidation.critic_stage_a_passed === true ? (
+                      <span className="leading-relaxed min-w-0 break-words text-emerald-700 dark:text-emerald-400">
+                        정합성 대조 통과 - 결함 수·감점·BBox·image_index 모순 없음
+                      </span>
+                    ) : logs.hitl_revalidation.critic_stage_a_passed === false ? (
+                      <span className="leading-relaxed min-w-0 break-words text-rose-700 dark:text-rose-400">
+                        정합성 위반 감지: {(logs.hitl_revalidation.critic_stage_a_issues || []).join(' / ')}
+                      </span>
+                    ) : (
+                      <span className="leading-relaxed min-w-0 break-words text-gray-500 dark:text-gray-400">
+                        재검증 실패: {logs.hitl_revalidation.critic_stage_a_error}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -785,7 +828,12 @@ export default function InventoryDetailPage() {
                   if (!activePrintData) return;
                   setIsPrinting(true);
                   try {
-                    const result = await labelsAPI.printLpn(activePrintData.lpn_barcode);
+                    const result = await labelsAPI.printLpn(
+                      activePrintData.lpn_barcode,
+                      activePrintData.book.title,
+                      activePrintData.book.isbn,
+                      activePrintData.worker_id
+                    );
                     if (result.skipped) {
                       alert('라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).');
                     } else if (!result.sent && !result.queued) {

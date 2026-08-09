@@ -91,6 +91,23 @@ export function defaultDecisionForGrade(grade: string | null): string {
   return 'APPROVE_DOWNGRADE'; // NORMAL 및 미산출(null) 폴백
 }
 
+/** 결함 유형 선택지 (신규 BBox 그리기, 백엔드 DEFECT_TRANSLATION_MAP과 동기화). */
+export const DEFECT_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'DMG_EXT_CRUSH', label: '모서리 찌그러짐' },
+  { value: 'DMG_EXT_WET', label: '외부 습기/침수' },
+  { value: 'DMG_EXT_TEAR', label: '커버 찢어짐' },
+  { value: 'DMG_EXT_SCRATCH', label: '표지 긁힘/스크래치' },
+  { value: 'DMG_EDGE_WEAR', label: '모서리 마모' },
+  { value: 'DMG_SPINE_CRACK', label: '책등 갈라짐' },
+  { value: 'DMG_BINDING_LOOSE', label: '제본 벌어짐' },
+  { value: 'DMG_INT_DOODLE', label: '내부 손글씨/낙서' },
+  { value: 'DMG_INT_STAIN', label: '내지 오염/이물질' },
+  { value: 'DMG_INT_DISCOLOR', label: '내지 황변/변색' },
+  { value: 'DMG_SIGNATURE', label: '측면 서명/이름' },
+  { value: 'DMG_STAMP', label: '도서관/장서인 도장' },
+  { value: 'DMG_EXT_STICKER', label: '스티커/바코드 자국' },
+];
+
 export interface HitlRoutingRule {
   /** 파이프라인이 남기는 reason_code. 코드가 없는 규칙은 판정 노드 이름을 쓴다. */
   code: string;
