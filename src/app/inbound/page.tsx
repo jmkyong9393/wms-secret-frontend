@@ -171,9 +171,13 @@ export default function InboundScannerPage() {
       let resolved = false;
       let staleTimer: ReturnType<typeof setTimeout> | null = null;
       let staleRecheckTimer: ReturnType<typeof setTimeout> | null = null;
+      let pollTimer: ReturnType<typeof setInterval> | null = null;
+      let pollCount = 0;
       const clearStaleTimers = () => {
         if (staleTimer) clearTimeout(staleTimer);
         if (staleRecheckTimer) clearTimeout(staleRecheckTimer);
+        if (pollTimer) clearInterval(pollTimer);
+        document.removeEventListener('visibilitychange', onVisible);
       };
 
       const persistEvaluation = (
@@ -299,19 +303,49 @@ export default function InboundScannerPage() {
         finalizeCompleted(parsed.grade, parsed.ubci_score, parsed.defect_description, parsed.message);
       };
 
+      // 연결이 끊겼지만 원장상 작업이 살아 있는 경우의 복구 경로. 작업은 서버 큐에서
+      // 계속 진행되므로(acks_late) FAILED로 단정하면 오표기다 — 15초 간격 원장 폴링으로
+      // 전환해 최종 상태를 추적한다. 상한 40회(10분) 초과 시에만 지연 실패로 확정한다.
+      const enterPollingMode = (reason: string) => {
+        if (resolved || pollTimer) return;
+        setUploadQueue(prev => prev.map(q => q.id === job_id
+          ? { ...q, message: `${reason} — 상태 자동 추적 중...` }
+          : q));
+        pollTimer = setInterval(() => {
+          pollCount += 1;
+          if (pollCount > 40) {
+            finalizeFailed('처리 지연 — 관리자 확인이 필요합니다');
+            return;
+          }
+          checkJobStatusViaRest();
+        }, 15000);
+      };
+
+      // 화면이 꺼졌다 켜지면(모바일 절전) 즉시 원장을 재확인한다 — SSE가 죽은 채로
+      // 사용자가 돌아왔을 때 결과를 바로 복원하기 위한 경로.
+      const onVisible = () => {
+        if (document.visibilityState === 'visible' && !resolved) {
+          checkJobStatusViaRest().then(outcome => {
+            if (outcome === 'pending' && evtSource.readyState === EventSource.CLOSED) {
+              enterPollingMode('연결 복구');
+            }
+          });
+        }
+      };
+      document.addEventListener('visibilitychange', onVisible);
+
       evtSource.onerror = (err) => {
         console.error("SSE Error:", err);
         // 연결이 끊긴 즉시 원장을 확인한다. 서버는 실제로 성공했는데 연결만 끊겼을 수도
-        // 있으므로, 확인 없이 바로 FAILED로 단정하지 않는다.
+        // 있고, 아직 처리 중일 수도 있다 — 어느 쪽이든 확인 없이 FAILED로 단정하지 않는다.
         checkJobStatusViaRest().then(outcome => {
-          if (outcome === 'pending') finalizeFailed('진행 상황 수신이 끊겼습니다');
+          if (outcome === 'pending') enterPollingMode('진행 상황 수신이 끊김');
         });
       };
 
       // 연결은 살아 있는데 3분 넘게 완료 신호가 없는 경우의 안전망(SSE 자체가 조용히
       // 멎는 경우 - 예: 화면이 백그라운드로 밀려 렌더링이 정지됨). 한 번 확인해서 아직
-      // 처리 중이면 60초 뒤 한 번 더 확인하고, 그래도 안 끝나면 지연으로 확정한다
-      // (무한 폴링 금지 - 실측 파이프라인 소요는 약 40초이므로 4분이면 충분한 여유다).
+      // 처리 중이면 60초 뒤 한 번 더 확인하고, 그래도 안 끝나면 폴링 모드로 전환한다.
       staleTimer = setTimeout(() => {
         checkJobStatusViaRest().then(outcome => {
           if (outcome !== 'pending') return;
@@ -320,7 +354,7 @@ export default function InboundScannerPage() {
             : q));
           staleRecheckTimer = setTimeout(() => {
             checkJobStatusViaRest().then(outcome2 => {
-              if (outcome2 === 'pending') finalizeFailed('처리 지연 — 관리자 확인이 필요합니다');
+              if (outcome2 === 'pending') enterPollingMode('처리 지연');
             });
           }, 60000);
         });
@@ -1148,7 +1182,12 @@ export default function InboundScannerPage() {
                     }
                     setIsPrinting(true);
                     try {
-                      const result = await labelsAPI.printLpn(currentLpn);
+                      const result = await labelsAPI.printLpn(
+                        currentLpn,
+                        bookInfo?.title,
+                        isbn,
+                        user?.name ? `${user.employeeId} (${user.name})` : undefined
+                      );
                       if (result.skipped) {
                         alert("라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).");
                       } else if (!result.sent && !result.queued) {
@@ -1186,7 +1225,12 @@ export default function InboundScannerPage() {
                   }
                   setIsPrinting(true);
                   try {
-                    const result = await labelsAPI.printLpn(currentLpn);
+                    const result = await labelsAPI.printLpn(
+                      currentLpn,
+                      bookInfo?.title,
+                      isbn,
+                      user?.name ? `${user.employeeId} (${user.name})` : undefined
+                    );
                     if (result.skipped) {
                       alert("라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).");
                     } else if (!result.sent && !result.queued) {

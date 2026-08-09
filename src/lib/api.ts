@@ -156,10 +156,20 @@ interface LabelPrintResult {
 }
 
 export const labelsAPI = {
-  printLpn: async (lpn: string) => {
+  /**
+   * 선부착 LPN 라벨 인쇄 - 등급/점수는 이 시점에 아직 없으므로 싣지 않는다
+   * (배경: 33번 문서 zpl_label_service.py). 도서명/ISBN/작업자만 출력한다.
+   */
+  printLpn: async (lpn: string, bookTitle?: string, isbn?: string, workerId?: string) => {
+    // 선부착 라벨은 작업자 표기만 싣는다 - 등급 확정 주체 문자열("HITL - WM..(이름)")이
+    // 들어오면 확정 경위 접두어를 벗긴다 (그 경위는 상세 페이지/보증서가 보여줄 몫).
+    const cleanWorker = workerId?.replace(/^\s*(HITL|AI_AUTO|AI|MANUAL)\s*[-–]\s*/i, "");
     const res = await apiClient.post<LabelPrintResult>("/api/v1/labels/print", {
       lpn,
       mode: "LPN",
+      book_title: bookTitle,
+      isbn,
+      worker_id: cleanWorker,
     });
     return res.data;
   },

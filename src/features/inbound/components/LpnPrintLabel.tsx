@@ -21,7 +21,10 @@ interface LpnPrintLabelProps {
 export const LpnPrintLabel: React.FC<LpnPrintLabelProps> = ({ data }) => {
   // 선부착(Label First, Inspect Later) 규격: DB 적치 전 라벨이므로 Location(Zone)은 제외하고 LPN/ISBN/도서명/작업자 정보만 QR에 유기적 인코딩
   // Real working QR code payload for smartphone camera scanning -> opens digital certificate
-  const qrPayload = `http://localhost:3000/certificate/${data.lpn_barcode}`;
+  // [2026-08-09 수정] localhost 하드코딩이면 다른 기기(작업자 스캐너, 고객 휴대폰)에서
+  // 스캔하면 그 기기의 localhost로 열려서 항상 실패한다. window.location.origin으로 교정
+  // (InventoryDataTable/HistoryDataGrid가 이미 쓰는 패턴과 통일).
+  const qrPayload = `${typeof window !== 'undefined' ? window.location.origin : ''}/certificate/${data.lpn_barcode}`;
 
   // 50x31mm 열전사 프린터 규격 (가로형)
   const containerStyle: React.CSSProperties = {
@@ -57,34 +60,42 @@ export const LpnPrintLabel: React.FC<LpnPrintLabelProps> = ({ data }) => {
     overflow: 'hidden',
   };
 
-  const lpnTitleStyle: React.CSSProperties = {
-    fontSize: '9.5pt',
-    fontWeight: 'bold',
-    marginBottom: '1mm',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    fontFamily: 'monospace'
-  };
-
-  const bookTitleStyle: React.CSSProperties = {
-    fontSize: '7.5pt',
-    fontWeight: 'bold',
-    marginBottom: '0.5mm',
+  // 5줄(LPN·등급·도서명·ISBN·작업자)이 되든 4줄(등급 미확정)이 되든 잘려도 깨지지
+  // 않도록 전 행에 동일한 말줄임(ellipsis) 규칙을 준다 - 내용 길이가 들쭉날쭉해도
+  // 라벨 폭 안에서 항상 한 줄로 가지런히 정렬된다.
+  const rowBase: React.CSSProperties = {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   };
 
+  const lpnTitleStyle: React.CSSProperties = {
+    ...rowBase,
+    fontSize: '9.5pt',
+    fontWeight: 'bold',
+    marginBottom: '0.8mm',
+    fontFamily: 'monospace',
+  };
+
+  const bookTitleStyle: React.CSSProperties = {
+    ...rowBase,
+    fontSize: '7.5pt',
+    fontWeight: 'bold',
+    marginBottom: '0.5mm',
+  };
+
   const isbnStyle: React.CSSProperties = {
+    ...rowBase,
     fontSize: '6.5pt',
     marginBottom: '0.5mm',
-    fontFamily: 'monospace'
+    fontFamily: 'monospace',
   };
 
   const workerStyle: React.CSSProperties = {
+    ...rowBase,
     fontSize: '6pt',
     color: '#222',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
   };
 
   return (
