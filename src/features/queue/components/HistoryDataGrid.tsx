@@ -88,7 +88,7 @@ export default function HistoryDataGrid() {
   const handlePrintQRCode = async () => {
     if (!selectedBook?.lpn) return;
     try {
-      const result = await labelsAPI.printLpn(selectedBook.lpn);
+      const result = await labelsAPI.printLpn(selectedBook.lpn, selectedBook.title, selectedBook.isbn);
       if (result.skipped) {
         alert('라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).');
       } else if (!result.sent && !result.queued) {

@@ -30,7 +30,7 @@ export function LpnPrintModal({
   const handlePrint = async () => {
     setIsPrinting(true);
     try {
-      const result = await labelsAPI.printLpn(data.lpn_barcode);
+      const result = await labelsAPI.printLpn(data.lpn_barcode, data.book?.title, data.book?.isbn, data.worker_id);
       if (result.skipped) {
         alert('라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).');
       } else if (!result.sent && !result.queued) {
