@@ -1,20 +1,24 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, ChevronLeft, ChevronRight, Eye, BookOpen, AlertCircle, Bot, ScanSearch } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Eye, BookOpen, AlertCircle, Bot, ScanSearch, PenSquare, Trash2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { bboxToPercent } from "@/features/inspection/utils/inspectionImageService";
 import type { HitlTask } from "@/features/hitl/types/hitl";
+import { DEFECT_TYPE_OPTIONS } from "@/features/hitl/policy";
 
-/**
- * 검수자가 화면에서 고친 판정. 인덱스는 agent_logs의 배열 기준이며, 결재 제출 시
- * 그대로 백엔드로 넘어가 감점이 재산정된다(admin/router.py의 BBox 편집 반영 블록).
- */
 export interface EditedBbox {
   xmin: number;
   ymin: number;
   xmax: number;
   ymax: number;
+}
+
+/** 검수자가 직접 그려 넣은 신규 결함 (AI가 놓친 것을 보완). 제출 시 addedBboxes로 전송. */
+export interface AddedBbox extends EditedBbox {
+  tempId: string;
+  type: string;
+  imageIndex: number;
 }
 
 export interface BBoxEdits {
@@ -24,15 +28,18 @@ export interface BBoxEdits {
   adopted: number[];
   /** 검수자가 드래그로 직접 고친 결함 좌표 (agent_logs.defects 인덱스, 0~1000 상대좌표) */
   edited: Record<number, EditedBbox>;
+  /** 검수자가 직접 그린 신규 결함 목록 */
+  added: AddedBbox[];
 }
 
-export const EMPTY_BBOX_EDITS: BBoxEdits = { excluded: [], adopted: [], edited: {} };
+export const EMPTY_BBOX_EDITS: BBoxEdits = { excluded: [], adopted: [], edited: {}, added: [] };
 
-/** 리사이즈 핸들 4개의 위치 키. 드래그 중 어느 모서리를 끄는지 구분한다. */
 type HandleCorner = "nw" | "ne" | "sw" | "se";
+type DragTarget =
+  | { kind: "existing"; defectIndex: number }
+  | { kind: "added"; tempId: string };
 
 const clampCoord = (v: number) => Math.max(0, Math.min(1000, Math.round(v)));
-/** 드래그로 박스가 한 점으로 찌그러져 사라지는 것을 막는 최소 폭/높이 (0~1000 기준). */
 const MIN_BBOX_GAP = 10;
 
 interface HitlImageModalProps {
@@ -57,14 +64,11 @@ const AGENT_LOG_STEPS = [
 function bboxesForIndex(rawList: any[], idx: number, imageUrl: string): any[] {
   const out: any[] = [];
   rawList.forEach((item: any) => {
-    // 1) 구조화된 Per-Image 포맷: { image_index: 0, bboxes: [...] }
     if (item.image_index !== undefined && Number(item.image_index) === idx && Array.isArray(item.bboxes)) {
       out.push(...item.bboxes);
     } else if (item.image_url !== undefined && item.image_url === imageUrl && Array.isArray(item.bboxes)) {
       out.push(...item.bboxes);
-    }
-    // 2) 평탄화(Flat) BBox 포맷: { image_idx: 0, xmin: ..., ymin: ... }
-    else if (item.xmin !== undefined && item.ymin !== undefined) {
+    } else if (item.xmin !== undefined && item.ymin !== undefined) {
       if (item.image_idx !== undefined && Number(item.image_idx) === idx) {
         out.push(item);
       } else if (item.image_index !== undefined && Number(item.image_index) === idx) {
@@ -77,44 +81,44 @@ function bboxesForIndex(rawList: any[], idx: number, imageUrl: string): any[] {
   return out;
 }
 
+const defectTypeLabel = (type: string) =>
+  DEFECT_TYPE_OPTIONS.find((o) => o.value === type)?.label || type;
+
 export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImageModalProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [showOverlay, setShowOverlay] = useState(true);
-  // WBF YOLO 사전탐지 후보 레이어. Vision 확정 결함과 별도로 껐다 켠다 - 결재자가
-  // "AI가 무엇을 보고 무엇을 기각했는지"까지 대조해야 판단이 빨라지기 때문.
   const [showYolo, setShowYolo] = useState(false);
-  // [2026-08-05] 서빙 conf는 VLM 힌트용으로 의도적으로 낮다(0.12~0.25). 그 원시 후보를
-  // 전부 그리면 저신뢰 오탐이 화면을 뒤덮어 결재자의 모델 신뢰를 깎으므로, 표시 기본값은
-  // conf 0.4 이상으로 제한하고 저신뢰 대역은 별도 토글로만 연다 (데이터는 그대로 보존).
+  // 서빙 conf는 VLM 힌트용으로 의도적으로 낮다 - 저신뢰 대역은 별도 토글로만 연다.
   const [showLowConfYolo, setShowLowConfYolo] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const [isZoomed, setIsZoomed] = useState(false);
-  // Vision Agent가 "도서 미식별"로 판정한 컷은 기본으로 숨긴다 (증거 보존을 위해 토글로 열람 가능)
   const [hideInvalid, setHideInvalid] = useState(true);
+  const [sidePanel, setSidePanel] = useState<"defects" | "agent">("defects");
+  const [drawMode, setDrawMode] = useState(false);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   const editable = Boolean(edits && onEditsChange);
   const cur: BBoxEdits = edits ?? EMPTY_BBOX_EDITS;
+  // 이 값들은 아직 DB에 반영되지 않은 임시 편집분이다 - 목록 화면의 처분결정 제출이 실제 저장 시점.
+  const pendingEditCount = cur.excluded.length + cur.adopted.length + Object.keys(cur.edited).length + cur.added.length;
   const toggle = (list: number[], i: number) =>
     list.includes(i) ? list.filter((x) => x !== i) : [...list, i];
   const toggleExcluded = (i: number) =>
     onEditsChange?.({ ...cur, excluded: toggle(cur.excluded, i) });
   const toggleAdopted = (i: number) =>
     onEditsChange?.({ ...cur, adopted: toggle(cur.adopted, i) });
+  const removeAdded = (tempId: string) =>
+    onEditsChange?.({ ...cur, added: cur.added.filter((a) => a.tempId !== tempId) });
 
-  // --- BBox 좌표 드래그 편집 (2026-08-08) ---
-  // 새 라이브러리(react-konva 등) 없이 기존 % 기반 div 오버레이에 리사이즈 핸들 4개만
-  // 얹는다. 드래그 중에는 로컬 state(liveDrag)로만 미리보기하고, 마우스를 떼는 순간에만
-  // 부모(cur.edited)로 커밋한다 - 매 mousemove마다 부모 state를 갱신하면 상위 컴포넌트
-  // 전체가 리렌더되어 드래그가 버벅인다.
-  // 작은 미리보기 뷰와 2.5X 확대 라이트박스 양쪽에서 편집이 가능하므로, 드래그가
-  // 시작된 <img> 엘리먼트를 그때그때 가리키는 참조를 둔다(좌표 환산 기준이 서로 다름).
-  const smallImgRef = useRef<HTMLImageElement | null>(null);
-  const zoomedImgRef = useRef<HTMLImageElement | null>(null);
-  const activeImgElRef = useRef<HTMLImageElement | null>(null);
-  const [liveDrag, setLiveDrag] = useState<{ defectIndex: number; bbox: EditedBbox } | null>(null);
-  const dragStateRef = useRef<{ defectIndex: number; corner: HandleCorner; startBbox: EditedBbox } | null>(null);
-  // 이벤트 리스너를 마운트 시 한 번만 붙이기 위해 최신 값을 ref로 미러링한다
-  // (매 렌더마다 리스너를 떼고 다시 붙이면 드래그 중 손실이 생길 수 있다).
+  // BBox 리사이즈 드래그: 로컬 state(liveDrag)로 미리보기하다 mouseup 시점에만 부모로 커밋.
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [liveDrag, setLiveDrag] = useState<{ target: DragTarget; bbox: EditedBbox } | null>(null);
+  const dragStateRef = useRef<{
+    target: DragTarget;
+    mode: HandleCorner | "move";
+    startBbox: EditedBbox;
+    startPx: number;
+    startPy: number;
+  } | null>(null);
   const liveDragRef = useRef(liveDrag);
   liveDragRef.current = liveDrag;
   const curRef = useRef(cur);
@@ -122,48 +126,97 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
   const onEditsChangeRef = useRef(onEditsChange);
   onEditsChangeRef.current = onEditsChange;
 
+  // 새 결함 그리기: 빈 영역을 드래그하면 사각형이 자라난다.
+  const drawStateRef = useRef<{ startPx: number; startPy: number; imageIndex: number } | null>(null);
+  const [liveDrawBox, setLiveDrawBox] = useState<EditedBbox | null>(null);
+  const liveDrawBoxRef = useRef(liveDrawBox);
+  liveDrawBoxRef.current = liveDrawBox;
+  const [pendingNewBox, setPendingNewBox] = useState<{ bbox: EditedBbox; imageIndex: number } | null>(null);
+  const [pendingType, setPendingType] = useState<string>(DEFECT_TYPE_OPTIONS[0].value);
+
   const applyDrag = useCallback((clientX: number, clientY: number) => {
     const st = dragStateRef.current;
-    const imgEl = activeImgElRef.current;
+    const imgEl = imgRef.current;
     if (!st || !imgEl) return;
     const rect = imgEl.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     const px = clampCoord(((clientX - rect.left) / rect.width) * 1000);
     const py = clampCoord(((clientY - rect.top) / rect.height) * 1000);
     let { xmin, ymin, xmax, ymax } = st.startBbox;
-    if (st.corner === "nw") {
+    if (st.mode === "move") {
+      let dx = px - st.startPx;
+      let dy = py - st.startPy;
+      dx = Math.max(-xmin, Math.min(1000 - xmax, dx));
+      dy = Math.max(-ymin, Math.min(1000 - ymax, dy));
+      xmin += dx; xmax += dx; ymin += dy; ymax += dy;
+    } else if (st.mode === "nw") {
       xmin = Math.min(px, xmax - MIN_BBOX_GAP);
       ymin = Math.min(py, ymax - MIN_BBOX_GAP);
-    } else if (st.corner === "ne") {
+    } else if (st.mode === "ne") {
       xmax = Math.max(px, xmin + MIN_BBOX_GAP);
       ymin = Math.min(py, ymax - MIN_BBOX_GAP);
-    } else if (st.corner === "sw") {
+    } else if (st.mode === "sw") {
       xmin = Math.min(px, xmax - MIN_BBOX_GAP);
       ymax = Math.max(py, ymin + MIN_BBOX_GAP);
     } else {
       xmax = Math.max(px, xmin + MIN_BBOX_GAP);
       ymax = Math.max(py, ymin + MIN_BBOX_GAP);
     }
-    setLiveDrag({ defectIndex: st.defectIndex, bbox: { xmin, ymin, xmax, ymax } });
+    setLiveDrag({ target: st.target, bbox: { xmin, ymin, xmax, ymax } });
+  }, []);
+
+  const applyDraw = useCallback((clientX: number, clientY: number) => {
+    const st = drawStateRef.current;
+    const imgEl = imgRef.current;
+    if (!st || !imgEl) return;
+    const rect = imgEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const px = clampCoord(((clientX - rect.left) / rect.width) * 1000);
+    const py = clampCoord(((clientY - rect.top) / rect.height) * 1000);
+    setLiveDrawBox({
+      xmin: Math.min(st.startPx, px),
+      xmax: Math.max(st.startPx, px),
+      ymin: Math.min(st.startPy, py),
+      ymax: Math.max(st.startPy, py),
+    });
   }, []);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (!dragStateRef.current) return;
-      applyDrag(e.clientX, e.clientY);
+      if (dragStateRef.current) {
+        applyDrag(e.clientX, e.clientY);
+      } else if (drawStateRef.current) {
+        applyDraw(e.clientX, e.clientY);
+      }
     };
     const onUp = () => {
       const st = dragStateRef.current;
       const live = liveDragRef.current;
       if (st && live) {
         const c = curRef.current;
-        onEditsChangeRef.current?.({
-          ...c,
-          edited: { ...c.edited, [live.defectIndex]: live.bbox },
-        });
+        if (live.target.kind === "existing") {
+          onEditsChangeRef.current?.({
+            ...c,
+            edited: { ...c.edited, [live.target.defectIndex]: live.bbox },
+          });
+        } else {
+          const tid = live.target.tempId;
+          onEditsChangeRef.current?.({
+            ...c,
+            added: c.added.map((a) => (a.tempId === tid ? { ...a, ...live.bbox } : a)),
+          });
+        }
       }
       dragStateRef.current = null;
       setLiveDrag(null);
+
+      const dst = drawStateRef.current;
+      const box = liveDrawBoxRef.current;
+      if (dst && box && box.xmax - box.xmin >= MIN_BBOX_GAP && box.ymax - box.ymin >= MIN_BBOX_GAP) {
+        setPendingNewBox({ bbox: box, imageIndex: dst.imageIndex });
+      }
+      drawStateRef.current = null;
+      setLiveDrawBox(null);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -171,36 +224,50 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [applyDrag]);
+  }, [applyDrag, applyDraw]);
 
-  const startDrag = (
-    di: number,
-    corner: HandleCorner,
-    original: EditedBbox,
-    imgElRef: React.RefObject<HTMLImageElement | null>
-  ) => (e: React.MouseEvent) => {
+  const startDrag = (target: DragTarget, corner: HandleCorner, original: EditedBbox) => (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    activeImgElRef.current = imgElRef.current;
-    const start = cur.edited[di] ?? original;
-    dragStateRef.current = { defectIndex: di, corner, startBbox: start };
-    setLiveDrag({ defectIndex: di, bbox: start });
+    const start =
+      target.kind === "existing"
+        ? cur.edited[target.defectIndex] ?? original
+        : cur.added.find((a) => a.tempId === target.tempId) ?? original;
+    const imgEl = imgRef.current;
+    const rect = imgEl?.getBoundingClientRect();
+    const startPx = rect && rect.width > 0 ? clampCoord(((e.clientX - rect.left) / rect.width) * 1000) : 0;
+    const startPy = rect && rect.height > 0 ? clampCoord(((e.clientY - rect.top) / rect.height) * 1000) : 0;
+    dragStateRef.current = { target, mode: corner, startBbox: start, startPx, startPy };
+    setLiveDrag({ target, bbox: start });
   };
 
-  /** 편집(드래그 중 미리보기 또는 커밋된 edited)이 있으면 그 좌표로, 없으면 원본 그대로. */
-  const effectiveBbox = (di: number | undefined, original: EditedBbox): EditedBbox => {
-    if (typeof di !== "number") return original;
-    if (liveDrag && liveDrag.defectIndex === di) return liveDrag.bbox;
-    return cur.edited[di] ?? original;
+  /** BBox 본체를 눌러 통째로 이동시키는 드래그 (리사이즈와 동일한 커밋 경로를 공유). */
+  const startMove = (target: DragTarget, original: EditedBbox) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const imgEl = imgRef.current;
+    const rect = imgEl?.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+    const start =
+      target.kind === "existing"
+        ? cur.edited[target.defectIndex] ?? original
+        : cur.added.find((a) => a.tempId === target.tempId) ?? original;
+    const startPx = clampCoord(((e.clientX - rect.left) / rect.width) * 1000);
+    const startPy = clampCoord(((e.clientY - rect.top) / rect.height) * 1000);
+    dragStateRef.current = { target, mode: "move", startBbox: start, startPx, startPy };
+    setLiveDrag({ target, bbox: start });
+  };
+
+  const effectiveBboxFor = (target: DragTarget | null, original: EditedBbox): EditedBbox => {
+    if (!target) return original;
+    if (liveDrag && dragTargetEquals(liveDrag.target, target)) return liveDrag.bbox;
+    if (target.kind === "existing") return cur.edited[target.defectIndex] ?? original;
+    return original;
   };
 
   if (!task) return null;
 
   const images = task.image_urls && task.image_urls.length > 0 ? task.image_urls : [];
-  // defect_coordinates에는 오탐 표식이 없다. 같은 결함의 판정 메타(evidence_suspect,
-  // conf_copied_from_candidate)는 defects 쪽에 있으므로 좌표로 맞춰 합쳐 준다.
-  // 이 표식이 없으면 **증거 대조가 반려한 건도 확정 결함과 똑같이** 빨간 실선으로 보여,
-  // 결재자가 이미 기각된 판독을 근거로 결재하게 된다.
   const defectsMeta: any[] = Array.isArray(task.agent_logs?.defects) ? task.agent_logs.defects : [];
   const metaIndexFor = (b: any) =>
     defectsMeta.findIndex(
@@ -211,23 +278,24 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
         Number(d.bbox.xmax) === Number(b.xmax) &&
         Number(d.bbox.ymax) === Number(b.ymax)
     );
-  const rawList: any[] = (task.agent_logs?.defect_coordinates || []).map((b: any) => {
-    const mi = metaIndexFor(b);
-    const m = mi >= 0 ? defectsMeta[mi] : null;
-    return m
-      ? {
-          ...b,
-          defectIndex: mi,
-          evidence_suspect: m.evidence_suspect,
-          conf_copied_from_candidate: m.conf_copied_from_candidate,
-        }
-      : b;
+  // defect_coordinates는 이미지별 그룹({image_index, bboxes:[...]})이라, 그룹이 아니라
+  // 그 안의 개별 bboxes[]에 defectIndex를 매칭해야 한다.
+  const rawList: any[] = (task.agent_logs?.defect_coordinates || []).map((group: any) => {
+    if (!group || !Array.isArray(group.bboxes)) return group;
+    return {
+      ...group,
+      bboxes: group.bboxes.map((b: any) => {
+        const mi = metaIndexFor(b);
+        const m = mi >= 0 ? defectsMeta[mi] : null;
+        return m
+          ? { ...b, defectIndex: mi, evidence_suspect: m.evidence_suspect, conf_copied_from_candidate: m.conf_copied_from_candidate }
+          : b;
+      }),
+    };
   });
   const logs: Record<string, any> = task.agent_logs || {};
   const agentEntries = AGENT_LOG_STEPS.filter((s) => typeof logs[s.key] === "string" && logs[s.key].trim().length > 0);
 
-  // [2026-08-04 조장 승인 확장] Vision Agent(GPT-4o) 산출 invalid_image_indexes —
-  // 도서가 식별되지 않는 촬영 컷(얼굴만 찍힘, 빈 배경 등)의 자동 필터링 근거
   const invalidSet = new Set<number>(
     (Array.isArray(logs.invalid_image_indexes) ? logs.invalid_image_indexes : [])
       .map(Number)
@@ -235,14 +303,13 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
   );
   const allIdx = images.map((_, i) => i);
   const filteredIdx = hideInvalid ? allIdx.filter((i) => !invalidSet.has(i)) : allIdx;
-  // 전 컷이 미식별이면 숨길 수 없으므로 전체를 보여준다
   const shownIdx = filteredIdx.length > 0 ? filteredIdx : allIdx;
   const effIdx = shownIdx.includes(currentIdx) ? currentIdx : (shownIdx[0] ?? 0);
   const currentImageUrl = images[effIdx] || "";
   const currentBBoxes = bboxesForIndex(rawList, effIdx, currentImageUrl);
   const navPos = shownIdx.indexOf(effIdx);
+  const currentAdded = cur.added.filter((a) => a.imageIndex === effIdx);
 
-  // WBF 3-YOLO 앙상블 사전탐지 후보 (Vision이 채택하지 않은 것도 포함)
   const YOLO_DISPLAY_CONF = 0.4;
   const yoloCandidates: any[] = Array.isArray(logs.yolo_candidates) ? logs.yolo_candidates : [];
   const allYoloBoxes = yoloCandidates
@@ -263,657 +330,626 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
   const lowConfCount = allYoloBoxes.filter((b) => b.isLowConf).length;
   const currentYoloBoxes = showLowConfYolo ? allYoloBoxes : allYoloBoxes.filter((b) => !b.isLowConf);
 
+  const onImageMouseDown = (e: React.MouseEvent) => {
+    if (!drawMode || !editable) return;
+    e.preventDefault();
+    const imgEl = imgRef.current;
+    if (!imgEl) return;
+    const rect = imgEl.getBoundingClientRect();
+    const px = clampCoord(((e.clientX - rect.left) / rect.width) * 1000);
+    const py = clampCoord(((e.clientY - rect.top) / rect.height) * 1000);
+    drawStateRef.current = { startPx: px, startPy: py, imageIndex: effIdx };
+    setLiveDrawBox({ xmin: px, ymin: py, xmax: px, ymax: py });
+  };
+
+  const confirmNewBox = () => {
+    if (!pendingNewBox) return;
+    const added: AddedBbox = {
+      tempId: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      type: pendingType,
+      imageIndex: pendingNewBox.imageIndex,
+      ...pendingNewBox.bbox,
+    };
+    onEditsChange?.({ ...cur, added: [...cur.added, added] });
+    setPendingNewBox(null);
+    setDrawMode(false);
+  };
+
   return (
-    <>
-      <div
-        className="fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 transition-all"
-        onClick={onClose}
-      >
-        <div
-          className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden text-gray-900 dark:text-gray-100"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-100 dark:border-blue-900">
-                <BookOpen className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-gray-900 dark:text-white line-clamp-1">
-                  결함 원본 이미지 검수 — {task.book_title || "도서"}
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-mono">
-                  ISBN: {task.isbn || "-"} | Task ID: {task.id.slice(0, 8)}...
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs font-semibold bg-gray-50 hover:bg-gray-100"
-                onClick={() => setIsZoomed(true)}
-              >
-                <Eye className="w-3.5 h-3.5 mr-1.5 text-purple-600" />
-                🔍 고화질 확대 검수
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs font-semibold"
-                onClick={() => setShowOverlay(!showOverlay)}
-              >
-                <Eye className="w-3.5 h-3.5 mr-1.5 text-blue-600" />
-                {showOverlay ? "AI 결함 영역 숨기기" : "AI 결함 영역 표시"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={yoloCandidates.length === 0}
-                className="text-xs font-semibold"
-                onClick={() => setShowYolo(!showYolo)}
-                title="WBF 3-YOLO 앙상블 사전탐지 후보 (Vision이 채택하지 않은 것 포함)"
-              >
-                <ScanSearch className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
-                YOLO 후보 {yoloCandidates.length}건 {showYolo ? "숨기기" : "보기"}
-              </Button>
-              {showYolo && lowConfCount > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs font-semibold text-gray-500"
-                  onClick={() => setShowLowConfYolo(!showLowConfYolo)}
-                  title={`신뢰도 ${Math.round(YOLO_DISPLAY_CONF * 100)}% 미만의 고재현율(High-Recall) 원시 후보 - VLM 힌트용이라 오탐이 많음`}
-                >
-                  저신뢰 {lowConfCount}건 {showLowConfYolo ? "숨기기" : "표시"}
-                </Button>
-              )}
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+    <div className="fixed inset-0 z-50 bg-white dark:bg-gray-950 flex flex-col text-gray-900 dark:text-gray-100">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-900 shrink-0">
+            <BookOpen className="w-5 h-5" />
           </div>
-
-          {/* Main Content: 이미지 뷰어 + Agent 판정 로그 사이드 패널 */}
-          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-          {/* Main Image View Area */}
-          <div className="flex-1 overflow-hidden relative bg-gray-950 flex items-center justify-center min-h-[420px] p-4">
-            {!imgError && currentImageUrl ? (
-              <div
-                className="relative max-w-full max-h-[65vh] inline-block cursor-zoom-in group"
-                onClick={() => setIsZoomed(true)}
-                title="클릭하여 고화질 2.5X 정밀 확대보기"
-              >
-                <img
-                  ref={smallImgRef}
-                  src={currentImageUrl}
-                  alt={`defect-${effIdx}`}
-                  onError={() => setImgError(true)}
-                  className="max-w-full max-h-[65vh] w-auto h-auto object-contain rounded shadow-lg group-hover:opacity-95 transition-opacity block"
-                />
-                <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity font-extrabold flex items-center gap-1.5 shadow-xl pointer-events-none">
-                  <span>🔍 클릭하여 확대검수</span>
-                </div>
-                {/* YOLO 사전탐지 후보 - 주황 점선. Vision이 기각한 것도 포함되어 있어
-                    결재자가 "AI가 무엇을 보고 무엇을 걸렀는지"를 대조할 수 있다. */}
-                {showYolo &&
-                  currentYoloBoxes.map((box: any, idx: number) => {
-                    const { left, top, width, height } = bboxToPercent(box);
-                    // [수정 이력 2026-08-06] 이미지 가장자리 박스의 라벨이 프레임 밖으로 나가
-                    // 잘리던 문제 - 가장자리 근처면 박스 안쪽/반대 앵커로 뒤집는다
-                    // (admin/inventory/[id] 상세 페이지 오버레이와 동일 규칙).
-                    const yoloLabelPos = top + height > 92 ? "bottom-1" : "-bottom-6";
-                    const yoloLabelAnchor = left > 50 ? "right-0" : "left-0";
-                    // AI가 채택하지 않은 후보를 검수자가 실제 결함으로 승격시킬 수 있다.
-                    // (AI 미탐을 사람이 메우는 경로 - 제외의 반대 방향)
-                    const adopted = cur.adopted.includes(box.candIndex);
-                    return (
-                      <div
-                        key={`y-${idx}`}
-                        onClick={editable ? () => toggleAdopted(box.candIndex) : undefined}
-                        title={editable ? (adopted ? "클릭하면 채택 취소" : "클릭하면 결함으로 채택") : undefined}
-                        className={[
-                          "absolute border-2 rounded z-10",
-                          editable ? "cursor-pointer" : "pointer-events-none",
-                          adopted
-                            ? "border-solid border-red-500 bg-red-500/25 shadow-lg"
-                            : box.isLowConf
-                              ? "border-dashed border-gray-400/70 bg-gray-400/5"
-                              : "border-dashed border-amber-400 bg-amber-400/10",
-                        ].join(" ")}
-                        style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
-                      >
-                        <span
-                          className={`absolute ${yoloLabelPos} ${yoloLabelAnchor} text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap ${
-                            adopted ? "bg-red-600" : box.isLowConf ? "bg-gray-500/90" : "bg-amber-500"
-                          }`}
-                        >
-                          {adopted ? "검수자 채택" : box.isLowConf ? "저신뢰 후보" : "YOLO 후보"}: {box.type}
-                          {box.confidence ? ` (${Math.round(box.confidence * 100)}%)` : ""}
-                        </span>
-                      </div>
-                    );
-                  })}
-
-                {showOverlay &&
-                  currentBBoxes.map((box: any, idx: number) => {
-                    // [수정 이력] 좌표계를 값 크기로 추측(xmin>1이면 1000, ...)하던 로직을 제거했다.
-                    // xmin이 0인 결함은 스케일이 100으로 잘못 잡히는 등 좌표가 어긋났다.
-                    // 백엔드가 coord_space를 명시해 내려주므로 공용 유틸이 그대로 환산한다.
-                    // 검수자가 직접 제외한 결함. AI 판정(suspect)과 구분해서 보여야
-                    // "누가 뺐는지"가 화면에서 드러난다.
-                    const di = box.defectIndex;
-                    // 드래그로 고친 좌표(또는 드래그 중 미리보기)가 있으면 그걸로 그린다 -
-                    // 원본 AI 좌표가 아니라 "지금 확정된" 위치를 화면과 제출값이 항상 같이 본다.
-                    const effBox = effectiveBbox(di, {
-                      xmin: Number(box.xmin),
-                      ymin: Number(box.ymin),
-                      xmax: Number(box.xmax),
-                      ymax: Number(box.ymax),
-                    });
-                    const { left, top, width, height } = bboxToPercent({ ...box, ...effBox });
-                    const label = box.label || box.type || `결함 #${idx + 1}`;
-                    // 상단 8% 이내 박스는 라벨을 박스 안쪽으로 내려 잘림 방지
-                    const visionLabelPos = top < 8 ? "top-1" : "-top-6";
-                    const visionLabelAnchor = left > 50 ? "right-0" : "left-0";
-
-                    // 증거 대조가 반려했거나 확신도를 제보에서 베낀 판독은 '확정'이 아니다.
-                    // 회색 점선으로 낮춰 그려 확정 결함(빨강 실선)과 한눈에 구분되게 한다.
-                    const suspect = Boolean(box.evidence_suspect || box.conf_copied_from_candidate);
-                    const excluded = typeof di === "number" && cur.excluded.includes(di);
-                    const clickable = editable && typeof di === "number";
-                    const wasEdited = typeof di === "number" && Boolean(cur.edited[di]);
-                    // [2026-08-09] 리사이즈 핸들은 이 작은 뷰에서 뺐다 - 이미지가 작아
-                    // 드래그로 정밀 조정이 사실상 불가능했다(실사용 피드백). 좌표 편집은
-                    // 2.5X 확대 라이트박스(아래 isZoomed 블록)에서만 하고, 여기서는
-                    // 제외/채택 클릭만 남긴다. "🔍 클릭하여 확대검수"가 그 진입점이다.
-                    return (
-                      <div
-                        key={idx}
-                        onClick={clickable ? () => toggleExcluded(di) : undefined}
-                        title={
-                          [
-                            // Policy가 이 감점을 어떻게 산정했는지(부위 합산 / 면적 구간 /
-                            // 가중치)를 그대로 보여준다. 숫자만 보여주면 결재자가 왜 그
-                            // 점수인지 확인할 방법이 없다.
-                            box.deduction_note,
-                            clickable
-                              ? excluded
-                                ? "클릭하면 감점에 다시 포함"
-                                : "클릭하면 감점에서 제외 · 영역 좌표 수정은 확대검수에서"
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join("\n") || undefined
-                        }
-                        className={[
-                          "absolute rounded",
-                          clickable ? "cursor-pointer" : "pointer-events-none",
-                          excluded
-                            ? "border-2 border-dashed border-slate-500 bg-slate-500/10 opacity-60"
-                            : suspect
-                              ? "border-2 border-dashed border-gray-400 bg-gray-400/15"
-                              : wasEdited
-                                ? "border-2 border-solid border-sky-500 bg-sky-500/25 shadow-lg"
-                                : "border-2 border-red-500 bg-red-500/30 shadow-lg animate-pulse",
-                        ].join(" ")}
-                        style={{
-                          left: `${left}%`,
-                          top: `${top}%`,
-                          width: `${width}%`,
-                          height: `${height}%`,
-                        }}
-                      >
-                        {/* 신뢰도를 함께 노출한다. 검수자가 "이 판독을 믿을지"를 판단하는
-                            1차 근거인데 종전에는 라벨만 보여, 낮은 신뢰도의 오탐과 확실한
-                            결함이 화면에서 구분되지 않았다(YOLO 후보 오버레이에는 이미 있었다). */}
-                        <span
-                          className={`absolute ${visionLabelPos} ${visionLabelAnchor} ${
-                            suspect ? "bg-gray-500" : wasEdited ? "bg-sky-600" : "bg-red-600"
-                          } text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap z-10`}
-                        >
-                          {label}
-                          {/* 감점은 유형에 따라 건당이 아니라 부위 묶음으로 산정된다
-                              (모서리 마모: 부위 N곳 합산 / 수험서 낙서: -15점 Cap).
-                              종전에는 그룹 감점을 상자마다 그대로 찍어, 마모 5건에
-                              "-5점"이 5번 떠 총 -25점처럼 읽혔다(실제 감점 -7점). */}
-                          {typeof box.deduction === "number"
-                            ? box.deduction_scope === "group"
-                              ? ` 묶음 -${box.deduction}점`
-                              : box.deduction_scope === "excluded"
-                                ? " 감점 제외"
-                                : ` -${box.deduction}점`
-                            : ""}
-                          {typeof box.confidence === "number"
-                            ? ` (${Math.round(box.confidence * 100)}%${
-                                box.conf_source === "vlm" ? " 추정" : ""
-                              })`
-                            : ""}
-                          {box.evidence_suspect ? " · 오탐 의심(감점 제외)" : ""}
-                          {box.conf_flat_selfreported
-                            ? " · 확신도 미산출"
-                            : box.conf_copied_from_candidate
-                              ? " · 판독 미검증"
-                              : ""}
-                          {excluded ? " · 검수자 제외" : ""}
-                          {wasEdited ? " · 검수자 영역 수정" : ""}
-                        </span>
-                      </div>
-                    );
-                  })}
-              </div>
-            ) : (
-              /* Fallback Graphic when external image fails or is missing */
-              <div className="relative w-72 h-96 bg-gray-900 border-2 border-dashed border-gray-700 rounded-xl flex flex-col items-center justify-center p-6 text-center shadow-inner">
-                <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mb-4">
-                  <AlertCircle className="w-8 h-8 text-red-400" />
-                </div>
-                <h4 className="text-sm font-bold text-gray-200">{task.book_title || "검수 이미지"}</h4>
-                <p className="text-xs text-gray-400 mt-1 font-mono">ISBN: {task.isbn || "-"}</p>
-                <p className="text-[11px] text-amber-400 mt-3 bg-amber-950/60 px-3 py-1 rounded border border-amber-800/40">
-                  AI 비전 탐지 샘플 이미지 모드
-                </p>
-
-                {/* Virtual Defect Overlay on Fallback Canvas */}
-                {showOverlay &&
-                  currentBBoxes.map((box: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="absolute border-2 border-red-500 bg-red-500/30 rounded animate-pulse"
-                      style={{
-                        left: `${box.xmin || 20}%`,
-                        top: `${box.ymin || 20}%`,
-                        width: `${(box.xmax || 50) - (box.xmin || 20)}%`,
-                        height: `${(box.ymax || 50) - (box.ymin || 20)}%`,
-                      }}
-                    >
-                      <span className="absolute -top-5 left-0 bg-red-600 text-white text-[10px] px-1.5 py-0.5 font-bold rounded shadow-sm">
-                        {box.label || `결함 #${idx + 1}`}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            )}
-
-            {/* Navigation Controls — 숨김 처리된 미식별 컷은 순회에서 제외 */}
-            {shownIdx.length > 1 && (
-              <>
-                <button
-                  onClick={() => {
-                    setImgError(false);
-                    setCurrentIdx(shownIdx[(navPos - 1 + shownIdx.length) % shownIdx.length]);
-                  }}
-                  className="absolute left-4 p-2.5 rounded-full bg-white/80 text-gray-800 hover:bg-white transition-all shadow-md"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => {
-                    setImgError(false);
-                    setCurrentIdx(shownIdx[(navPos + 1) % shownIdx.length]);
-                  }}
-                  className="absolute right-4 p-2.5 rounded-full bg-white/80 text-gray-800 hover:bg-white transition-all shadow-md"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </>
-            )}
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white line-clamp-1">
+              결함 검수 — {task.book_title || "도서"}
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-mono">
+              ISBN: {task.isbn || "-"} | Task ID: {task.id.slice(0, 8)}...
+            </p>
           </div>
-
-          {/*
-            Agent 판정 로그 사이드 패널 — 관리자가 이미지와 AI 판정 근거를 한 화면에서
-            대조하며 결재할 수 있게 한다 (하단 실시간 로그 패널과 달리 이 건의 DB 기록 기반).
-          */}
-          <aside className="w-full lg:w-96 shrink-0 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-900 p-4 overflow-y-auto max-h-56 lg:max-h-none space-y-3">
-            <h4 className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wide flex items-center gap-1.5">
-              <Bot className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-              Multi-Agent 판정 근거 (DB 기록)
-            </h4>
-
-            {/* 현재 이미지 결함 요약 */}
-            <div
-              className={`p-2.5 rounded-lg border text-[11px] font-bold ${
-                invalidSet.has(effIdx)
-                  ? "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800"
-                  : currentBBoxes.length > 0
-                  ? "bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800"
-                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
-              }`}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {editable && (
+            <Button
+              variant={drawMode ? "default" : "outline"}
+              size="sm"
+              className="text-xs font-semibold"
+              onClick={() => setDrawMode((v) => !v)}
             >
-              현재 이미지 #{effIdx + 1}: {invalidSet.has(effIdx)
-                ? "👤 도서 미식별 컷 (Vision Agent 판정 — 결함 판정 제외 대상)"
-                : currentBBoxes.length > 0
-                ? `결함 BBox ${currentBBoxes.length}건 검출`
-                : "AI 결함 미검출"}
-            </div>
-
-            {agentEntries.length === 0 ? (
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
-                이 건에는 저장된 Agent 판정 서술이 없습니다. 목록의 <strong>[AI 재검수]</strong>를
-                실행하면 각 Agent의 판정 근거가 DB에 기록되어 여기에 표시됩니다.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {agentEntries.map((s) => (
-                  <div key={s.key} className="p-2.5 bg-white dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <p className="text-[11px] font-black text-purple-700 dark:text-purple-400 mb-1">
-                      {s.icon} {s.label}
-                    </p>
-                    <p className="text-[11px] text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                      {logs[s.key]}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {typeof logs.retry_count === "number" && logs.retry_count > 0 && (
-              <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300">
-                ⟳ 파이프라인 재검수 {logs.retry_count}회 수행됨
-              </p>
-            )}
-          </aside>
-          </div>
-
-          {/* Footer & Notes Section */}
-          <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-3">
-            {/* AI Special Notes Badge */}
-            {task.special_notes && (
-              <div className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-900 dark:text-amber-200">
-                <span className="font-bold bg-amber-200/80 dark:bg-amber-900 px-2 py-0.5 rounded text-[11px] text-amber-950 dark:text-amber-200">
-                  AI 시각 특이사항 (special_notes)
-                </span>
-                <span className="line-clamp-1">{task.special_notes}</span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 overflow-x-auto py-1">
-                {shownIdx.map((idx) => {
-                  const url = images[idx];
-                  // 썸네일마다 결함 건수를 표기해, 결함 없는 촬영 컷을 열어보지 않고 건너뛸 수 있게 한다.
-                  const cnt = bboxesForIndex(rawList, idx, url).length;
-                  const isInvalid = invalidSet.has(idx);
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        setImgError(false);
-                        setCurrentIdx(idx);
-                      }}
-                      title={isInvalid ? "도서 미식별 컷 (Vision Agent 판정)" : cnt > 0 ? `결함 ${cnt}건 검출` : "AI 결함 미검출"}
-                      className={`relative w-12 h-16 rounded overflow-hidden border-2 transition-all bg-gray-200 dark:bg-gray-800 shrink-0 ${
-                        effIdx === idx ? "border-blue-600 ring-2 ring-blue-100 dark:ring-blue-900 scale-105" : "border-gray-200 dark:border-gray-700 opacity-60 hover:opacity-100"
-                      }`}
-                    >
-                      <img
-                        src={url}
-                        alt={`thumb-${idx}`}
-                        className={`w-full h-full object-cover ${isInvalid ? "grayscale opacity-50" : ""}`}
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = "none";
-                        }}
-                      />
-                      {cnt > 0 && (
-                        <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-0.5 bg-red-600 text-white text-[9px] font-black rounded-full flex items-center justify-center shadow z-10">
-                          {cnt}
-                        </span>
-                      )}
-                      {isInvalid && (
-                        <span className="absolute bottom-0 inset-x-0 bg-amber-500/95 text-white text-[8px] font-black text-center py-0.5 z-10">
-                          미식별
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-
-                {/* 도서 미식별 컷 자동 필터 토글 (Vision Agent invalid_image_indexes 기반) */}
-                {invalidSet.size > 0 && (
-                  <button
-                    onClick={() => setHideInvalid(!hideInvalid)}
-                    className="shrink-0 px-2.5 py-1.5 rounded-lg border border-dashed border-amber-400 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 text-[10px] font-black hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors"
-                    title="Vision Agent가 도서를 식별하지 못한 컷 (얼굴/빈 배경 등)"
-                  >
-                    {hideInvalid ? `👤 미식별 ${invalidSet.size}컷 숨김 · 보기` : `👤 미식별 ${invalidSet.size}컷 표시 중 · 숨기기`}
-                  </button>
-                )}
-              </div>
-
-              <div className="text-right text-xs text-gray-500 dark:text-gray-400">
-                <div className="flex items-center justify-end gap-2">
-                  {task.inspection_type && (
-                    <span className={`px-2 py-0.5 text-[11px] font-bold rounded ${
-                      task.inspection_type === "BUYBACK" ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" : "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-                    }`}>
-                      {task.inspection_type === "BUYBACK" ? "중고 바이백 정산" : "고객 반품 환불"}
-                    </span>
-                  )}
-                  <span>이미지 <strong className="text-gray-900 dark:text-white">{shownIdx.length > 0 ? navPos + 1 : 0}</strong> / {shownIdx.length}{invalidSet.size > 0 && hideInvalid ? ` (미식별 ${invalidSet.size}컷 제외)` : ""}</span>
-                </div>
-                {/* 증거 대조가 판독을 전건 기각하면 감점이 0이 되어 산식상 100점이 나오지만,
-                    그것은 "무결점"이 아니라 "판정 못 함"이다. 점수를 그대로 띄우면 5곳이
-                    검출된 책이 화면에서 만점으로 보인다(실측: LPN-260806-A001). */}
-                {logs.score_unverified ? (
-                  <div className="mt-1 text-amber-600 dark:text-amber-400 font-bold">
-                    UBCI 점수: <span className="text-sm">판정 보류</span>
-                    <span className="ml-1 font-normal text-[11px]">
-                      (증거 대조 전건 반려 — 관리자 확인 필요)
-                    </span>
-                  </div>
-                ) : (
-                  task.ubci_score !== undefined && (
-                    <div className="mt-1 text-blue-600 dark:text-blue-400 font-bold">
-                      UBCI 점수: <span className="text-sm">{task.ubci_score}</span>점
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-          </div>
+              <PenSquare className="w-3.5 h-3.5 mr-1.5" />
+              {drawMode ? "그리기 모드 끄기" : "+ 새 결함 영역 추가"}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="text-xs font-semibold" onClick={() => setShowOverlay(!showOverlay)}>
+            <Eye className="w-3.5 h-3.5 mr-1.5 text-blue-400" />
+            {showOverlay ? "AI 결함 영역 숨기기" : "AI 결함 영역 표시"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={yoloCandidates.length === 0}
+            className="text-xs font-semibold"
+            onClick={() => setShowYolo(!showYolo)}
+            title="WBF 3-YOLO 앙상블 사전탐지 후보 (Vision이 채택하지 않은 것 포함)"
+          >
+            <ScanSearch className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
+            YOLO 후보 {yoloCandidates.length}건 {showYolo ? "숨기기" : "보기"}
+          </Button>
+          {showYolo && lowConfCount > 0 && (
+            <Button variant="outline" size="sm" className="text-xs font-semibold text-gray-500 dark:text-gray-400" onClick={() => setShowLowConfYolo(!showLowConfYolo)}>
+              저신뢰 {lowConfCount}건 {showLowConfYolo ? "숨기기" : "표시"}
+            </Button>
+          )}
+          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors ml-1">
+            <X className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
-      {/* High-Resolution Full-Screen Image Lightbox Modal — BBox 편집의 실제 작업 화면.
-          [2026-08-09] 작은 미리보기에서는 이미지가 작아 모서리 드래그가 실사용 불가능했다
-          (조장 피드백). 좌표 편집·제외/채택 클릭 전부 여기로 옮기고, 안내 툴바를 새로 얹었다. */}
-      {isZoomed && currentImageUrl && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 transition-all"
-          onClick={() => setIsZoomed(false)}
-        >
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 max-w-[92vw]">
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-300 font-mono bg-gray-800/80 px-3 py-1.5 rounded-full border border-gray-700">
-                🔍 2.5X 초고화질 정밀 검수 모드 (ESC 또는 배경 클릭하여 닫기)
-              </span>
-              <button
-                onClick={() => setIsZoomed(false)}
-                className="p-2 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors shadow-2xl"
-              >
-                <X className="w-6 h-6" />
-              </button>
+      {/* 저장 시점 안내 - 이 화면의 편집은 로컬 임시 상태다. 실제 DB 반영은 목록 화면의 처분결정 제출 시점. */}
+      {editable && (
+        <div className="px-6 py-2 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 text-[12px] text-amber-800 dark:text-amber-200 flex items-center gap-2 shrink-0">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            여기서 수정한 내용은 이 창을 닫아도 임시 저장 상태입니다. <strong>목록 화면에서 처분결정을 확정·제출해야 DB에 최종 반영</strong>됩니다.
+            {pendingEditCount > 0 && <span className="ml-1 font-bold">(현재 미저장 변경 {pendingEditCount}건)</span>}
+          </span>
+        </div>
+      )}
+
+      {/* Main: 이미지 + 우측 패널 */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Image area */}
+        <div className="flex-1 relative bg-gray-100 dark:bg-black flex items-center justify-center p-4 min-w-0">
+          {drawMode && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-xl">
+              그리기 모드 — 빈 영역을 드래그해 새 결함 영역을 그리세요
             </div>
-            {editable && (
-              <div
-                className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-gray-300 bg-gray-800/80 px-3 py-1.5 rounded-full border border-gray-700"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-sm border-2 border-red-500 bg-red-500/30 inline-block" />
-                  확정 결함 (클릭: 제외)
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-sm border-2 border-dashed border-slate-500 bg-slate-500/10 inline-block" />
-                  제외됨 (클릭: 포함)
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-sm border-2 border-sky-500 bg-sky-500/25 inline-block" />
-                  좌표 수정됨
-                </span>
-                {showYolo && (
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-sm border-2 border-dashed border-amber-400 bg-amber-400/10 inline-block" />
-                    YOLO 후보 (클릭: 채택)
-                  </span>
-                )}
-                <span className="text-gray-500">·</span>
-                <span>흰 원(●) 드래그로 영역 크기/위치 수정</span>
-              </div>
-            )}
-          </div>
+          )}
+          {!imgError && currentImageUrl ? (
+            <div
+              className={`relative max-w-full max-h-full inline-block ${drawMode ? "cursor-crosshair" : ""}`}
+              onMouseDown={onImageMouseDown}
+            >
+              <img
+                ref={imgRef}
+                src={currentImageUrl}
+                alt={`defect-${effIdx}`}
+                onError={() => setImgError(true)}
+                className="max-w-full max-h-[80vh] w-auto h-auto object-contain rounded shadow-lg block select-none"
+                draggable={false}
+              />
 
-          <div
-            className="relative inline-block max-w-[92vw] max-h-[85vh] overflow-auto rounded-xl shadow-2xl border-2 border-gray-700 bg-gray-900"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              ref={zoomedImgRef}
-              src={currentImageUrl}
-              alt="enlarged-defect"
-              className="h-[82vh] w-auto max-w-[90vw] object-contain rounded-lg block mx-auto"
-            />
-
-            {showYolo &&
-              currentYoloBoxes.map((box: any, idx: number) => {
-                const { left, top, width, height } = bboxToPercent(box);
-                const yoloLabelPos = top + height > 92 ? "bottom-1" : "-bottom-7";
-                const yoloLabelAnchor = left > 50 ? "right-0" : "left-0";
-                const adopted = cur.adopted.includes(box.candIndex);
+              {/* 그리는 중인 임시 사각형 */}
+              {liveDrawBox && (() => {
+                const { left, top, width, height } = bboxToPercent({ ...liveDrawBox, coord_space: 1000 } as any);
                 return (
                   <div
-                    key={`zy-${idx}`}
-                    onClick={editable ? () => toggleAdopted(box.candIndex) : undefined}
-                    title={editable ? (adopted ? "클릭하면 채택 취소" : "클릭하면 결함으로 채택") : undefined}
-                    className={[
-                      "absolute border-2 rounded",
-                      editable ? "cursor-pointer" : "pointer-events-none",
-                      adopted
-                        ? "border-solid border-red-500 bg-red-500/25 shadow-lg"
-                        : box.isLowConf
-                          ? "border-dashed border-gray-400/70 bg-gray-400/5"
-                          : "border-dashed border-amber-400 bg-amber-400/10",
-                    ].join(" ")}
+                    className="absolute border-2 border-dashed border-blue-400 bg-blue-400/20 pointer-events-none"
                     style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
-                  >
-                    <span
-                      className={`absolute ${yoloLabelPos} ${yoloLabelAnchor} text-white text-[11px] px-2 py-0.5 font-bold rounded whitespace-nowrap ${
-                        adopted ? "bg-red-600" : box.isLowConf ? "bg-gray-500/90" : "bg-amber-500"
-                      }`}
-                    >
-                      {adopted ? "검수자 채택" : box.isLowConf ? "저신뢰 후보" : "YOLO 후보"}: {box.type}
-                      {box.confidence ? ` (${Math.round(box.confidence * 100)}%)` : ""}
-                    </span>
-                  </div>
+                  />
                 );
-              })}
+              })()}
 
-            {showOverlay &&
-              currentBBoxes.map((box: any, idx: number) => {
-                const di = box.defectIndex;
-                const effBox = effectiveBbox(di, {
-                  xmin: Number(box.xmin),
-                  ymin: Number(box.ymin),
-                  xmax: Number(box.xmax),
-                  ymax: Number(box.ymax),
-                });
-                const { left, top, width, height } = bboxToPercent({ ...box, ...effBox });
-                const label = box.label || box.type || `결함 #${idx + 1}`;
-                const zoomLabelPos = top < 8 ? "top-1" : "-top-7";
-                const zoomLabelAnchor = left > 50 ? "right-0" : "left-0";
-                const suspect = Boolean(box.evidence_suspect || box.conf_copied_from_candidate);
-                const excluded = typeof di === "number" && cur.excluded.includes(di);
-                const clickable = editable && typeof di === "number";
-                const resizable = clickable && !excluded;
-                const wasEdited = typeof di === "number" && Boolean(cur.edited[di]);
+              {showYolo &&
+                currentYoloBoxes.map((box: any, idx: number) => {
+                  const { left, top, width, height } = bboxToPercent(box);
+                  const yoloLabelPos = top + height > 92 ? "bottom-1" : "-bottom-6";
+                  const yoloLabelAnchor = left > 50 ? "right-0" : "left-0";
+                  const adopted = cur.adopted.includes(box.candIndex);
+                  const key = `yolo-${box.candIndex}`;
+                  return (
+                    <div
+                      key={`y-${idx}`}
+                      onMouseEnter={() => setHoveredKey(key)}
+                      onMouseLeave={() => setHoveredKey((k) => (k === key ? null : k))}
+                      className={[
+                        "absolute border-2 rounded pointer-events-none transition-shadow",
+                        adopted
+                          ? "border-solid border-red-500 bg-red-500/25 shadow-lg"
+                          : box.isLowConf
+                            ? "border-dashed border-gray-400/70 bg-gray-400/5"
+                            : "border-dashed border-amber-400 bg-amber-400/10",
+                        hoveredKey === key ? "ring-2 ring-white" : "",
+                      ].join(" ")}
+                      style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
+                    >
+                      <span
+                        className={`absolute ${yoloLabelPos} ${yoloLabelAnchor} text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap ${
+                          adopted ? "bg-red-600" : box.isLowConf ? "bg-gray-500/90" : "bg-amber-500"
+                        }`}
+                      >
+                        {adopted ? "검수자 채택" : box.isLowConf ? "저신뢰 후보" : "YOLO 후보"}: {box.type}
+                      </span>
+                    </div>
+                  );
+                })}
 
-                return (
-                  <div
-                    key={idx}
-                    onClick={clickable ? () => toggleExcluded(di) : undefined}
-                    title={
-                      [
-                        box.deduction_note,
-                        clickable
-                          ? excluded
-                            ? "클릭하면 감점에 다시 포함"
-                            : "클릭하면 감점에서 제외 · 흰 원을 드래그하면 영역 수정"
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join("\n") || undefined
-                    }
-                    className={[
-                      "absolute rounded shadow-2xl",
-                      clickable ? "cursor-pointer" : "pointer-events-none",
-                      excluded
-                        ? "border-2 border-dashed border-slate-500 bg-slate-500/10 opacity-60"
-                        : suspect
-                          ? "border-2 border-dashed border-gray-400 bg-gray-400/15"
-                          : wasEdited
-                            ? "border-2 border-solid border-sky-500 bg-sky-500/25"
-                            : "border-2 border-red-500 bg-red-500/35 animate-pulse",
-                    ].join(" ")}
-                    style={{
-                      left: `${left}%`,
-                      top: `${top}%`,
-                      width: `${width}%`,
-                      height: `${height}%`,
-                    }}
-                  >
-                    {resizable &&
-                      (["nw", "ne", "sw", "se"] as HandleCorner[]).map((corner) => (
-                        <span
-                          key={corner}
-                          onMouseDown={startDrag(
-                            di,
-                            corner,
-                            {
+              {showOverlay &&
+                currentBBoxes.map((box: any, idx: number) => {
+                  const di = box.defectIndex;
+                  const target: DragTarget | null = typeof di === "number" ? { kind: "existing", defectIndex: di } : null;
+                  const effBox = effectiveBboxFor(target, {
+                    xmin: Number(box.xmin),
+                    ymin: Number(box.ymin),
+                    xmax: Number(box.xmax),
+                    ymax: Number(box.ymax),
+                  });
+                  const { left, top, width, height } = bboxToPercent({ ...box, ...effBox });
+                  const label = box.label || box.type || `결함 #${idx + 1}`;
+                  const labelPos = top < 8 ? "top-1" : "-top-6";
+                  const labelAnchor = left > 50 ? "right-0" : "left-0";
+                  const suspect = Boolean(box.evidence_suspect || box.conf_copied_from_candidate);
+                  const excluded = typeof di === "number" && cur.excluded.includes(di);
+                  const editableBox = editable && typeof di === "number" && !excluded;
+                  const wasEdited = typeof di === "number" && Boolean(cur.edited[di]);
+                  const key = `defect-${di}`;
+                  return (
+                    <div
+                      key={idx}
+                      onMouseEnter={() => setHoveredKey(key)}
+                      onMouseLeave={() => setHoveredKey((k) => (k === key ? null : k))}
+                      onMouseDown={
+                        editableBox && !drawMode
+                          ? startMove(target!, {
                               xmin: Number(box.xmin),
                               ymin: Number(box.ymin),
                               xmax: Number(box.xmax),
                               ymax: Number(box.ymax),
-                            },
-                            zoomedImgRef
-                          )}
-                          onClick={(e) => e.stopPropagation()}
-                          title="드래그해서 결함 영역 수정"
+                            })
+                          : undefined
+                      }
+                      title={box.deduction_note || undefined}
+                      className={[
+                        "absolute rounded transition-shadow",
+                        editableBox && !drawMode ? "pointer-events-auto cursor-move" : "pointer-events-none",
+                        excluded
+                          ? "border-2 border-dashed border-slate-500 bg-slate-500/10 opacity-60"
+                          : suspect
+                            ? "border-2 border-dashed border-gray-400 bg-gray-400/15"
+                            : wasEdited
+                              ? "border-2 border-solid border-sky-500 bg-sky-500/25 shadow-lg"
+                              : "border-2 border-red-500 bg-red-500/30 shadow-lg",
+                        hoveredKey === key ? "ring-2 ring-white" : "",
+                      ].join(" ")}
+                      style={{
+                        left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%`,
+                        zIndex: hoveredKey === key ? 20 : 10,
+                      }}
+                    >
+                      {editableBox &&
+                        (["nw", "ne", "sw", "se"] as HandleCorner[]).map((corner) => (
+                          <span
+                            key={corner}
+                            onMouseDown={startDrag(target!, corner, {
+                              xmin: Number(box.xmin),
+                              ymin: Number(box.ymin),
+                              xmax: Number(box.xmax),
+                              ymax: Number(box.ymax),
+                            })}
+                            className={[
+                              "absolute w-3.5 h-3.5 rounded-full bg-white pointer-events-auto shadow",
+                              wasEdited ? "border-2 border-sky-600" : "border-2 border-red-600",
+                              corner === "nw" ? "-left-1.5 -top-1.5 cursor-nwse-resize" : "",
+                              corner === "ne" ? "-right-1.5 -top-1.5 cursor-nesw-resize" : "",
+                              corner === "sw" ? "-left-1.5 -bottom-1.5 cursor-nesw-resize" : "",
+                              corner === "se" ? "-right-1.5 -bottom-1.5 cursor-nwse-resize" : "",
+                            ].join(" ")}
+                          />
+                        ))}
+                      <span
+                        className={`absolute ${labelPos} ${labelAnchor} ${
+                          suspect ? "bg-gray-500" : wasEdited ? "bg-sky-600" : "bg-red-600"
+                        } text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap`}
+                      >
+                        {label}
+                        {typeof box.deduction === "number"
+                          ? box.deduction_scope === "group"
+                            ? ` 묶음 -${box.deduction}점`
+                            : box.deduction_scope === "excluded"
+                              ? " 감점 제외"
+                              : ` -${box.deduction}점`
+                          : ""}
+                        {excluded ? " · 제외됨" : ""}
+                        {wasEdited ? " · 수정됨" : ""}
+                      </span>
+                      {editable && typeof di === "number" && (
+                        <button
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={() => toggleExcluded(di)}
+                          title={excluded ? "감점에 다시 포함" : "결함 삭제 (감점에서 제외, 감사 기록은 보존)"}
+                          className={`absolute ${labelPos} ${labelAnchor === "left-0" ? "right-0" : "left-0"} pointer-events-auto w-5 h-5 rounded-full flex items-center justify-center shadow-md ${
+                            excluded ? "bg-emerald-600 hover:bg-emerald-500" : "bg-white hover:bg-red-50 border border-red-300"
+                          }`}
+                        >
+                          {excluded ? <RotateCcw className="w-3 h-3 text-white" /> : <Trash2 className="w-3 h-3 text-red-600" />}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+              {/* 검수자가 직접 그린 신규 결함 */}
+              {currentAdded.map((a) => {
+                const target: DragTarget = { kind: "added", tempId: a.tempId };
+                const effBox = effectiveBboxFor(target, a);
+                const { left, top, width, height } = bboxToPercent({ ...effBox, coord_space: 1000 } as any);
+                const key = `added-${a.tempId}`;
+                return (
+                  <div
+                    key={a.tempId}
+                    onMouseEnter={() => setHoveredKey(key)}
+                    onMouseLeave={() => setHoveredKey((k) => (k === key ? null : k))}
+                    onMouseDown={editable && !drawMode ? startMove(target, a) : undefined}
+                    className={[
+                      "absolute rounded border-2 border-solid border-emerald-500 bg-emerald-500/25 shadow-lg transition-shadow",
+                      editable && !drawMode ? "pointer-events-auto cursor-move" : "pointer-events-none",
+                      hoveredKey === key ? "ring-2 ring-white" : "",
+                    ].join(" ")}
+                    style={{
+                      left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%`,
+                      zIndex: hoveredKey === key ? 20 : 10,
+                    }}
+                  >
+                    {editable &&
+                      (["nw", "ne", "sw", "se"] as HandleCorner[]).map((corner) => (
+                        <span
+                          key={corner}
+                          onMouseDown={startDrag(target, corner, a)}
                           className={[
-                            "absolute w-4 h-4 rounded-full bg-white z-20 shadow-lg",
-                            wasEdited ? "border-2 border-sky-600" : "border-2 border-red-600",
-                            corner === "nw" ? "-left-2 -top-2 cursor-nwse-resize" : "",
-                            corner === "ne" ? "-right-2 -top-2 cursor-nesw-resize" : "",
-                            corner === "sw" ? "-left-2 -bottom-2 cursor-nesw-resize" : "",
-                            corner === "se" ? "-right-2 -bottom-2 cursor-nwse-resize" : "",
+                            "absolute w-3.5 h-3.5 rounded-full bg-white border-2 border-emerald-600 pointer-events-auto shadow",
+                            corner === "nw" ? "-left-1.5 -top-1.5 cursor-nwse-resize" : "",
+                            corner === "ne" ? "-right-1.5 -top-1.5 cursor-nesw-resize" : "",
+                            corner === "sw" ? "-left-1.5 -bottom-1.5 cursor-nesw-resize" : "",
+                            corner === "se" ? "-right-1.5 -bottom-1.5 cursor-nwse-resize" : "",
                           ].join(" ")}
                         />
                       ))}
-                    <span
-                      className={`absolute ${zoomLabelPos} ${zoomLabelAnchor} ${
-                        suspect ? "bg-gray-500" : wasEdited ? "bg-sky-600" : "bg-red-600"
-                      } text-white text-xs px-2.5 py-1 font-extrabold rounded shadow-xl whitespace-nowrap border border-white/20 z-10`}
-                    >
-                      {label}
-                      {typeof box.deduction === "number"
-                        ? box.deduction_scope === "group"
-                          ? ` 묶음 -${box.deduction}점`
-                          : box.deduction_scope === "excluded"
-                            ? " 감점 제외"
-                            : ` -${box.deduction}점`
-                        : ""}
-                      {excluded ? " · 검수자 제외" : ""}
-                      {wasEdited ? " · 검수자 영역 수정" : ""}
+                    <span className="absolute -top-6 left-0 bg-emerald-600 text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap">
+                      {defectTypeLabel(a.type)} · 검수자 추가
                     </span>
                   </div>
                 );
               })}
+            </div>
+          ) : (
+            <div className="relative w-72 h-96 bg-gray-100 dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl flex flex-col items-center justify-center p-6 text-center shadow-inner">
+              <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-500/10 border border-red-300 dark:border-red-500/30 flex items-center justify-center mb-4">
+                <AlertCircle className="w-8 h-8 text-red-500 dark:text-red-400" />
+              </div>
+              <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200">{task.book_title || "검수 이미지"}</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 font-mono">ISBN: {task.isbn || "-"}</p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-3 bg-amber-100 dark:bg-amber-950/60 px-3 py-1 rounded border border-amber-300 dark:border-amber-800/40">
+                이미지 없음
+              </p>
+            </div>
+          )}
+
+          {shownIdx.length > 1 && (
+            <>
+              <button
+                onClick={() => {
+                  setImgError(false);
+                  setCurrentIdx(shownIdx[(navPos - 1 + shownIdx.length) % shownIdx.length]);
+                }}
+                className="absolute left-4 p-2.5 rounded-full bg-black/10 hover:bg-black/20 text-gray-900 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white transition-all"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => {
+                  setImgError(false);
+                  setCurrentIdx(shownIdx[(navPos + 1) % shownIdx.length]);
+                }}
+                className="absolute right-4 p-2.5 rounded-full bg-black/10 hover:bg-black/20 text-gray-900 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white transition-all"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </>
+          )}
+
+          {/* 새 결함 확정 팝오버 */}
+          {pendingNewBox && (
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-40" onClick={() => setPendingNewBox(null)}>
+              <div
+                className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl shadow-2xl p-4 w-72 space-y-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-sm font-bold text-gray-900 dark:text-white">새 결함 영역 — 유형 선택</p>
+                <select
+                  value={pendingType}
+                  onChange={(e) => setPendingType(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white"
+                >
+                  {DEFECT_TYPE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" size="sm" onClick={() => setPendingNewBox(null)}>취소</Button>
+                  <Button size="sm" onClick={confirmNewBox}>추가</Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 우측 사이드 패널 */}
+        <aside className="w-96 shrink-0 border-l border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex flex-col min-h-0">
+          <div className="flex border-b border-gray-200 dark:border-gray-800 shrink-0">
+            <button
+              onClick={() => setSidePanel("defects")}
+              className={`flex-1 py-2.5 text-xs font-black transition-colors ${
+                sidePanel === "defects"
+                  ? "text-gray-900 dark:text-white border-b-2 border-blue-500 bg-blue-50 dark:bg-gray-800/50"
+                  : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              결함 목록
+            </button>
+            <button
+              onClick={() => setSidePanel("agent")}
+              className={`flex-1 py-2.5 text-xs font-black transition-colors flex items-center justify-center gap-1 ${
+                sidePanel === "agent"
+                  ? "text-gray-900 dark:text-white border-b-2 border-purple-500 bg-purple-50 dark:bg-gray-800/50"
+                  : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5" /> AI 판정 근거
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {sidePanel === "defects" ? (
+              <>
+                <p className="text-[11px] text-gray-600 dark:text-gray-500 font-bold px-1">현재 이미지 #{effIdx + 1} 기준</p>
+                {currentBBoxes.length === 0 && currentAdded.length === 0 && (!showYolo || currentYoloBoxes.length === 0) && (
+                  <p className="text-xs text-gray-500 dark:text-gray-500 px-1 py-4 text-center">이 이미지엔 결함 표시가 없습니다.</p>
+                )}
+                {currentBBoxes.map((box: any, idx: number) => {
+                  const di = box.defectIndex;
+                  const excluded = typeof di === "number" && cur.excluded.includes(di);
+                  const wasEdited = typeof di === "number" && Boolean(cur.edited[di]);
+                  const key = `defect-${di}`;
+                  return (
+                    <div
+                      key={`list-${idx}`}
+                      onMouseEnter={() => setHoveredKey(key)}
+                      onMouseLeave={() => setHoveredKey((k) => (k === key ? null : k))}
+                      className={`p-2.5 rounded-lg border text-xs ${
+                        excluded
+                          ? "bg-gray-100 dark:bg-gray-800/40 border-gray-300 dark:border-gray-700 opacity-60"
+                          : hoveredKey === key
+                            ? "bg-gray-100 dark:bg-gray-800 border-gray-400 dark:border-gray-500"
+                            : "bg-white dark:bg-gray-800/70 border-gray-200 dark:border-gray-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-gray-900 dark:text-gray-100">{box.label || box.type}</span>
+                        {typeof di === "number" && editable && (
+                          <button
+                            onClick={() => toggleExcluded(di)}
+                            title={excluded ? "감점에 다시 포함" : "오탐으로 판단해 감점에서 제외"}
+                            className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${excluded ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400"}`}
+                          >
+                            {excluded ? <RotateCcw className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-gray-600 dark:text-gray-400 mt-1 flex flex-wrap gap-x-2">
+                        {typeof box.deduction === "number" && <span>감점 {box.deduction}점</span>}
+                        {typeof box.confidence === "number" && <span>신뢰도 {Math.round(box.confidence * 100)}%</span>}
+                        {excluded && <span className="text-slate-600 dark:text-slate-400 font-bold">검수자 제외</span>}
+                        {wasEdited && <span className="text-sky-600 dark:text-sky-400 font-bold">좌표 수정됨</span>}
+                        {box.evidence_suspect && <span className="text-gray-500 dark:text-gray-500">오탐 의심</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {currentAdded.map((a) => {
+                  const key = `added-${a.tempId}`;
+                  return (
+                    <div
+                      key={a.tempId}
+                      onMouseEnter={() => setHoveredKey(key)}
+                      onMouseLeave={() => setHoveredKey((k) => (k === key ? null : k))}
+                      className={`p-2.5 rounded-lg border text-xs ${hoveredKey === key ? "bg-emerald-100 dark:bg-emerald-950/60 border-emerald-400 dark:border-emerald-600" : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800"}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-emerald-700 dark:text-emerald-300">{defectTypeLabel(a.type)}</span>
+                        {editable && (
+                          <button
+                            onClick={() => removeAdded(a.tempId)}
+                            title="이 신규 결함 삭제"
+                            className="p-1 rounded hover:bg-emerald-200 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-400"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 mt-1">검수자가 직접 추가한 결함</div>
+                    </div>
+                  );
+                })}
+
+                {showYolo && currentYoloBoxes.map((box: any) => {
+                  const adopted = cur.adopted.includes(box.candIndex);
+                  const key = `yolo-${box.candIndex}`;
+                  return (
+                    <div
+                      key={key}
+                      onMouseEnter={() => setHoveredKey(key)}
+                      onMouseLeave={() => setHoveredKey((k) => (k === key ? null : k))}
+                      className={`p-2.5 rounded-lg border text-xs ${adopted ? "bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800" : "bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900/60"}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-amber-700 dark:text-amber-300">{box.type} (YOLO 후보)</span>
+                        {editable && (
+                          <button
+                            onClick={() => toggleAdopted(box.candIndex)}
+                            title={adopted ? "채택 취소" : "실제 결함으로 채택"}
+                            className={`text-[10px] font-bold px-2 py-1 rounded ${adopted ? "bg-red-600 dark:bg-red-800 text-white" : "bg-amber-600 dark:bg-amber-800 text-white"}`}
+                          >
+                            {adopted ? "채택됨" : "채택"}
+                          </button>
+                        )}
+                      </div>
+                      {typeof box.confidence === "number" && (
+                        <div className="text-[10px] text-amber-700/80 dark:text-amber-400/80 mt-1">신뢰도 {Math.round(box.confidence * 100)}%</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <div
+                  className={`p-2.5 rounded-lg border text-[11px] font-bold ${
+                    invalidSet.has(effIdx)
+                      ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                      : currentBBoxes.length > 0
+                        ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700"
+                  }`}
+                >
+                  현재 이미지 #{effIdx + 1}: {invalidSet.has(effIdx)
+                    ? "👤 도서 미식별 컷"
+                    : currentBBoxes.length > 0
+                      ? `결함 BBox ${currentBBoxes.length}건 검출`
+                      : "AI 결함 미검출"}
+                </div>
+                {agentEntries.length === 0 ? (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-lg text-[11px] text-amber-800 dark:text-amber-200 leading-relaxed">
+                    저장된 Agent 판정 서술이 없습니다. <strong>[AI 재검수]</strong> 실행 시 기록됩니다.
+                  </div>
+                ) : (
+                  agentEntries.map((s) => (
+                    <div key={s.key} className="p-2.5 bg-gray-50 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 rounded-lg">
+                      <p className="text-[11px] font-black text-purple-600 dark:text-purple-400 mb-1">{s.icon} {s.label}</p>
+                      <p className="text-[11px] text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{logs[s.key]}</p>
+                    </div>
+                  ))
+                )}
+                {typeof logs.retry_count === "number" && logs.retry_count > 0 && (
+                  <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300">⟳ 파이프라인 재검수 {logs.retry_count}회 수행됨</p>
+                )}
+              </>
+            )}
+          </div>
+        </aside>
+      </div>
+
+      {/* Footer: 썸네일 + 요약 */}
+      <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex flex-col gap-2 shrink-0">
+        {task.special_notes && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-lg text-xs text-amber-800 dark:text-amber-200">
+            <span className="font-bold bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 px-2 py-0.5 rounded text-[11px]">AI 시각 특이사항</span>
+            <span className="line-clamp-1">{task.special_notes}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 overflow-x-auto py-1">
+            {shownIdx.map((idx) => {
+              const url = images[idx];
+              const cnt = bboxesForIndex(rawList, idx, url).length + cur.added.filter((a) => a.imageIndex === idx).length;
+              const isInvalid = invalidSet.has(idx);
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setImgError(false);
+                    setCurrentIdx(idx);
+                  }}
+                  className={`relative w-12 h-16 rounded overflow-hidden border-2 transition-all bg-gray-200 dark:bg-gray-800 shrink-0 ${
+                    effIdx === idx ? "border-blue-500 ring-2 ring-blue-200 dark:ring-blue-900 scale-105" : "border-gray-300 dark:border-gray-700 opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <img
+                    src={url}
+                    alt={`thumb-${idx}`}
+                    className={`w-full h-full object-cover ${isInvalid ? "grayscale opacity-50" : ""}`}
+                    onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+                  />
+                  {cnt > 0 && (
+                    <span className="absolute top-0.5 right-0.5 min-w-4 h-4 px-0.5 bg-red-600 text-white text-[9px] font-black rounded-full flex items-center justify-center shadow z-10">
+                      {cnt}
+                    </span>
+                  )}
+                  {isInvalid && (
+                    <span className="absolute bottom-0 inset-x-0 bg-amber-500/95 text-white text-[8px] font-black text-center py-0.5 z-10">미식별</span>
+                  )}
+                </button>
+              );
+            })}
+            {invalidSet.size > 0 && (
+              <button
+                onClick={() => setHideInvalid(!hideInvalid)}
+                className="shrink-0 px-2.5 py-1.5 rounded-lg border border-dashed border-amber-400 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[10px] font-black hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors"
+              >
+                {hideInvalid ? `👤 미식별 ${invalidSet.size}컷 숨김 · 보기` : `👤 미식별 ${invalidSet.size}컷 표시 중 · 숨기기`}
+              </button>
+            )}
+          </div>
+          <div className="text-right text-xs text-gray-600 dark:text-gray-400">
+            <div className="flex items-center justify-end gap-2">
+              {task.inspection_type && (
+                <span className={`px-2 py-0.5 text-[11px] font-bold rounded ${
+                  task.inspection_type === "BUYBACK"
+                    ? "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800"
+                    : "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800"
+                }`}>
+                  {task.inspection_type === "BUYBACK" ? "중고 바이백 정산" : "고객 반품 환불"}
+                </span>
+              )}
+              <span>이미지 <strong className="text-gray-900 dark:text-white">{shownIdx.length > 0 ? navPos + 1 : 0}</strong> / {shownIdx.length}</span>
+            </div>
+            {logs.score_unverified ? (
+              <div className="mt-1 text-amber-600 dark:text-amber-400 font-bold">
+                UBCI 점수: <span className="text-sm">판정 보류</span>
+                <span className="ml-1 font-normal text-[11px]">(증거 대조 전건 반려 — 관리자 확인 필요)</span>
+              </div>
+            ) : (
+              task.ubci_score !== undefined && (
+                <div className="mt-1 text-blue-600 dark:text-blue-400 font-bold">
+                  UBCI 점수: <span className="text-sm">{task.ubci_score}</span>점
+                </div>
+              )
+            )}
           </div>
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
+}
+
+function dragTargetEquals(a: DragTarget, b: DragTarget): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "existing" && b.kind === "existing") return a.defectIndex === b.defectIndex;
+  if (a.kind === "added" && b.kind === "added") return a.tempId === b.tempId;
+  return false;
 }

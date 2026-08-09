@@ -42,6 +42,8 @@ export interface HitlOverrideRequest {
   adoptedCandidateIndexes?: number[];
   /** 검수자가 드래그로 직접 고친 결함 좌표 (agent_logs.defects 인덱스, 0~1000 상대좌표) */
   editedBboxes?: { index: number; xmin: number; ymin: number; xmax: number; ymax: number }[];
+  /** 검수자가 직접 그린 신규 결함 (AI가 놓친 것 보완) */
+  addedBboxes?: { type: string; xmin: number; ymin: number; xmax: number; ymax: number; imageIndex: number }[];
 }
 
 export interface BulkOverridePayload {

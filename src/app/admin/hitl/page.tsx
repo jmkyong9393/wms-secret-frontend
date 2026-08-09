@@ -71,8 +71,7 @@ const REASON_CODE_MAP: Record<string, { label: string; category: string; color: 
   DMG_INT_DISCOLOR: { label: '내지 황변/변색', category: '내부 훼손', color: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800' },
   FP_SHADOW: { label: '그림자 오탐', category: '오탐 방어', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
   FP_GLARE: { label: '빛 반사 오탐', category: '오탐 방어', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
-  // [2026-08-08 추가] app/ai/agents/__init__.py DEFECT_TRANSLATION_MAP에는 있지만
-  // 여기 빠져 있던 실제 결함 코드. 없으면 칩이 한글 라벨 없이 원시 코드로 표시된다.
+  // 백엔드 DEFECT_TRANSLATION_MAP과 동기화된 결함 코드 라벨.
   DMG_EXT_SCRATCH: { label: '표지 긁힘/스크래치', category: '외부 손상', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
   DMG_EXT_STICKER: { label: '스티커/바코드 자국', category: '외부 손상', color: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800' },
   DMG_EDGE_WEAR: { label: '모서리 마모', category: '외부 손상', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
@@ -85,14 +84,7 @@ const REASON_CODE_MAP: Record<string, { label: string; category: string; color: 
   AWAITING_HUMAN_REVIEW: { label: '관리자 판독 대기', category: 'HITL 이관', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
 };
 
-/**
- * [2026-08-09 신설] agent_logs.reason_code/primary_reason_code는 "왜 HITL로 이관됐는가"를
- * 나타내는 파이프라인 라우팅 코드다(REASON_CODE_MAP의 DMG_*/FP_* 결함 분류 코드와는
- * 완전히 다른 taxonomy). "AI 비전 감지 사유" 컬럼에 이 라우팅 코드를 결함 분류인 것처럼
- * 보여주던 게 버그였다 - 실제 결함이 없는데도 원시 코드(NO_VALID_IMAGE_HITL 등)가
- * 결함 칩처럼 표시됐다. 결함 데이터가 없을 때만(getPrimaryDefectReason이 null일 때)
- * 이 맵으로 "왜 이관됐는지"를 정직하게 보여준다.
- */
+/** HITL 이관 사유(라우팅 코드) 라벨. 결함 분류 코드(REASON_CODE_MAP)와는 별개 taxonomy. */
 const HITL_ESCALATION_LABELS: Record<string, { label: string; category: string; color: string }> = {
   NO_VALID_IMAGE_HITL: { label: '도서 미식별 (판독 불가)', category: 'HITL 이관 사유', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
   CRITIC_RETRY_EXCEEDED: { label: '재검수 한도 초과', category: 'HITL 이관 사유', color: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800' },
@@ -168,8 +160,7 @@ export default function AdminHitlDashboard() {
 
   const handleTriggerAiReinspect = async (jobId: string) => {
     const targetTask = tasks.find((t) => t.id === jobId) as any;
-    const yymmdd = new Date().toISOString().slice(2, 10).replace(/-/g, "");
-    const lpnStr = targetTask?.agent_logs?.lpn_barcode || targetTask?.lpn_barcode || `LPN-${yymmdd}-${jobId.slice(0, 4).toUpperCase()}`;
+    const lpnStr = targetTask?.agent_logs?.lpn_barcode || targetTask?.lpn_barcode || "LPN 미발급";
     const titleStr = targetTask?.book_title || "수동 검수 요청 도서";
 
     setReinspectingIds((prev) => new Set(prev).add(jobId));
@@ -356,33 +347,6 @@ export default function AdminHitlDashboard() {
       const initReasons: Record<string, string> = {};
       const initComments: Record<string, string> = {};
 
-      const getDefaultReason = (desc: string) => {
-        if (!desc) return "DMG_INT_DOODLE";
-        const d = desc.toLowerCase();
-        
-        for (const key of Object.keys(REASON_CODE_MAP)) {
-          if (d.includes(key.toLowerCase())) return key;
-        }
-        
-        // 1. 외부 손상 / 찌그러짐
-        if (d.includes("찌그러짐") || d.includes("찍힘") || d.includes("구겨짐") || d.includes("긁힘") || d.includes("스크래치") || d.includes("갈라짐")) return "DMG_EXT_CRUSH";
-        // 2. 외부 습기 / 침수
-        if (d.includes("습기") || d.includes("침수") || d.includes("물") || d.includes("액체") || d.includes("울기") || d.includes("warping") || d.includes("water")) return "DMG_EXT_WET";
-        // 3. 커버 찢어짐
-        if (d.includes("찢어짐") || d.includes("tear")) return "DMG_EXT_TEAR";
-        // 4. 오염 / 얼룩
-        if (d.includes("오염") || d.includes("얼룩") || d.includes("stain")) return "DMG_INT_STAIN";
-        // 5. 변색 / 황변
-        if (d.includes("변색") || d.includes("황변") || d.includes("빛바램")) return "DMG_INT_DISCOLOR";
-        // 6. 오탐 방어
-        if (d.includes("그림자") || d.includes("shadow")) return "FP_SHADOW";
-        if (d.includes("빛반사") || d.includes("glare")) return "FP_GLARE";
-        // 7. 필기 / 낙서 / 밑줄 (기본값)
-        if (d.includes("필기") || d.includes("낙서") || d.includes("밑줄") || d.includes("handwriting") || d.includes("scribble")) return "DMG_INT_DOODLE";
-        
-        return "DMG_INT_DOODLE";
-      };
-
       list.forEach((t: HitlTask) => {
         // [2026-08-08] AI가 이미 산출한 UBCI 점수(t.ubci_score)를 등급 경계에 대입해
         // 처분/목표등급 기본값을 추천한다. suggested_grade/suggested_decision이 있으면
@@ -427,7 +391,8 @@ export default function AdminHitlDashboard() {
       (t) =>
         (t.book_title && t.book_title.toLowerCase().includes(kw)) ||
         (t.isbn && t.isbn.includes(kw)) ||
-        (t.id && t.id.toLowerCase().includes(kw))
+        (t.id && t.id.toLowerCase().includes(kw)) ||
+        (t.agent_logs?.lpn_barcode && String(t.agent_logs.lpn_barcode).toLowerCase().includes(kw))
     );
   }, [tasks, keyword]);
 
@@ -527,6 +492,10 @@ export default function AdminHitlDashboard() {
         adoptedCandidateIndexes: bboxEdits[id]?.adopted ?? [],
         editedBboxes: Object.entries(bboxEdits[id]?.edited ?? {}).map(([index, bbox]) => ({
           index: Number(index),
+          ...bbox,
+        })),
+        addedBboxes: (bboxEdits[id]?.added ?? []).map(({ tempId, imageIndex, ...bbox }) => ({
+          imageIndex,
           ...bbox,
         })),
       });
@@ -660,7 +629,7 @@ export default function AdminHitlDashboard() {
           <p className="text-3xl font-black text-purple-600 dark:text-purple-400 font-mono">
             {filteredTasks.length}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">도서명 / ISBN / Task ID 키워드 필터</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">도서명 / ISBN / LPN / Task ID 키워드 필터</p>
         </div>
       </div>
 
@@ -743,7 +712,7 @@ export default function AdminHitlDashboard() {
               type="text"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="도서명, ISBN, Task ID 검색..."
+              placeholder="도서명, ISBN, LPN, Task ID 검색..."
               className="w-full pl-10 pr-4 py-2.5 text-xs border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50 dark:bg-gray-800 dark:text-white font-medium"
             />
           </div>
@@ -934,9 +903,21 @@ export default function AdminHitlDashboard() {
                           {t.book_title || "도서 정보 없음"}
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          <span className="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono text-[11px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
-                            {(t as any).agent_logs?.lpn_barcode || (t as any).lpn_barcode || `LPN-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${t.id.slice(0, 4).toUpperCase()}`}
-                          </span>
+                          {(() => {
+                            const realLpn = (t as any).agent_logs?.lpn_barcode || (t as any).lpn_barcode;
+                            return realLpn ? (
+                              <span className="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono text-[11px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
+                                {realLpn}
+                              </span>
+                            ) : (
+                              <span
+                                className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-600 font-mono text-[11px] font-bold px-2 py-0.5 rounded"
+                                title="이 건은 아직 물리 LPN 라벨이 발급되지 않았습니다"
+                              >
+                                LPN 미발급
+                              </span>
+                            );
+                          })()}
                           <span className="text-gray-500 dark:text-gray-400 font-mono text-[11px]">ISBN: {t.isbn || "-"}</span>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
@@ -951,17 +932,34 @@ export default function AdminHitlDashboard() {
 
                       <td className="p-3">
                         {(() => {
-                          const code = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code || "DMG_EXT_CRUSH";
-                          const meta = REASON_CODE_MAP[code] || {
-                            label: code,
-                            category: 'AI 감지',
-                            color: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700',
-                          };
+                          // [2026-08-09 수정] 이 컬럼은 "AI 비전 감지 사유" - AI가 실제로
+                          // 찾아낸 결함이 있으면 그걸 보여줘야 한다(오버라이드 사유 초기값과
+                          // 동일 소스, getPrimaryDefectReason). reason_code/primary_reason_code는
+                          // "왜 HITL로 이관됐는가"(라우팅 사유)라 결함 분류가 아니다 - 종전에는
+                          // 이 라우팅 코드를 결함 칩처럼 그대로 노출해, 결함이 하나도 없는 건에도
+                          // 원시 코드가 결함인 것처럼 찍혔다. 실제 결함이 없을 때만 라우팅
+                          // 사유를 정직하게 보여준다(HITL_ESCALATION_LABELS, 별도 톤).
+                          const primaryDefect = getPrimaryDefectReason(t);
+                          const routingCode = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code;
+                          const code = primaryDefect || routingCode;
+                          const meta = primaryDefect
+                            ? REASON_CODE_MAP[primaryDefect] || {
+                                label: primaryDefect,
+                                category: 'AI 감지',
+                                color: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700',
+                              }
+                            : routingCode
+                              ? HITL_ESCALATION_LABELS[routingCode] || {
+                                  label: routingCode,
+                                  category: 'HITL 이관 사유',
+                                  color: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700',
+                                }
+                              : { label: '판정 정보 없음', category: '-', color: 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' };
                           return (
                             <div className="space-y-1">
                               {/* 원시 코드([DMG_...]) 노출 대신 검수 처리 내역과 동일한 한글 라벨 필 배지로 표기 */}
                               <span
-                                title={`[${code}] ${meta.category}`}
+                                title={code ? `[${code}] ${meta.category}` : meta.category}
                                 className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-extrabold border ${meta.color}`}
                               >
                                 {meta.label}
