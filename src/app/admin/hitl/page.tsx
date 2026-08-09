@@ -193,9 +193,17 @@ export default function AdminHitlDashboard() {
       // 옛 실패 로그를 "완료"로 표시해, 새 요청이 OpenAI에 도달하기도 전에 화면이 끝났다고
       // 말했다(실측: 크레딧 충전 후에도 사용량 $0). 트리거 전 스냅샷을 기준선으로 잡아,
       // 그 값과 달라졌을 때만 완료로 판단한다.
+      //
+      // [2026-08-10 재수정] agent_logs 전체(JSON.stringify)를 기준선으로 삼았더니 여전히
+      // 2~3초 만에 완료로 오판했다. 원인: 백엔드가 큐잉 직전 동기적으로
+      // agent_logs.hitl_locked=true를 써서 커밋한다(admin/router.py trigger_ai_reinspection).
+      // policy_text는 그대로 옛 값인데 hitl_locked 키 하나 때문에 전체 JSON이 달라져
+      // "changed"가 실제 재실행과 무관하게 즉시 참이 됐다. policy_text/report_text 두
+      // 필드만 정확히 비교한다 - 완료 판정에 실제로 쓰는 필드와 정확히 일치시킨다.
       const t = () => new Date().toLocaleTimeString();
       const baseline = await adminAPI.getInspectionResult(jobId).catch(() => null);
-      const baselineLogs = JSON.stringify(baseline?.agent_logs || {});
+      const baselinePolicyText = baseline?.agent_logs?.policy_text;
+      const baselineReportText = baseline?.agent_logs?.report_text;
       await adminAPI.triggerAiReinspection(jobId);
 
       setActiveReinspectionTask((prev) =>
@@ -215,9 +223,9 @@ export default function AdminHitlDashboard() {
         try {
           const cur = await adminAPI.getInspectionResult(jobId);
           const lg = (cur?.agent_logs || {}) as Record<string, string | undefined>;
-          // 재검수가 끝나면 Policy/Report 서술이 채워진다. 단, 이전 시도의 잔여 값과
-          // 완전히 같으면(=기준선과 동일) 새 실행이 아직 반영 안 된 것이므로 계속 기다린다.
-          const changed = JSON.stringify(lg) !== baselineLogs;
+          // 재검수가 끝나면 Policy/Report 서술이 채워진다. 단, 그 값이 트리거 전 기준선과
+          // 완전히 같으면(=옛 시도의 잔여 텍스트) 새 실행이 아직 반영 안 된 것이므로 기다린다.
+          const changed = lg.policy_text !== baselinePolicyText || lg.report_text !== baselineReportText;
           if ((lg.policy_text || lg.report_text) && changed) {
             result = cur;
             break;

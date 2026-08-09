@@ -35,6 +35,8 @@ export interface InspectionDefect {
   reason_code: string;
   description: string;
   confidence: number;
+  /** 관리자가 HITL에서 오탐으로 제외한 결함 - 감사 기록으로 남기되 감점엔 미반영. */
+  excluded?: boolean;
 }
 
 export interface InspectionItem {
