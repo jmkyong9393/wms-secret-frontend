@@ -106,7 +106,11 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
   // 얹는다. 드래그 중에는 로컬 state(liveDrag)로만 미리보기하고, 마우스를 떼는 순간에만
   // 부모(cur.edited)로 커밋한다 - 매 mousemove마다 부모 state를 갱신하면 상위 컴포넌트
   // 전체가 리렌더되어 드래그가 버벅인다.
-  const imgRef = useRef<HTMLImageElement | null>(null);
+  // 작은 미리보기 뷰와 2.5X 확대 라이트박스 양쪽에서 편집이 가능하므로, 드래그가
+  // 시작된 <img> 엘리먼트를 그때그때 가리키는 참조를 둔다(좌표 환산 기준이 서로 다름).
+  const smallImgRef = useRef<HTMLImageElement | null>(null);
+  const zoomedImgRef = useRef<HTMLImageElement | null>(null);
+  const activeImgElRef = useRef<HTMLImageElement | null>(null);
   const [liveDrag, setLiveDrag] = useState<{ defectIndex: number; bbox: EditedBbox } | null>(null);
   const dragStateRef = useRef<{ defectIndex: number; corner: HandleCorner; startBbox: EditedBbox } | null>(null);
   // 이벤트 리스너를 마운트 시 한 번만 붙이기 위해 최신 값을 ref로 미러링한다
@@ -120,7 +124,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
 
   const applyDrag = useCallback((clientX: number, clientY: number) => {
     const st = dragStateRef.current;
-    const imgEl = imgRef.current;
+    const imgEl = activeImgElRef.current;
     if (!st || !imgEl) return;
     const rect = imgEl.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
@@ -169,9 +173,15 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
     };
   }, [applyDrag]);
 
-  const startDrag = (di: number, corner: HandleCorner, original: EditedBbox) => (e: React.MouseEvent) => {
+  const startDrag = (
+    di: number,
+    corner: HandleCorner,
+    original: EditedBbox,
+    imgElRef: React.RefObject<HTMLImageElement | null>
+  ) => (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    activeImgElRef.current = imgElRef.current;
     const start = cur.edited[di] ?? original;
     dragStateRef.current = { defectIndex: di, corner, startBbox: start };
     setLiveDrag({ defectIndex: di, bbox: start });
@@ -339,7 +349,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                 title="클릭하여 고화질 2.5X 정밀 확대보기"
               >
                 <img
-                  ref={imgRef}
+                  ref={smallImgRef}
                   src={currentImageUrl}
                   alt={`defect-${effIdx}`}
                   onError={() => setImgError(true)}
@@ -416,10 +426,11 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                     const suspect = Boolean(box.evidence_suspect || box.conf_copied_from_candidate);
                     const excluded = typeof di === "number" && cur.excluded.includes(di);
                     const clickable = editable && typeof di === "number";
-                    // 리사이즈 핸들은 제외되지 않은 확정 결함에만 붙인다 - 제외된 박스는
-                    // 감점 계산에서 이미 빠졌으니 좌표를 고쳐도 의미가 없다.
-                    const resizable = clickable && !excluded;
                     const wasEdited = typeof di === "number" && Boolean(cur.edited[di]);
+                    // [2026-08-09] 리사이즈 핸들은 이 작은 뷰에서 뺐다 - 이미지가 작아
+                    // 드래그로 정밀 조정이 사실상 불가능했다(실사용 피드백). 좌표 편집은
+                    // 2.5X 확대 라이트박스(아래 isZoomed 블록)에서만 하고, 여기서는
+                    // 제외/채택 클릭만 남긴다. "🔍 클릭하여 확대검수"가 그 진입점이다.
                     return (
                       <div
                         key={idx}
@@ -433,7 +444,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                             clickable
                               ? excluded
                                 ? "클릭하면 감점에 다시 포함"
-                                : "클릭하면 감점에서 제외 · 모서리를 드래그하면 영역 수정"
+                                : "클릭하면 감점에서 제외 · 영역 좌표 수정은 확대검수에서"
                               : null,
                           ]
                             .filter(Boolean)
@@ -457,28 +468,6 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                           height: `${height}%`,
                         }}
                       >
-                        {resizable &&
-                          (["nw", "ne", "sw", "se"] as HandleCorner[]).map((corner) => (
-                            <span
-                              key={corner}
-                              onMouseDown={startDrag(di, corner, {
-                                xmin: Number(box.xmin),
-                                ymin: Number(box.ymin),
-                                xmax: Number(box.xmax),
-                                ymax: Number(box.ymax),
-                              })}
-                              onClick={(e) => e.stopPropagation()}
-                              title="드래그해서 결함 영역 수정"
-                              className={[
-                                "absolute w-2.5 h-2.5 rounded-full bg-white z-20 shadow",
-                                wasEdited ? "border-2 border-sky-600" : "border-2 border-red-600",
-                                corner === "nw" ? "-left-1 -top-1 cursor-nwse-resize" : "",
-                                corner === "ne" ? "-right-1 -top-1 cursor-nesw-resize" : "",
-                                corner === "sw" ? "-left-1 -bottom-1 cursor-nesw-resize" : "",
-                                corner === "se" ? "-right-1 -bottom-1 cursor-nwse-resize" : "",
-                              ].join(" ")}
-                            />
-                          ))}
                         {/* 신뢰도를 함께 노출한다. 검수자가 "이 판독을 믿을지"를 판단하는
                             1차 근거인데 종전에는 라벨만 보여, 낮은 신뢰도의 오탐과 확실한
                             결함이 화면에서 구분되지 않았다(YOLO 후보 오버레이에는 이미 있었다). */}
@@ -729,42 +718,146 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
         </div>
       </div>
 
-      {/* High-Resolution Full-Screen Image Lightbox Modal */}
+      {/* High-Resolution Full-Screen Image Lightbox Modal — BBox 편집의 실제 작업 화면.
+          [2026-08-09] 작은 미리보기에서는 이미지가 작아 모서리 드래그가 실사용 불가능했다
+          (조장 피드백). 좌표 편집·제외/채택 클릭 전부 여기로 옮기고, 안내 툴바를 새로 얹었다. */}
       {isZoomed && currentImageUrl && (
         <div
           className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 transition-all"
           onClick={() => setIsZoomed(false)}
         >
-          <div className="absolute top-4 right-6 flex items-center gap-3">
-            <span className="text-xs text-gray-300 font-mono bg-gray-800/80 px-3 py-1.5 rounded-full border border-gray-700">
-              🔍 2.5X 초고화질 정밀 검수 모드 (ESC 또는 클릭하여 닫기)
-            </span>
-            <button
-              onClick={() => setIsZoomed(false)}
-              className="p-2 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors shadow-2xl"
-            >
-              <X className="w-6 h-6" />
-            </button>
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 max-w-[92vw]">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-300 font-mono bg-gray-800/80 px-3 py-1.5 rounded-full border border-gray-700">
+                🔍 2.5X 초고화질 정밀 검수 모드 (ESC 또는 배경 클릭하여 닫기)
+              </span>
+              <button
+                onClick={() => setIsZoomed(false)}
+                className="p-2 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors shadow-2xl"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            {editable && (
+              <div
+                className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-gray-300 bg-gray-800/80 px-3 py-1.5 rounded-full border border-gray-700"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm border-2 border-red-500 bg-red-500/30 inline-block" />
+                  확정 결함 (클릭: 제외)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm border-2 border-dashed border-slate-500 bg-slate-500/10 inline-block" />
+                  제외됨 (클릭: 포함)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm border-2 border-sky-500 bg-sky-500/25 inline-block" />
+                  좌표 수정됨
+                </span>
+                {showYolo && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-sm border-2 border-dashed border-amber-400 bg-amber-400/10 inline-block" />
+                    YOLO 후보 (클릭: 채택)
+                  </span>
+                )}
+                <span className="text-gray-500">·</span>
+                <span>흰 원(●) 드래그로 영역 크기/위치 수정</span>
+              </div>
+            )}
           </div>
 
           <div
-            className="relative inline-block max-w-[92vw] max-h-[85vh] cursor-zoom-out overflow-auto rounded-xl shadow-2xl border-2 border-gray-700 bg-gray-900"
+            className="relative inline-block max-w-[92vw] max-h-[85vh] overflow-auto rounded-xl shadow-2xl border-2 border-gray-700 bg-gray-900"
             onClick={(e) => e.stopPropagation()}
           >
             <img
+              ref={zoomedImgRef}
               src={currentImageUrl}
               alt="enlarged-defect"
               className="h-[82vh] w-auto max-w-[90vw] object-contain rounded-lg block mx-auto"
             />
+
+            {showYolo &&
+              currentYoloBoxes.map((box: any, idx: number) => {
+                const { left, top, width, height } = bboxToPercent(box);
+                const yoloLabelPos = top + height > 92 ? "bottom-1" : "-bottom-7";
+                const yoloLabelAnchor = left > 50 ? "right-0" : "left-0";
+                const adopted = cur.adopted.includes(box.candIndex);
+                return (
+                  <div
+                    key={`zy-${idx}`}
+                    onClick={editable ? () => toggleAdopted(box.candIndex) : undefined}
+                    title={editable ? (adopted ? "클릭하면 채택 취소" : "클릭하면 결함으로 채택") : undefined}
+                    className={[
+                      "absolute border-2 rounded",
+                      editable ? "cursor-pointer" : "pointer-events-none",
+                      adopted
+                        ? "border-solid border-red-500 bg-red-500/25 shadow-lg"
+                        : box.isLowConf
+                          ? "border-dashed border-gray-400/70 bg-gray-400/5"
+                          : "border-dashed border-amber-400 bg-amber-400/10",
+                    ].join(" ")}
+                    style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
+                  >
+                    <span
+                      className={`absolute ${yoloLabelPos} ${yoloLabelAnchor} text-white text-[11px] px-2 py-0.5 font-bold rounded whitespace-nowrap ${
+                        adopted ? "bg-red-600" : box.isLowConf ? "bg-gray-500/90" : "bg-amber-500"
+                      }`}
+                    >
+                      {adopted ? "검수자 채택" : box.isLowConf ? "저신뢰 후보" : "YOLO 후보"}: {box.type}
+                      {box.confidence ? ` (${Math.round(box.confidence * 100)}%)` : ""}
+                    </span>
+                  </div>
+                );
+              })}
+
             {showOverlay &&
               currentBBoxes.map((box: any, idx: number) => {
-                const { left, top, width, height } = bboxToPercent(box);
+                const di = box.defectIndex;
+                const effBox = effectiveBbox(di, {
+                  xmin: Number(box.xmin),
+                  ymin: Number(box.ymin),
+                  xmax: Number(box.xmax),
+                  ymax: Number(box.ymax),
+                });
+                const { left, top, width, height } = bboxToPercent({ ...box, ...effBox });
                 const label = box.label || box.type || `결함 #${idx + 1}`;
+                const zoomLabelPos = top < 8 ? "top-1" : "-top-7";
+                const zoomLabelAnchor = left > 50 ? "right-0" : "left-0";
+                const suspect = Boolean(box.evidence_suspect || box.conf_copied_from_candidate);
+                const excluded = typeof di === "number" && cur.excluded.includes(di);
+                const clickable = editable && typeof di === "number";
+                const resizable = clickable && !excluded;
+                const wasEdited = typeof di === "number" && Boolean(cur.edited[di]);
 
                 return (
                   <div
                     key={idx}
-                    className="absolute border-2 border-red-500 bg-red-500/35 rounded shadow-2xl animate-pulse pointer-events-none"
+                    onClick={clickable ? () => toggleExcluded(di) : undefined}
+                    title={
+                      [
+                        box.deduction_note,
+                        clickable
+                          ? excluded
+                            ? "클릭하면 감점에 다시 포함"
+                            : "클릭하면 감점에서 제외 · 흰 원을 드래그하면 영역 수정"
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join("\n") || undefined
+                    }
+                    className={[
+                      "absolute rounded shadow-2xl",
+                      clickable ? "cursor-pointer" : "pointer-events-none",
+                      excluded
+                        ? "border-2 border-dashed border-slate-500 bg-slate-500/10 opacity-60"
+                        : suspect
+                          ? "border-2 border-dashed border-gray-400 bg-gray-400/15"
+                          : wasEdited
+                            ? "border-2 border-solid border-sky-500 bg-sky-500/25"
+                            : "border-2 border-red-500 bg-red-500/35 animate-pulse",
+                    ].join(" ")}
                     style={{
                       left: `${left}%`,
                       top: `${top}%`,
@@ -772,8 +865,48 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                       height: `${height}%`,
                     }}
                   >
-                    <span className="absolute -top-7 left-0 bg-red-600 text-white text-xs px-2.5 py-1 font-extrabold rounded shadow-xl whitespace-nowrap border border-red-400 z-20">
+                    {resizable &&
+                      (["nw", "ne", "sw", "se"] as HandleCorner[]).map((corner) => (
+                        <span
+                          key={corner}
+                          onMouseDown={startDrag(
+                            di,
+                            corner,
+                            {
+                              xmin: Number(box.xmin),
+                              ymin: Number(box.ymin),
+                              xmax: Number(box.xmax),
+                              ymax: Number(box.ymax),
+                            },
+                            zoomedImgRef
+                          )}
+                          onClick={(e) => e.stopPropagation()}
+                          title="드래그해서 결함 영역 수정"
+                          className={[
+                            "absolute w-4 h-4 rounded-full bg-white z-20 shadow-lg",
+                            wasEdited ? "border-2 border-sky-600" : "border-2 border-red-600",
+                            corner === "nw" ? "-left-2 -top-2 cursor-nwse-resize" : "",
+                            corner === "ne" ? "-right-2 -top-2 cursor-nesw-resize" : "",
+                            corner === "sw" ? "-left-2 -bottom-2 cursor-nesw-resize" : "",
+                            corner === "se" ? "-right-2 -bottom-2 cursor-nwse-resize" : "",
+                          ].join(" ")}
+                        />
+                      ))}
+                    <span
+                      className={`absolute ${zoomLabelPos} ${zoomLabelAnchor} ${
+                        suspect ? "bg-gray-500" : wasEdited ? "bg-sky-600" : "bg-red-600"
+                      } text-white text-xs px-2.5 py-1 font-extrabold rounded shadow-xl whitespace-nowrap border border-white/20 z-10`}
+                    >
                       {label}
+                      {typeof box.deduction === "number"
+                        ? box.deduction_scope === "group"
+                          ? ` 묶음 -${box.deduction}점`
+                          : box.deduction_scope === "excluded"
+                            ? " 감점 제외"
+                            : ` -${box.deduction}점`
+                        : ""}
+                      {excluded ? " · 검수자 제외" : ""}
+                      {wasEdited ? " · 검수자 영역 수정" : ""}
                     </span>
                   </div>
                 );
