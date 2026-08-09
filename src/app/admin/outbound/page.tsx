@@ -59,6 +59,31 @@ const STANDARD_COURIER_BOX_OPTIONS: BoxOption[] = [
 
 const BOX_OPTIONS: BoxOption[] = [...BOOK_SLIM_BOX_OPTIONS, ...STANDARD_COURIER_BOX_OPTIONS];
 
+// 수동 선택 모드(지시서 미연동)에서 쓰는 표시용 주문 ID/거래처 — 실제 지시서 연동 시 activeInstruction 값으로 대체된다.
+const B2B_CUSTOMER_POOL = [
+  "교보문고 B2B 지점",
+  "영풍문고 종로점",
+  "YES24 강남물류센터",
+  "알라딘 중고매입센터",
+  "북센 도매유통",
+  "교보문고 B2B 물류센터 (인천)",
+];
+
+function todayYYYYMMDD(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find(p => p.type === t)?.value || "";
+  return `${get("year")}${get("month")}${get("day")}`;
+}
+
+function randomB2bCustomerName(): string {
+  return B2B_CUSTOMER_POOL[Math.floor(Math.random() * B2B_CUSTOMER_POOL.length)];
+}
+
 export default function OutboundDashboard() {
   const [mockOrder, setMockOrder] = useState<any>(null);
   const [boxCategoryTab, setBoxCategoryTab] = useState<'slim' | 'standard'>('slim');
@@ -412,8 +437,8 @@ export default function OutboundDashboard() {
         setPricingResult(data);
         const usedBooks = books.filter(b => !b.isNew);
         setMockOrder({
-          order_id: activeInstruction ? activeInstruction.instruction_no : `ORD-20260727-B2B`,
-          customer_name: activeInstruction?.customer_name || books[0].customer || "교보문고 B2B 지점",
+          order_id: activeInstruction ? activeInstruction.instruction_no : `ORD-${todayYYYYMMDD()}-B2B`,
+          customer_name: activeInstruction?.customer_name || books[0].customer || randomB2bCustomerName(),
           title: books.length === 1 ? books[0].title : `${books[0].title} 외 ${books.length - 1}권 (묶음 출고)`,
           isbn: books.length === 1 ? books[0].isbn : `${books[0].isbn} 등 N권`,
           list_price: data.total_list_price || books.reduce((s, b) => s + b.listPrice, 0),
