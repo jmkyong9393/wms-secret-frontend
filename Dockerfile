@@ -16,6 +16,13 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+# [2026-08-09 추가] next.config.ts의 rewrites()가 반환하는 프록시 대상은 standalone
+# 빌드 시 .next/routes-manifest.json에 문자열로 고정(bake)된다 - 컨테이너 런타임에
+# environment:로 BACKEND_ORIGIN을 줘도 이미 굳어진 값이라 반영되지 않는다. 빌드
+# 인자로 받아야 한다.
+ARG BACKEND_ORIGIN
+ENV BACKEND_ORIGIN=$BACKEND_ORIGIN
+
 # next.config.ts 의 output: 'standalone' 설정에 의해 프로덕션용 파일만 추려짐
 RUN npm run build
 
