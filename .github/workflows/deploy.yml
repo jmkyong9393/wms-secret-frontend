@@ -22,7 +22,7 @@ jobs:
         context: .
         push: true
         build-args: |
-          NEXT_PUBLIC_API_URL=https://aivle.p-e.kr
+          NEXT_PUBLIC_API_URL=https://nexus-wms.p-e.kr
           BACKEND_ORIGIN=http://wms-api-svc:8000
         tags: |
           ${{ steps.ecr.outputs.registry }}/nexus-frontend-repo:${{ github.sha }}
