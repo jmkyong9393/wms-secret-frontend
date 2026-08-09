@@ -77,10 +77,16 @@ function toInspectionDefects(raw: unknown): InspectionItem['defects_found'] {
     if (d.level != null) parts.push(`강도 ${d.level}단계`);
     // 증거 대조 검증이 오탐으로 지목한 건은 감점에서 빠졌다는 사실을 같이 보여준다.
     if (d.evidence_suspect) parts.push('증거 대조 결과 오탐 의심 (감점 제외)');
+    // [2026-08-10 수정] HITL 관리자가 오탐으로 제외/직접 추가한 표식을 이 목록이 무시하고
+    // 있었다 - 관리자가 5건을 제외해 최종 1건만 반영됐어도 화면은 6건 전부를 "탐지된
+    // 결함"으로 보여줘 점수(높은 점수)와 목록(많은 결함)이 서로 모순돼 보였다.
+    if (d.hitl_excluded) parts.push('관리자 오탐 판정 (감점 미반영)');
+    if (d.hitl_added) parts.push('관리자 직접 추가');
     return {
       reason_code: String(d.type ?? d.reason_code ?? 'UNKNOWN'),
       description: String(d.description ?? (parts.length ? parts.join(' · ') : '상세 설명 없음')),
       confidence: Math.round(c <= 1 ? c * 100 : c),
+      excluded: Boolean(d.hitl_excluded),
     };
   });
 }
@@ -776,12 +782,22 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                       color: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700',
                     };
                     return (
-                      <div key={idx} className="p-3.5 rounded-xl border bg-gray-50 dark:bg-gray-800/60 dark:border-gray-700 flex items-center justify-between gap-3 text-sm">
+                      <div
+                        key={idx}
+                        className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-sm ${
+                          defect.excluded
+                            ? 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700 opacity-60'
+                            : 'bg-gray-50 dark:bg-gray-800/60 dark:border-gray-700'
+                        }`}
+                      >
                         <div className="flex items-center gap-2.5">
-                          <span className={`px-2.5 py-1 rounded-lg text-xs font-black border font-mono ${dm.color}`}>
+                          <span className={`px-2.5 py-1 rounded-lg text-xs font-black border font-mono ${dm.color} ${defect.excluded ? 'line-through' : ''}`}>
                             [{defect.reason_code}] {dm.label}
                           </span>
-                          <span className="font-extrabold text-gray-900 dark:text-white">{defect.description}</span>
+                          <span className={`font-extrabold text-gray-900 dark:text-white ${defect.excluded ? 'line-through' : ''}`}>{defect.description}</span>
+                          {defect.excluded && (
+                            <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-black">제외됨</span>
+                          )}
                         </div>
                         <span className="text-xs font-mono font-bold text-gray-500 dark:text-gray-400 shrink-0">
                           신뢰도: <strong className="text-blue-700 dark:text-blue-400 font-extrabold">{defect.confidence}%</strong>
