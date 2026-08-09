@@ -85,6 +85,43 @@ const REASON_CODE_MAP: Record<string, { label: string; category: string; color: 
   AWAITING_HUMAN_REVIEW: { label: '관리자 판독 대기', category: 'HITL 이관', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
 };
 
+/**
+ * [2026-08-09 신설] agent_logs.reason_code/primary_reason_code는 "왜 HITL로 이관됐는가"를
+ * 나타내는 파이프라인 라우팅 코드다(REASON_CODE_MAP의 DMG_*/FP_* 결함 분류 코드와는
+ * 완전히 다른 taxonomy). "AI 비전 감지 사유" 컬럼에 이 라우팅 코드를 결함 분류인 것처럼
+ * 보여주던 게 버그였다 - 실제 결함이 없는데도 원시 코드(NO_VALID_IMAGE_HITL 등)가
+ * 결함 칩처럼 표시됐다. 결함 데이터가 없을 때만(getPrimaryDefectReason이 null일 때)
+ * 이 맵으로 "왜 이관됐는지"를 정직하게 보여준다.
+ */
+const HITL_ESCALATION_LABELS: Record<string, { label: string; category: string; color: string }> = {
+  NO_VALID_IMAGE_HITL: { label: '도서 미식별 (판독 불가)', category: 'HITL 이관 사유', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
+  CRITIC_RETRY_EXCEEDED: { label: '재검수 한도 초과', category: 'HITL 이관 사유', color: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800' },
+  SCORE_BOUNDARY: { label: '등급 경계 점수', category: 'HITL 이관 사유', color: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800' },
+  CRITIC_INTEGRITY_VIOLATION: { label: '판정 정합성 위반', category: 'HITL 이관 사유', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
+  AWAITING_HUMAN_REVIEW: { label: '관리자 판독 대기', category: 'HITL 이관 사유', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
+  OK: { label: '정합성 확인됨', category: 'HITL 이관 사유', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
+};
+
+/**
+ * agent_logs.defects[](Vision/YOLO가 실제로 낸 결함 목록)에서 hitl_excluded/evidence_suspect가
+ * 아닌 것 중 감점 비중이 가장 큰 유형을 대표 결함으로 반환한다. "AI 비전 감지 사유" 컬럼과
+ * "오버라이드 사유" 초기값이 반드시 같은 값을 봐야 하므로(둘 다 이 함수 하나로 통일),
+ * 컴포넌트 바깥으로 뺐다 - 두 군데서 각자 계산하면 로직이 갈라져 서로 다른 값을 보여줄 수 있다.
+ */
+function getPrimaryDefectReason(t: HitlTask): string | null {
+  const defects: any[] = Array.isArray(t.agent_logs?.defects) ? t.agent_logs.defects : [];
+  const candidates = defects.filter(
+    (d) => d && typeof d.type === "string" && d.type && !d.hitl_excluded && !d.evidence_suspect
+  );
+  if (candidates.length === 0) return null;
+  candidates.sort(
+    (a, b) =>
+      Number(b.applied_deduction ?? b.preliminary_deduction ?? 0) -
+      Number(a.applied_deduction ?? a.preliminary_deduction ?? 0)
+  );
+  return candidates[0].type;
+}
+
 export default function AdminHitlDashboard() {
   const [reinspectingIds, setReinspectingIds] = useState<Set<string>>(new Set());
   const [activeReinspectionTask, setActiveReinspectionTask] = useState<{
@@ -346,27 +383,6 @@ export default function AdminHitlDashboard() {
         return "DMG_INT_DOODLE";
       };
 
-      // [2026-08-08 신설] agent_logs.reason_code/primary_reason_code(CRITIC_INTEGRITY_VIOLATION,
-      // SCORE_BOUNDARY, NO_VALID_IMAGE_HITL, CRITIC_RETRY_EXCEEDED 등)는 "왜 HITL로 이관됐는가"를
-      // 나타내는 파이프라인 라우팅 코드이지, primaryReasonCode가 요구하는 결함 분류 코드
-      // (DMG_EXT_CRUSH 등)가 아니다. 그런데도 종전 기본값 로직은 이 라우팅 코드를 그대로
-      // primaryReasonCode에 흘려보내, 검수자가 손대지 않고 제출하면 "우리가 실제로 검증한
-      // 결함"이 아니라 "이관 사유"가 사유 코드로 저장됐다. 실제로 Vision/YOLO가 확정한
-      // agent_logs.defects[]에서 가장 비중이 큰(감점 기준) 결함 유형을 대표 사유로 쓴다.
-      const getPrimaryDefectReason = (t: HitlTask): string | null => {
-        const defects: any[] = Array.isArray(t.agent_logs?.defects) ? t.agent_logs.defects : [];
-        const candidates = defects.filter(
-          (d) => d && typeof d.type === "string" && d.type && !d.hitl_excluded && !d.evidence_suspect
-        );
-        if (candidates.length === 0) return null;
-        candidates.sort(
-          (a, b) =>
-            Number(b.applied_deduction ?? b.preliminary_deduction ?? 0) -
-            Number(a.applied_deduction ?? a.preliminary_deduction ?? 0)
-        );
-        return candidates[0].type;
-      };
-
       list.forEach((t: HitlTask) => {
         // [2026-08-08] AI가 이미 산출한 UBCI 점수(t.ubci_score)를 등급 경계에 대입해
         // 처분/목표등급 기본값을 추천한다. suggested_grade/suggested_decision이 있으면
@@ -377,10 +393,12 @@ export default function AdminHitlDashboard() {
           t.agent_logs?.suggested_decision || defaultDecisionForGrade(recommendedGrade);
         initGrades[t.id] = recommendedGrade;
         // 실제로 검증된 결함(agent_logs.defects) 중 감점 비중이 가장 큰 유형을 사유
-        // 기본값으로 쓴다. defects가 비어 있는 건(NO_VALID_IMAGE_HITL 등 판독 자체가 없던
-        // 경우)만 예전 서술 기반 추론으로 폴백한다.
-        initReasons[t.id] =
-          getPrimaryDefectReason(t) || getDefaultReason(t.agent_logs?.defect_description || "");
+        // 기본값으로 쓴다("AI 비전 감지 사유" 컬럼과 동일 소스 - §하단 렌더링 참조).
+        // [2026-08-09 수정] defects가 비어 있는 건(NO_VALID_IMAGE_HITL 등 판독 자체가
+        // 없던 경우)은 더 이상 "DMG_INT_DOODLE" 같은 결함을 지어내지 않는다 - 실제로
+        // 아무 결함도 못 찾은 상태에서 결함 코드를 기본 선택해 두면 검수자가 안 고치고
+        // 제출할 위험이 있다. 빈 값으로 두어 검수자가 육안 확인 후 직접 고르게 한다.
+        initReasons[t.id] = getPrimaryDefectReason(t) || "";
         initComments[t.id] = t.human_issue_notes || "관리자 검수 오버라이드";
       });
 
@@ -908,7 +926,13 @@ export default function AdminHitlDashboard() {
                       </td>
 
                       <td className="p-3">
-                        <div className="font-bold text-gray-900 dark:text-white line-clamp-1">{t.book_title || "도서 정보 없음"}</div>
+                        <div
+                          className="font-bold text-gray-900 dark:text-white line-clamp-1 cursor-pointer hover:underline hover:text-blue-700 dark:hover:text-blue-400 w-fit"
+                          onClick={() => setModalTask(t)}
+                          title="클릭하여 원본 이미지 및 결함 박스 확대보기"
+                        >
+                          {t.book_title || "도서 정보 없음"}
+                        </div>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
                           <span className="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono text-[11px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
                             {(t as any).agent_logs?.lpn_barcode || (t as any).lpn_barcode || `LPN-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${t.id.slice(0, 4).toUpperCase()}`}
