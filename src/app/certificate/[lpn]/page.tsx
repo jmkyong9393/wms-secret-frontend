@@ -321,7 +321,10 @@ export default function CertificatePage() {
                             ))}
                           </div>
                         ) : cert ? (
-                          <div className="border-t border-gray-100 pt-2">
+                          // 위 "AI 정밀 진단 리포트" 카드가 이미 cert.condition_detail을 보여준다.
+                          // 결함 0건이면 여기 또 같은 문장이 반복될 뿐이라 인쇄본에서는 뺀다
+                          // (화면은 스크롤이라 중복이 덜 거슬리지만, 인쇄는 그대로 지면을 먹는다).
+                          <div className="border-t border-gray-100 pt-2 print:hidden">
                             <span className="text-xs font-bold text-gray-800">상세 사유</span>
                             <p className="text-xs text-gray-600 leading-relaxed mt-1">
                               {cert.condition_detail || '검출된 결함이 없습니다.'}

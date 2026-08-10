@@ -150,6 +150,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
             // 검수 담당자는 등급을 확정한 주체다. 조회자 사번(workerId)을 쓰면
             // 누가 보느냐에 따라 담당자가 바뀐다.
             worker_id: it.inspector_label || '등급 미확정',
+            worker_label: it.worker_label || '작업자 미기록',
             inspected_at: it.updated_at || it.created_at || '',
             // 결함별 판독 신뢰도의 평균. 결함이 없으면 근거가 없어 null이다.
             ai_confidence: it.avg_defect_confidence != null ? Math.round(it.avg_defect_confidence * 1000) / 10 : null,
@@ -649,7 +650,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                                     setActivePrintData({
                                       lpn_barcode: item.lpn_barcode,
                                       book: { title: item.book.title, author: item.book.author, isbn: item.book.isbn },
-                                      worker_id: item.worker_id,
+                                      worker_id: item.worker_label,
                                     })
                                   }
                                   className="px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-extrabold rounded-xl transition-all text-xs flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"

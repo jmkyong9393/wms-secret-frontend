@@ -62,6 +62,8 @@ export interface InspectionItem {
   confirmed_grade?: string | null;
   status: InspectionStatus;
   worker_id: string;
+  /** 라벨 인쇄용 - AI/HITL 판정 주체(worker_id)가 아니라 실제 입고 처리한 사람. */
+  worker_label: string;
   inspected_at: string;
   /** 백엔드가 산출·저장하지 않는 지표다. 하드코딩 금지 — 없으면 표시하지 않는다. */
   ai_confidence?: number | null;

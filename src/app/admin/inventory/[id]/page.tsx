@@ -42,6 +42,8 @@ interface InventoryDetailData {
   zone: string;
   quantity: number;
   worker_id: string;
+  /** 라벨 인쇄용 - AI/HITL 판정 주체(worker_id)가 아니라 실제 입고 처리한 사람. */
+  worker_label?: string;
   inspector?: InspectorInfo;
   date: string;
   image_urls?: string[];
@@ -272,7 +274,7 @@ export default function InventoryDetailPage() {
                   setActivePrintData({
                     lpn_barcode: data.lpn_barcode,
                     book: { title: data.book.title, author: data.book.author, isbn: data.book.isbn },
-                    worker_id: data.worker_id,
+                    worker_id: data.worker_label || data.worker_id,
                   })
                 }
                 className="flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-2xs cursor-pointer"
