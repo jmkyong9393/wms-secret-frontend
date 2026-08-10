@@ -290,7 +290,14 @@ export default function CertificatePage() {
                             {findings.map((f: any, idx: number) => (
                               <div key={idx} className="border-t border-gray-100 pt-2 first:border-0 first:pt-0">
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="text-xs font-bold text-gray-800">{f.label}</span>
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-bold text-gray-800">{f.label}</span>
+                                    {f.location && (
+                                      <span className="ml-1.5 text-[10px] text-gray-500">{f.location}</span>
+                                    )}
+                                  </div>
+                                  {/* 마모처럼 부위 합산으로 산정되는 유형은 같은 감점이 여러 항목에
+                                      실리므로, 서버가 첫 항목에만 값을 남기고 나머지는 0으로 내린다. */}
                                   {f.deduction ? (
                                     <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded shrink-0">
                                       -{f.deduction}점
@@ -301,11 +308,21 @@ export default function CertificatePage() {
                               </div>
                             ))}
                           </div>
-                        ) : (
+                        ) : cert ? (
                           <div className="border-t border-gray-100 pt-2">
                             <span className="text-xs font-bold text-gray-800">상세 사유</span>
                             <p className="text-xs text-gray-600 leading-relaxed mt-1">
-                              {cert?.condition_detail || '검출된 결함이 없습니다.'}
+                              {cert.condition_detail || '검출된 결함이 없습니다.'}
+                            </p>
+                          </div>
+                        ) : (
+                          /* 보증서 문서가 없는 건은 "결함이 없다"고 말할 근거가 없다.
+                             검수하지 못한 것과 흠이 없는 것을 같게 표기하지 않는다. */
+                          <div className="border-t border-gray-100 pt-2">
+                            <span className="text-xs font-bold text-gray-800">상세 사유</span>
+                            <p className="text-xs text-gray-600 leading-relaxed mt-1">
+                              이 도서는 아직 AI 검수 보증서가 발급되지 않았습니다. 결함 유무는
+                              보증서 발급 후 확인하실 수 있습니다.
                             </p>
                           </div>
                         )}
