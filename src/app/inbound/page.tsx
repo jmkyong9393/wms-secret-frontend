@@ -21,6 +21,13 @@ import { saveDraft, loadDraft, clearDraft } from '@/features/inbound/inspectionD
 
 type Step = 'SELECT_TYPE' | 'SCAN_BARCODE' | 'PRINT_STICKER' | 'VISION_EVALUATION' | 'RESULT';
 type InboundType = 'NEW_FASTTRACK' | 'USED_RETURN_INSPECTION';
+// 채번 응답: LPN 문자열 + 원장에 있는 도서 메타(없으면 null)
+type IssuedLpn = { lpn: string; book: any | null };
+
+// 서버가 조회 실패 시 Book.title에 넣는 자리표시자. 이 값이면 도서 조회를 다시 시도한다.
+const UNKNOWN_BOOK_TITLE = '미확인 도서';
+// 작업 진행 현황 패널이 유지하는 최대 행 수 (초과분은 오래된 것부터 선입선출로 밀어낸다)
+const QUEUE_VISIBLE_MAX = 10;
 
 export default function InboundScannerPage() {
   const [step, setStep] = useState<Step>('SELECT_TYPE');
@@ -29,6 +36,11 @@ export default function InboundScannerPage() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentLpn, setCurrentLpn] = useState('');
+  // 이번 화면에서 방금 채번했고 아직 인쇄하지 않은 상태인지. 뒤로가기 시 이 값이 true일
+  // 때만 LPN을 회수한다 - 재촬영으로 스캔한 기존 LPN을 지우면 안 되기 때문이다.
+  const [lpnIssuedNow, setLpnIssuedNow] = useState(false);
+  // 재출력 진행 중인 LPN (해당 행 버튼만 스피너로 잠근다)
+  const [reprintingLpn, setReprintingLpn] = useState<string | null>(null);
   const [bookInfo, setBookInfo] = useState<any | null>(null);
   const [selectedBook, setSelectedBook] = useState<any | null>(null);
   const [isLoadingBook, setIsLoadingBook] = useState(false);
@@ -68,9 +80,34 @@ export default function InboundScannerPage() {
   const setUploadQueue = useSetAtom(uploadQueueAtom);
   const user = useAtomValue(currentUserAtom);
 
-  // 정상 완료 건은 5초 뒤 이 목록에서만 감춘다(집계에는 남는다).
-  const visibleQueue = uploadQueue.filter(t => !t.autoHidden);
+  // 목록은 최신 건이 위로 오도록 뒤집어 보여준다 (큐 자체는 전송 순서로 쌓인다).
+  const visibleQueue = [...uploadQueue].reverse();
   const inFlightCount = uploadQueue.filter(t => t.status === 'UPLOADING' || t.status === 'ANALYZING').length;
+  const finishedCount = uploadQueue.filter(t => t.status === 'COMPLETED' || t.status === 'FAILED').length;
+
+  // 진행 중이 아닌 완료·실패 건만 목록에서 비운다.
+  const clearFinishedTasks = () => {
+    setUploadQueue(prev => prev.filter(t => t.status === 'UPLOADING' || t.status === 'ANALYZING'));
+  };
+
+  // 목록에서 바로 라벨을 다시 뽑는다 (라벨 훼손·인쇄 실패 시 재고 화면까지 가지 않아도 되게).
+  const reprintLpnLabel = async (lpn: string, title?: string) => {
+    setReprintingLpn(lpn);
+    try {
+      const result = await labelsAPI.printLpn(
+        lpn,
+        title,
+        undefined,
+        user?.name ? `${user.employeeId} (${user.name})` : undefined
+      );
+      if (result.skipped) alert('라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).');
+      else if (!result.sent && !result.queued) alert('라벨 전송에 실패했습니다.');
+    } catch {
+      alert('라벨 프린터 통신 중 오류가 발생했습니다. 프린터 전원/LAN 연결을 확인해주세요.');
+    } finally {
+      setReprintingLpn(null);
+    }
+  };
 
   /**
    * LPN 채번 — 반드시 서버(POST /inventory/lpn)에서 받아온다.
@@ -139,7 +176,7 @@ export default function InboundScannerPage() {
     };
   };
 
-  const issueLPN = async (isbnValue: string): Promise<string> => {
+  const issueLPN = async (isbnValue: string): Promise<IssuedLpn> => {
     const res = await fetch(`${API_BASE_URL}/api/v1/inventory/lpn`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -151,11 +188,56 @@ export default function InboundScannerPage() {
     });
     if (!res.ok) {
       const detail = await res.json().catch(() => ({}));
-      throw new Error(detail?.detail || 'LPN 채번에 실패했습니다. 네트워크를 확인하세요.');
+      throw new Error(detail?.detail || detail?.message || 'LPN 채번에 실패했습니다. 네트워크를 확인하세요.');
     }
     const json = await res.json();
     if (!json?.lpn_barcode) throw new Error('서버가 LPN을 반환하지 않았습니다.');
-    return json.lpn_barcode;
+    return { lpn: json.lpn_barcode, book: json.book || null };
+  };
+
+  /**
+   * 도서 정보 확정. 채번 응답에 실려 온 원장 메타를 1순위로 쓰고, 쓸 수 없을 때만
+   * 도서 조회 API를 호출한다. 이미 입고된 적 있는 도서는 외부 API 없이 화면이 채워진다.
+   */
+  const resolveBookInfo = async (isbnValue: string, seed: any | null) => {
+    if (seed?.title && seed.title !== UNKNOWN_BOOK_TITLE) {
+      setBookInfo(seed);
+      setIsLoadingBook(false);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/inbound/book-lookup?isbn=${isbnValue}`);
+      if (res.ok) {
+        setBookInfo(await res.json());
+      } else {
+        // isbn을 반드시 함께 넘긴다 - 없으면 이후 evaluate 요청의 book_metadata에서
+        // isbn이 빠져 서버가 Book row를 만들지 못하고 500(book_id NOT NULL)을 낸다.
+        const body = await res.json().catch(() => ({} as any));
+        setBookInfo({
+          title: body?.detail || body?.message ||
+            (res.status === 503 ? '도서 정보 서버 연결 실패 (다시 스캔해주세요)' : '등록되지 않은 ISBN'),
+          isbn: isbnValue,
+          lookupFailed: true,
+        });
+      }
+    } catch {
+      setBookInfo({ title: '네트워크 오류로 도서 정보를 불러오지 못했습니다', isbn: isbnValue, lookupFailed: true });
+    } finally {
+      setIsLoadingBook(false);
+    }
+  };
+
+  /**
+   * 인쇄 전 미부착 LPN 회수. 실패해도 작업 흐름은 막지 않는다 - 라벨이 실물에 붙지
+   * 않았으므로 서버에 남아도 다음 정리 대상이 될 뿐이다.
+   */
+  const cancelIssuedLpn = async (lpn: string) => {
+    if (!lpn) return;
+    try {
+      await fetch(`${API_BASE_URL}/api/v1/inventory/lpn/${encodeURIComponent(lpn)}`, { method: 'DELETE' });
+    } catch {
+      // 네트워크 단절 - 회수 실패는 무시한다
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -191,16 +273,17 @@ export default function InboundScannerPage() {
       // 임시 ID(tempJobId)로 큐에 먼저 자리를 잡아 두고, 화면은 곧바로 다음 단계로 넘긴다.
       // 상태는 '전송 중'이며, 완료로 바뀌는 시점은 서버 응답·SSE가 결정한다.
       const tempJobId = `temp-${Date.now()}`;
+      // 상한 초과분은 오래된 것부터 밀어낸다. 진행 중인 건은 항상 최신 쪽에 있어 잘리지 않는다.
       setUploadQueue(prev => [...prev, {
         id: tempJobId,
         lpn: newEvaluation.lpn,
         title: newEvaluation.book_metadata?.title || '미등록 도서',
         previewUrl: newEvaluation.previewUrl,
-        status: 'UPLOADING',
+        status: 'UPLOADING' as const,
         progress: 0,
         message: '전송 중...',
         timestamp: Date.now()
-      }]);
+      }].slice(-QUEUE_VISIBLE_MAX));
 
       // 카메라 뷰파인더 닫고, 즉시(0.001초만에) 다음 화면(RESULT)으로 전환하여 체감속도 극대화
       setStep('RESULT');
@@ -278,15 +361,6 @@ export default function InboundScannerPage() {
           localEvals.push(newEval);
         }
         localStorage.setItem('local_evaluations', JSON.stringify(localEvals));
-
-        // 완료된 건 중 S/A 등급(정상)은 5초 뒤 현장 촬영 화면 목록에서만 감춘다.
-        // 큐에서 지우지는 않는다 — Header·대시보드의 세션 집계가 근거를 잃는다.
-        // 반려나 예외 상황은 사용자가 직접 확인할 수 있게 계속 남는다.
-        if (grade.includes('S') || grade.includes('A') || grade.includes('NORMAL') || grade.includes('MINT')) {
-          setTimeout(() => {
-            setUploadQueue(prev => prev.map(q => q.id === job_id ? { ...q, autoHidden: true } : q));
-          }, 5000);
-        }
       };
 
       const finalizeCompleted = (
@@ -477,6 +551,7 @@ export default function InboundScannerPage() {
       setInboundType(draft.inboundType as InboundType);
       setIsbn(draft.isbn || '');
       setCurrentLpn(draft.currentLpn);
+      setLpnIssuedNow(false); // 복원된 작업의 라벨은 이미 인쇄됐다고 본다 (회수 금지)
       setBookInfo(draft.bookInfo ?? null);
       setCapturedImages(images);
       setStep(draft.step as Step);  // 카메라는 step 변화에 반응하는 위 이펙트가 되살린다
@@ -584,6 +659,7 @@ export default function InboundScannerPage() {
             }
 
             setIsLoadingBook(false);
+            setLpnIssuedNow(false); // 기존 LPN이므로 뒤로가기로 회수하지 않는다
             setStep('PRINT_STICKER');
             return;
           }
@@ -593,43 +669,35 @@ export default function InboundScannerPage() {
           if (inboundType === 'NEW_FASTTRACK') {
             // [조장님 기획 지침] 신품 도서는 개별 LPN 라벨 스티커 출력 100% 스킵!
             setCurrentLpn('');
+            setLpnIssuedNow(false);
             setBookInfo(null);
             setIsLoadingBook(true);
             setFasttrackQty(1);
             setStep('PRINT_STICKER'); // 하단 패스트트랙 수량 카드 렌더링
-          } else {
-            // 중고/반품 도서만 개별 LPN 채번 및 스티커 출력.
-            // 서버 채번이므로 비동기다. 실패 시 라벨을 만들지 않고 스캔 단계에 머문다.
-            setBookInfo(null);
-            setIsLoadingBook(true);
-            setStep('PRINT_STICKER');
-            try {
-              setCurrentLpn(await issueLPN(text));
-            } catch (e: any) {
-              alert(e?.message || 'LPN 채번 실패');
-              setCurrentLpn('');
-              setIsLoadingBook(false);
-              setStep('SCAN_BARCODE');
-              return;
-            }
+            await resolveBookInfo(text, null);
+            return;
           }
 
-          // 백그라운드에서 알라딘 API 연동 도서 정보 조회
+          // 중고/반품 도서만 개별 LPN 채번 및 스티커 출력.
+          // 서버 채번이므로 비동기다. 실패 시 라벨을 만들지 않고 스캔 단계에 머문다.
+          setBookInfo(null);
+          setIsLoadingBook(true);
+          setStep('PRINT_STICKER');
+          let issued: IssuedLpn;
           try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/inbound/book-lookup?isbn=${text}`);
-            if (res.ok) {
-              const data = await res.json();
-              setBookInfo(data);
-            } else {
-              // isbn을 반드시 함께 넘긴다 - 없으면 이후 evaluate 요청의 book_metadata에서
-              // isbn이 빠져 서버가 Book row를 만들지 못하고 500(book_id NOT NULL)을 낸다.
-              setBookInfo({ title: '도서 정보 조회 실패 (API 키 확인 필요)', isbn: text });
-            }
-          } catch (e) {
-            setBookInfo({ title: '도서 정보 조회 에러', isbn: text });
-          } finally {
+            issued = await issueLPN(text);
+            setCurrentLpn(issued.lpn);
+            setLpnIssuedNow(true);
+          } catch (e: any) {
+            alert(e?.message || 'LPN 채번 실패');
+            setCurrentLpn('');
+            setLpnIssuedNow(false);
             setIsLoadingBook(false);
+            setStep('SCAN_BARCODE');
+            return;
           }
+
+          await resolveBookInfo(text, issued.book);
         };
 
         // 1. ZXing Browser 오픈소스 엔진 (최적화)
@@ -703,12 +771,26 @@ export default function InboundScannerPage() {
 
   // 뒤로가기 핸들러 (부착 미완료 시 화면 상태 초기화)
   //
-  // [2026-08-06 수정] 종전에는 localStorage 카운터를 1 되돌려 번호를 재사용했다.
-  // 서버 채번으로 이관하면서 이 롤백은 제거한다. 발급된 LPN은 이미 DB에 선부착
-  // 등록(PENDING_INSPECTION)되어 있으므로, 되돌려 재사용하면 서로 다른 실물이 같은
-  // 번호를 갖게 된다. **결번은 정상이다** — 폐기된 라벨 번호를 재사용하면 추적성이 깨진다.
+  // 인쇄 전에 되돌아간 LPN은 서버에서 회수(DELETE)한다. 실물에 붙지 않은 번호를 DB에
+  // 남기면 유령 LPN이 되고 채번만 밀려 올라간다. 회수분이 그날 마지막 번호였다면 다음
+  // 스캔이 같은 번호를 다시 받는다. 인쇄 후에는 회수하지 않는다 - 결번이 정상이다.
+  // 유형 선택 화면으로 이탈. 인쇄 전 LPN을 들고 나가면 그대로 유령이 되므로 함께 회수한다.
+  const resetToTypeSelect = () => {
+    if (lpnIssuedNow && currentLpn) void cancelIssuedLpn(currentLpn);
+    setLpnIssuedNow(false);
+    setCurrentLpn('');
+    setIsbn('');
+    setBookInfo(null);
+    setStep('SELECT_TYPE');
+  };
+
   const handleBack = () => {
+    if (step === 'SCAN_BARCODE') {
+      setStep('SELECT_TYPE');
+    }
     if (step === 'PRINT_STICKER') {
+      if (lpnIssuedNow && currentLpn) void cancelIssuedLpn(currentLpn);
+      setLpnIssuedNow(false);
       setCurrentLpn('');
       setIsbn('');
       setBookInfo(null);
@@ -814,7 +896,7 @@ export default function InboundScannerPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-full text-xs font-bold font-mono flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              INBOUND CONTROL CENTER v2.14.0.0
+              INBOUND CONTROL CENTER v2.15.0.1
             </span>
             <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">Real-time Vision AI & Fast-track Pipeline</span>
           </div>
@@ -848,7 +930,7 @@ export default function InboundScannerPage() {
           </div>
 
           <button
-            onClick={() => setStep('SELECT_TYPE')}
+            onClick={resetToTypeSelect}
             className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-2 cursor-pointer shrink-0"
           >
             <RefreshCcw className="w-4 h-4" />
@@ -882,8 +964,10 @@ export default function InboundScannerPage() {
         {/* Header */}
         <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-4 flex items-center justify-between z-20 absolute top-0 w-full text-gray-900 dark:text-white border-b border-gray-200 dark:border-slate-800 transition-colors">
           <div className="flex items-center">
+            {/* 한 단계 뒤로. 유형 화면으로 한 번에 나가려면 상단 '검수 유형 재선택'을 쓴다.
+                이 버튼이 handleBack을 거쳐야 미인쇄 LPN 회수·촬영분 정리가 수행된다. */}
             {step !== 'SELECT_TYPE' && (
-              <button onClick={() => setStep('SELECT_TYPE')} className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors cursor-pointer">
+              <button onClick={handleBack} className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors cursor-pointer">
                 <ChevronLeft className="w-6 h-6" />
               </button>
             )}
@@ -1179,6 +1263,7 @@ export default function InboundScannerPage() {
                     }
 
                     setIsLoadingBook(false);
+                    setLpnIssuedNow(false); // 기존 LPN이므로 뒤로가기로 회수하지 않는다
                     setStep('PRINT_STICKER');
                     return;
                   }
@@ -1187,40 +1272,33 @@ export default function InboundScannerPage() {
                   setIsbn(inputVal);
                   if (inboundType === 'NEW_FASTTRACK') {
                     setCurrentLpn('');
+                    setLpnIssuedNow(false);
                     setBookInfo(null);
                     setIsLoadingBook(true);
                     setFasttrackQty(1);
                     setStep('PRINT_STICKER');
-                  } else {
-                    setBookInfo(null);
-                    setIsLoadingBook(true);
-                    setStep('PRINT_STICKER');
-                    try {
-                      setCurrentLpn(await issueLPN(inputVal));
-                    } catch (e: any) {
-                      alert(e?.message || 'LPN 채번 실패');
-                      setCurrentLpn('');
-                      setIsLoadingBook(false);
-                      setStep('SCAN_BARCODE');
-                      return;
-                    }
+                    await resolveBookInfo(inputVal, null);
+                    return;
                   }
 
+                  setBookInfo(null);
+                  setIsLoadingBook(true);
+                  setStep('PRINT_STICKER');
+                  let issued: IssuedLpn;
                   try {
-                    const res = await fetch(`${API_BASE_URL}/api/v1/inbound/book-lookup?isbn=${inputVal}`);
-                    if (res.ok) {
-                      const data = await res.json();
-                      setBookInfo(data);
-                    } else {
-                      // isbn을 반드시 함께 넘긴다 - 없으면 이후 evaluate 요청의 book_metadata에서
-                      // isbn이 빠져 서버가 Book row를 만들지 못하고 500(book_id NOT NULL)을 낸다.
-                      setBookInfo({ title: '도서 정보 조회 실패 (API 키 확인 필요)', isbn: inputVal });
-                    }
-                  } catch (e) {
-                    setBookInfo({ title: '도서 정보 조회 에러', isbn: inputVal });
-                  } finally {
+                    issued = await issueLPN(inputVal);
+                    setCurrentLpn(issued.lpn);
+                    setLpnIssuedNow(true);
+                  } catch (e: any) {
+                    alert(e?.message || 'LPN 채번 실패');
+                    setCurrentLpn('');
+                    setLpnIssuedNow(false);
                     setIsLoadingBook(false);
+                    setStep('SCAN_BARCODE');
+                    return;
                   }
+
+                  await resolveBookInfo(inputVal, issued.book);
                 }}
                 /* shrink-0 + whitespace-nowrap: 버튼이 글자 폭 아래로 눌리면 '조 회'로 접힌다 */
                 className="shrink-0 whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg shadow-emerald-200 dark:shadow-none flex items-center gap-1.5"
@@ -1389,6 +1467,8 @@ export default function InboundScannerPage() {
             ) : (
               <button
                 onClick={async () => {
+                  // 촬영 단계로 넘어가면 그 LPN은 사용 확정이다. 이후 뒤로가기로 회수하지 않는다.
+                  setLpnIssuedNow(false);
                   // 시스템 설정에서 자동 인쇄를 끈 경우 프린터 전송 없이 바로 촬영 단계로
                   if (!getSystemSettings().autoPrintTrigger) {
                     setStep('VISION_EVALUATION');
@@ -1498,11 +1578,21 @@ export default function InboundScannerPage() {
       
       {/* 작업 진행 현황 패널 (비동기 큐 모니터링) */}
       <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-800 mx-2 sm:mx-0 transition-all">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">작업 진행 현황</h3>
-          <span className="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1 rounded-full">
-            대기 {inFlightCount}건
-          </span>
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm shrink-0">작업 진행 현황</h3>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {finishedCount > 0 && (
+              <button
+                onClick={clearFinishedTasks}
+                className="text-[11px] font-bold text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 border border-gray-200 dark:border-gray-700 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+              >
+                완료 기록 지우기 ({finishedCount})
+              </button>
+            )}
+            <span className="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">
+              대기 {inFlightCount}건
+            </span>
+          </div>
         </div>
 
         {visibleQueue.length === 0 ? (
@@ -1552,15 +1642,27 @@ export default function InboundScannerPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-end">
-                      <span className={`text-xs font-bold px-2 py-1 rounded shadow-sm whitespace-nowrap ${
-                        item.status === 'FAILED'
-                          ? 'text-red-700 dark:text-red-300 bg-red-200 dark:bg-red-900'
-                          : 'text-emerald-700 dark:text-emerald-300 bg-emerald-200 dark:bg-emerald-900'
-                      }`}>
-                        {item.status === 'FAILED' ? '실패' : item.grade}
-                      </span>
-                      {item.message && <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-right max-w-[120px] truncate" title={item.message}>{item.message}</span>}
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-end">
+                        <span className={`text-xs font-bold px-2 py-1 rounded shadow-sm whitespace-nowrap ${
+                          item.status === 'FAILED'
+                            ? 'text-red-700 dark:text-red-300 bg-red-200 dark:bg-red-900'
+                            : 'text-emerald-700 dark:text-emerald-300 bg-emerald-200 dark:bg-emerald-900'
+                        }`}>
+                          {item.status === 'FAILED' ? '실패' : item.grade}
+                        </span>
+                        {item.message && <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-right max-w-[120px] truncate" title={item.message}>{item.message}</span>}
+                      </div>
+                      <button
+                        onClick={() => reprintLpnLabel(item.lpn, item.title)}
+                        disabled={reprintingLpn === item.lpn}
+                        title="LPN 라벨 재출력"
+                        className="shrink-0 p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 disabled:opacity-40 transition-colors cursor-pointer"
+                      >
+                        {reprintingLpn === item.lpn
+                          ? <RefreshCcw className="w-4 h-4 animate-spin" />
+                          : <Printer className="w-4 h-4" />}
+                      </button>
                     </div>
                   )}
                 </div>

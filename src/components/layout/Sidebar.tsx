@@ -215,7 +215,7 @@ export default function Sidebar() {
                     <span className="text-gray-900 dark:text-white">Nexus</span>
                     <span className="text-blue-600 dark:text-blue-400">WMS</span>
                   </div>
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono font-bold mt-0.5">Enterprise v2.14.0.0</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono font-bold mt-0.5">Enterprise v2.15.0.1</span>
                 </div>
               </div>
               <button
