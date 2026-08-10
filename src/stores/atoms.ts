@@ -45,7 +45,6 @@ export interface UploadTask {
   message?: string;
   grade?: string;
   timestamp: number;
-  autoHidden?: boolean; // 현장 촬영 화면 목록에서만 감춤 (집계에는 계속 포함)
 }
 export const uploadQueueAtom = atom<UploadTask[]>([]);
 

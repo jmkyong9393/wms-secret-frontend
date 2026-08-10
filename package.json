@@ -1,6 +1,6 @@
 {
   "name": "nexus-wms-frontend",
-  "version": "2.14.0.0",
+  "version": "2.15.0.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
