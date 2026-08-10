@@ -283,11 +283,13 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
   const handleBatchExportCSV = () =>
     exportToCSV(`nexus_inventory_selected_${selectedIds.length}items`, items.filter((i) => selectedIds.includes(i.id)).map(toCsvRow));
 
+  // 라벨의 "작업자"는 등급 확정 주체(AI/HITL)가 아니라 실제 입고 처리한 사람을 보여준다.
+  // item.worker_id는 구 필드(등급 확정 주체 서술, 화면 호환용) — 라벨에는 쓰지 않는다.
   const handlePrintLabel = (item: InventoryItem) =>
     setActivePrintData({
       lpn_barcode: item.lpn_barcode,
       book: { title: item.book.title, author: item.book.author, isbn: item.book.isbn },
-      worker_id: item.worker_id,
+      worker_id: item.worker_label,
     });
 
   const openZoom = (item: InventoryItem) =>

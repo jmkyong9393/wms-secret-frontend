@@ -133,40 +133,50 @@ export default function CertificatePage() {
 
   return (
     // print-color-adjust: exact - 등급 배지 그라데이션/배경색이 PDF 출력물에서 날아가지 않게 강제
+    //
+    // [2026-08-11] PDF 저장(window.print)이 화면과 같은 여백/폰트 크기로 그대로 찍혀 A4 두 장으로
+    // 넘쳤다(실측: "명품 C++ Programming" 보증서). 화면용 레이아웃은 그대로 두고, print: 변형으로
+    // 패딩/여백만 압축해 한 장에 들어가게 한다. 결함 사진은 세로가 긴 실물 촬영본이 많아
+    // print:max-h로 높이를 별도 제한하지 않으면 이 블록 하나가 남은 페이지를 다 먹는다.
     <div
-      className="min-h-dvh bg-slate-50 flex flex-col font-sans pb-12 print:pb-0"
+      className="min-h-dvh bg-slate-50 flex flex-col font-sans pb-12 print:pb-0 print:min-h-0"
       style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
     >
+      <style>{`
+        @media print {
+          @page { size: A4; margin: 8mm; }
+        }
+      `}</style>
       {/* Header */}
-      <div className="bg-indigo-600 text-white p-6 shadow-md rounded-b-3xl">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <ShieldCheck size={28} className="text-emerald-300" />
-          <h1 className="text-xl font-bold tracking-tight">AI 품질 보증서</h1>
+      <div className="bg-indigo-600 text-white p-6 print:p-3 shadow-md rounded-b-3xl print:rounded-b-lg">
+        <div className="flex items-center justify-center gap-2 mb-2 print:mb-1">
+          <ShieldCheck size={28} className="text-emerald-300 print:w-5 print:h-5" />
+          <h1 className="text-xl print:text-base font-bold tracking-tight">AI 품질 보증서</h1>
         </div>
         <p className="text-indigo-100 text-center text-xs opacity-90">
           Nexus WMS Vision AI가 투명하게 검증한 도서입니다.
         </p>
       </div>
 
-      <div className="max-w-md w-full mx-auto px-4 -mt-4 relative z-10">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+      <div className="max-w-md w-full mx-auto px-4 print:px-0 -mt-4 print:mt-2 relative z-10">
+        <div className="bg-white rounded-2xl print:rounded-lg shadow-xl print:shadow-none overflow-hidden border border-gray-100">
           {/* Grade Badge */}
-          <div className={`p-6 flex flex-col items-center border-b ${view.bg}`}>
-            <div className="bg-white p-3 rounded-full shadow-md mb-3 border border-emerald-100">
-              <Medal size={42} className={view.icon} />
+          <div className={`p-6 print:p-3 flex flex-col items-center border-b ${view.bg}`}>
+            <div className="bg-white p-3 print:p-1.5 rounded-full shadow-md mb-3 print:mb-1 border border-emerald-100">
+              <Medal size={42} className={`print:w-6 print:h-6 ${view.icon}`} />
             </div>
-            <h2 className={`text-3xl sm:text-4xl font-black tracking-tight mb-1 ${view.text}`}>{view.title}</h2>
+            <h2 className={`text-3xl sm:text-4xl print:text-xl font-black tracking-tight mb-1 ${view.text}`}>{view.title}</h2>
             <span className="text-xs font-bold text-emerald-700 bg-emerald-100/80 px-3 py-0.5 rounded-full border border-emerald-200 mt-1">
               Nexus AI 검증 완료 도서
             </span>
             {cert?.headline && (
-              <p className={`text-sm font-bold mt-3 text-center leading-snug ${view.text}`}>{cert.headline}</p>
+              <p className={`text-sm print:text-xs font-bold mt-3 print:mt-1 text-center leading-snug ${view.text}`}>{cert.headline}</p>
             )}
           </div>
 
           {/* Book Info */}
-          <div className="p-6">
-            <div className="flex items-start gap-4 mb-6">
+          <div className="p-6 print:p-3">
+            <div className="flex items-start gap-4 mb-6 print:mb-2">
               <div className="w-20 h-28 bg-gray-200 rounded shadow-sm shrink-0 flex items-center justify-center overflow-hidden">
                 {item.book?.cover_image_url ? (
                   <img src={item.book.cover_image_url} alt={item.book.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -201,29 +211,29 @@ export default function CertificatePage() {
 
             {/* AI 정밀 진단 리포트 */}
             <div>
-              <div className="flex items-center justify-between mb-3 gap-2">
-                <h4 className="font-bold text-gray-900 flex items-center gap-2 text-base">
-                  <ShieldCheck size={18} className="text-emerald-600" /> AI 정밀 진단 리포트
+              <div className="flex items-center justify-between mb-3 print:mb-1.5 gap-2">
+                <h4 className="font-bold text-gray-900 flex items-center gap-2 text-base print:text-sm">
+                  <ShieldCheck size={18} className="text-emerald-600 print:w-3.5 print:h-3.5" /> AI 정밀 진단 리포트
                 </h4>
                 <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
                   UBCI {score}점
                 </span>
               </div>
 
-              <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/80 text-sm space-y-4">
+              <div className="bg-slate-50/80 rounded-2xl print:rounded-lg p-4 print:p-2 border border-slate-200/80 text-sm space-y-4 print:space-y-1.5">
                 {cert ? (
                   <>
-                    <div className="bg-white p-3.5 rounded-xl border border-slate-100 shadow-2xs space-y-2">
+                    <div className="bg-white p-3.5 print:p-2 rounded-xl print:rounded-md border border-slate-100 shadow-2xs space-y-2 print:space-y-1">
                       <p className="text-gray-700 text-xs sm:text-sm leading-relaxed font-medium">{cert.summary}</p>
                     </div>
 
-                    <div className="bg-white p-3.5 rounded-xl border border-slate-100 shadow-2xs space-y-1.5">
+                    <div className="bg-white p-3.5 print:p-2 rounded-xl print:rounded-md border border-slate-100 shadow-2xs space-y-1.5">
                       <p className="text-xs font-bold text-gray-800">상세 사유</p>
                       <p className="text-xs text-gray-600 leading-relaxed">{cert.condition_detail}</p>
                     </div>
 
                     {cert.care_tip && (
-                      <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-100">
+                      <div className="bg-indigo-50/70 p-3 print:p-1.5 rounded-xl print:rounded-md border border-indigo-100 print:hidden">
                         <p className="text-[11px] text-indigo-900 leading-relaxed">
                           <span className="font-bold">보관 팁 · </span>
                           {cert.care_tip}
@@ -234,13 +244,13 @@ export default function CertificatePage() {
                 ) : (
                   // Report Agent 문서가 없는 과거 건. 프론트가 그럴듯한 문장을 지어내지 않고
                   // 문서가 아직 없다는 사실을 그대로 알린다.
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-100 text-xs text-gray-500 leading-relaxed">
+                  <div className="bg-white p-3.5 print:p-2 rounded-xl print:rounded-md border border-slate-100 text-xs text-gray-500 leading-relaxed">
                     이 도서는 UBCI {score}점 판정을 받았습니다. 상세 진단 문서는 아직 발행되지 않았습니다.
                   </div>
                 )}
 
-                {/* 3대 핵심 품질 보증 항목 */}
-                <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+                {/* 3대 핵심 품질 보증 항목 — 인쇄본에서는 생략(장식용, 지면 절약) */}
+                <div className="grid grid-cols-3 gap-2 text-center text-[11px] print:hidden">
                   <div className="bg-white p-2 rounded-lg border border-slate-100 flex flex-col items-center">
                     <span className="text-base mb-0.5">🛡️</span>
                     <span className="font-bold text-slate-700">100% 픽셀 검증</span>
@@ -256,9 +266,9 @@ export default function CertificatePage() {
                 </div>
 
                 {/* AI 실물 검수 및 결함 판독 내역 */}
-                <div className="mt-4">
+                <div className="mt-4 print:mt-1.5">
                   <p className="text-xs font-bold text-gray-700 mb-1">📷 AI 실물 검수 및 결함 판독 내역</p>
-                  <p className="text-[11px] text-gray-500 mb-2">
+                  <p className="text-[11px] text-gray-500 mb-2 print:hidden">
                     {findings.length > 0
                       ? '감점 사유가 가장 큰 실물 스캔 사진과 판독 위치를 그대로 공개합니다.'
                       : '결함이 발견되지 않아 첫 번째 실물 스캔 사진을 그대로 공개합니다.'}
@@ -269,10 +279,12 @@ export default function CertificatePage() {
                       공개 가능한 실물 스캔 사진이 없습니다.
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-3 mt-3">
-                      <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-3">
-                        <div className="relative inline-block w-full rounded overflow-hidden bg-gray-100 border border-gray-200">
-                          <img src={repImage} alt="실물 검수 사진" className="w-full h-auto object-contain block" />
+                    <div className="flex flex-col gap-3 print:gap-1.5 mt-3 print:mt-1.5">
+                      <div className="bg-white p-3 print:p-1.5 rounded-lg print:rounded-md border border-gray-200 shadow-sm space-y-3 print:space-y-1.5">
+                        {/* 세로로 긴 실물 촬영본이 PDF 한 장을 다 먹는 걸 막기 위해 인쇄본만
+                            높이를 제한한다 (object-contain이라 비율은 유지되고 잘리지 않는다). */}
+                        <div className="relative inline-block w-full rounded overflow-hidden bg-gray-100 border border-gray-200 print:max-h-[220px]">
+                          <img src={repImage} alt="실물 검수 사진" className="w-full h-auto object-contain block print:max-h-[220px] print:mx-auto" />
                           {repBBoxes.map((box, i) => {
                             const { left, top, width, height } = bboxToPercent(box);
                             return (
@@ -335,7 +347,7 @@ export default function CertificatePage() {
           </div>
 
           {/* Footer Metadata */}
-          <div className="bg-slate-50 p-4 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-slate-400 font-mono text-center">
+          <div className="bg-slate-50 p-4 print:p-2 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-slate-400 font-mono text-center">
             <p>LPN: {item.lpn_barcode || lpn}</p>
             <p>Inspection: {item.date}</p>
             {cert?.cert_id && <p>Cert: {cert.cert_id}</p>}
