@@ -1314,7 +1314,10 @@ export default function InboundScannerPage() {
                         isbn: isbn,
                         title: bookInfo?.title || '신품 도서',
                         imageUrl: bookInfo?.imageUrl || '',
-                        qty: fasttrackQty
+                        qty: fasttrackQty,
+                        // 신품 입고 작업자. 이 값이 있어야 "나의 검수 내역"이 신품 입고분을
+                        // 걸러낼 수 있다 (중고 /evaluate의 worker_id와 같은 역할).
+                        worker_id: user?.employeeId || null
                       })
                     });
                     if (res.ok) {
