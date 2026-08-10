@@ -17,6 +17,7 @@ import { BrowserMultiFormatReader as ZXingBrowserReader } from '@zxing/browser';
 import { QRCodeSVG } from 'qrcode.react';
 import { LpnPrintLabel } from '@/features/inbound/components/LpnPrintLabel';
 import { TRACK1_IMAGE_COUNT, TRACK1_SHOTS, shotAt, shotLabel } from '@/features/inbound/captureSequence';
+import { saveDraft, loadDraft, clearDraft } from '@/features/inbound/inspectionDraft';
 
 type Step = 'SELECT_TYPE' | 'SCAN_BARCODE' | 'PRINT_STICKER' | 'VISION_EVALUATION' | 'RESULT';
 type InboundType = 'NEW_FASTTRACK' | 'USED_RETURN_INSPECTION';
@@ -33,6 +34,9 @@ export default function InboundScannerPage() {
   const [isLoadingBook, setIsLoadingBook] = useState(false);
   const [fasttrackQty, setFasttrackQty] = useState<number>(1);
   const [activeStation, setActiveStation] = useState<string>('A');
+  // 화면 꺼짐·새로고침으로 페이지가 재생성된 뒤 이전 작업을 되살렸을 때 띄우는 안내.
+  // null이면 평소 진입(복원 없음)이다.
+  const [resumedDraft, setResumedDraft] = useState<{ lpn: string; shots: number } | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -86,6 +90,55 @@ export default function InboundScannerPage() {
    * 서버는 존·날짜별 max(순번)+1로 채번하며 UNIQUE 충돌 시 재시도한다. 실패하면
    * 라벨을 발급하지 않고 예외를 던진다 — 잘못된 번호를 실물에 붙이는 것보다 낫다.
    */
+  /**
+   * LPN 재검수 시 원본 도서 정보 조회.
+   *
+   * [2026-08-10 수정] 종전에는 localStorage('local_evaluations')만 뒤졌다. 그 기록은
+   * **최초 입고를 수행한 그 브라우저에만** 남으므로, 다른 작업자 단말로 스캔하거나
+   * 캐시가 지워졌거나 도메인이 바뀌면(터널 URL 변경 등) 항상 미스가 나
+   * `{title:'정보 없음 (재촬영 진행)', categoryName:'LPN 재스캔'}`이 그대로 서버로 갔다.
+   * 그 값은 단순 표시용이 아니다 — 워커가 `agent_logs.book_metadata.title`을 읽어
+   * Policy Agent의 수험서 낙서 Cap(is_workbook) 판정과 보증서 본문 생성에 쓰므로,
+   * 같은 책인데 재검수만 하면 판정 근거와 고객 보증서 문구가 달라진다.
+   *
+   * 원장(서버)에는 최초 입고 때 연결된 book이 그대로 있으므로 그것을 정본으로 쓴다.
+   * 오프라인이거나 조회에 실패하면 종전 localStorage 경로로 폴백한다.
+   */
+  const lookupBookByLpn = async (lpn: string): Promise<any | null> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/inventory/${encodeURIComponent(lpn)}`);
+      if (res.ok) {
+        const item = await res.json();
+        const b = item?.book;
+        if (b?.title) {
+          return {
+            isbn: b.isbn || '',
+            title: b.title,
+            author: b.author,
+            publisher: b.publisher,
+            imageUrl: b.cover_image_url,
+            price: b.base_price,
+            isRescan: true,
+          };
+        }
+      }
+    } catch {
+      // 네트워크 단절 - 아래 로컬 기록으로 폴백한다.
+    }
+
+    const localEvals = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
+    const hit = [...localEvals].reverse().find((e: any) => e.lpn === lpn);
+    if (!hit) return null;
+    return {
+      isbn: hit.isbn || '',
+      title: hit.title,
+      author: hit.author,
+      publisher: hit.publisher,
+      categoryName: hit.category,
+      isRescan: true,
+    };
+  };
+
   const issueLPN = async (isbnValue: string): Promise<string> => {
     const res = await fetch(`${API_BASE_URL}/api/v1/inventory/lpn`, {
       method: 'POST',
@@ -122,10 +175,14 @@ export default function InboundScannerPage() {
       });
       const base64Images = await Promise.all(data.images.map(getBase64));
 
+      // [수정 이력 2026-08-10] worker_id 누락 - 백엔드는 이미 이 값을 받아 agent_logs.
+      // inbound_worker_id에 저장하고 "내 검수만" 필터(returns/inspections?worker_id=)가
+      // 그 값을 기준으로 거른다. 이 필드가 빠져 있으면 서버에 저장되는 값이 항상 null이라,
+      // 실제로 촬영·검수한 작업자 본인의 "나의 검수 내역"이 매번 0건으로 뜬다.
       const res = await fetch(`${API_BASE_URL}/api/v1/inbound/evaluate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lpn: data.lpn, images: base64Images, book_metadata: data.book_metadata })
+        body: JSON.stringify({ lpn: data.lpn, images: base64Images, book_metadata: data.book_metadata, worker_id: user?.employeeId || null })
       });
       if (!res.ok) throw new Error("Evaluation failed");
       return res.json();
@@ -147,11 +204,23 @@ export default function InboundScannerPage() {
 
       // 카메라 뷰파인더 닫고, 즉시(0.001초만에) 다음 화면(RESULT)으로 전환하여 체감속도 극대화
       setStep('RESULT');
+      // [수정 이력 2026-08-10] 전송 시점에 이미지를 blob으로 이미 캡처해 mutate()에 넘겼으므로
+      // (위 mutationFn의 data.images) 여기서 비워도 전송에는 영향이 없다. 종전에는 "다음 도서
+      // 스캔하기" 버튼이나 뒤로가기 버튼을 눌러야만 비워졌다 - RESULT 화면에서 SSE 진행이
+      // 멈추거나(백그라운드 탭 스로틀링 등) 화면이 꺼졌다 켜진 뒤 그 버튼들을 거치지 않고
+      // 촬영 화면(VISION_EVALUATION)에 재진입하면, 이전 도서의 사진 3장이 그대로 남아
+      // "이미 다 찍힌 것"처럼 보였다.
+      setCapturedImages([]);
       return { tempJobId };
     },
     onSuccess: (data, variables, context) => {
       // 2. 서버 통신이 '진짜로' 성공하면, 서버가 발급한 진짜 Job ID를 받아옴
       const { job_id, lpn } = data;
+
+      // 서버가 작업을 접수한 시점에만 초안을 버린다. onMutate(낙관적 전환)에서 지우면
+      // 전송이 실패했을 때 촬영분까지 사라져 처음부터 다시 찍어야 한다.
+      clearDraft();
+      setResumedDraft(null);
 
       // 임시 ID로 잡아둔 자리를 실제 job_id로 치환하고 분석 대기 상태로 넘긴다.
       setUploadQueue(prev => prev.map(q => q.id === context?.tempJobId
@@ -382,6 +451,69 @@ export default function InboundScannerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
+  // ---------------------------------------------------------------------------
+  // 작업 이어하기 (화면 꺼짐·새로고침 복구) — features/inbound/inspectionDraft.ts
+  // ---------------------------------------------------------------------------
+  // 비동기 복원 도중 작업자가 먼저 새 작업을 시작했는지 판별하기 위한 현재 단계 스냅샷.
+  // state를 직접 읽으면 이펙트 생성 시점 값에 고정되므로 ref로 최신값을 본다.
+  const stepRef = useRef(step);
+  useEffect(() => { stepRef.current = step; }, [step]);
+
+  // 진행 중이던 작업 복원 (마운트 1회).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const draft = await loadDraft();
+      if (cancelled || !draft?.currentLpn) return;
+      // 복원을 기다리지 않고 이미 다음 작업에 들어갔다면 덮어쓰지 않는다.
+      if (stepRef.current !== 'SELECT_TYPE') return;
+
+      // 촬영분은 Blob으로 보존된다. 객체 URL은 페이지가 새로 뜨면 무효라 다시 만든다.
+      const images = (draft.images || []).map((blob) => ({
+        url: URL.createObjectURL(blob),
+        blob,
+      }));
+
+      setInboundType(draft.inboundType as InboundType);
+      setIsbn(draft.isbn || '');
+      setCurrentLpn(draft.currentLpn);
+      setBookInfo(draft.bookInfo ?? null);
+      setCapturedImages(images);
+      setStep(draft.step as Step);  // 카메라는 step 변화에 반응하는 위 이펙트가 되살린다
+      setResumedDraft({ lpn: draft.currentLpn, shots: images.length });
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // 진행 상태 저장.
+  //
+  // LPN이 발급된 뒤(= 실물에 라벨이 붙은 뒤)의 단계만 저장한다. 그 앞 단계는 되돌릴
+  // 것이 없고, 애매한 중간 상태를 복원하면 오히려 혼란스럽다. 전송 완료 후(RESULT)는
+  // 저장 대상이 아니므로 아래 조건에서 자연히 빠진다.
+  useEffect(() => {
+    if (!currentLpn) return;
+    if (step !== 'PRINT_STICKER' && step !== 'VISION_EVALUATION') return;
+    saveDraft({
+      step,
+      inboundType,
+      isbn,
+      currentLpn,
+      bookInfo,
+      images: capturedImages.map((i) => i.blob),
+    });
+  }, [step, inboundType, isbn, currentLpn, bookInfo, capturedImages]);
+
+  /** 이어하기 안내를 닫고 초안을 버린 뒤 처음 화면으로 돌아간다. */
+  const discardResumedDraft = () => {
+    clearDraft();
+    setResumedDraft(null);
+    setCapturedImages([]);
+    setCurrentLpn('');
+    setIsbn('');
+    setBookInfo(null);
+    setStep('SELECT_TYPE');
+  };
+
   // 실제 바코드(ISBN) 스캐닝 로직 (ZXing Browser)
   const codeReader = useRef<any>(null);
 
@@ -438,26 +570,19 @@ export default function InboundScannerPage() {
           if (text.toUpperCase().startsWith('LPN-')) {
             const lpn = text.toUpperCase();
             setCurrentLpn(lpn);
-            
-            // 로컬 스토리지에서 기존 도서 정보 조회 (가장 최신 데이터를 가져오기 위해 뒤에서부터 검색)
-            const localEvals = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
-            const existingBook = [...localEvals].reverse().find((e: any) => e.lpn === lpn);
-            
+            setIsLoadingBook(true);
+
+            // 원장(서버)이 정본. 실패 시에만 단말 로컬 기록으로 폴백한다 (lookupBookByLpn 주석 참조).
+            const existingBook = await lookupBookByLpn(lpn);
+
             if (existingBook) {
               setIsbn(existingBook.isbn || '');
-              setBookInfo({
-                isbn: existingBook.isbn,
-                title: existingBook.title,
-                author: existingBook.author,
-                publisher: existingBook.publisher,
-                categoryName: existingBook.category,
-                isRescan: true
-              });
+              setBookInfo(existingBook);
             } else {
               setIsbn('');
               setBookInfo({ title: '정보 없음 (재촬영 진행)', categoryName: 'LPN 재스캔', isRescan: true });
             }
-            
+
             setIsLoadingBook(false);
             setStep('PRINT_STICKER');
             return;
@@ -601,6 +726,8 @@ export default function InboundScannerPage() {
       setIsbn('');
       setCurrentLpn('');
       setCapturedImages([]);
+      clearDraft();
+      setResumedDraft(null);
     }
   };
 
@@ -769,6 +896,38 @@ export default function InboundScannerPage() {
             </h1>
           </div>
         </div>
+
+        {/*
+          이어하기 안내. 화면이 꺼졌다 켜지거나 새로고침으로 페이지가 새로 뜬 뒤
+          직전 작업을 되살렸을 때만 나타난다. 작업자가 "왜 이 화면부터 시작하지?"라고
+          의심하지 않도록 복원 사실과 근거(LPN·촬영 장수)를 명시하고, 잘못 되살아난
+          경우를 위해 새로 시작할 출구를 함께 둔다.
+        */}
+        {resumedDraft && (
+          <div className="absolute top-16 w-full z-30 px-3 pt-2 animate-in slide-in-from-top-2 duration-200">
+            <div className="bg-amber-50 dark:bg-amber-950/90 border border-amber-300 dark:border-amber-700 rounded-xl px-3 py-2.5 flex items-center gap-2.5 shadow-lg backdrop-blur-sm">
+              <RefreshCcw className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div className="min-w-0 flex-1 leading-tight">
+                <p className="text-xs font-black text-amber-900 dark:text-amber-200">이전 작업을 이어서 진행합니다</p>
+                <p className="text-[11px] font-mono text-amber-800/80 dark:text-amber-300/80 truncate">
+                  {resumedDraft.lpn} · 촬영 {resumedDraft.shots}장 복원됨
+                </p>
+              </div>
+              <button
+                onClick={() => setResumedDraft(null)}
+                className="text-[11px] font-bold text-amber-800 dark:text-amber-300 px-2 py-1 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/60 shrink-0 cursor-pointer"
+              >
+                확인
+              </button>
+              <button
+                onClick={discardResumedDraft}
+                className="text-[11px] font-bold text-white bg-amber-600 hover:bg-amber-700 px-2.5 py-1 rounded-lg shrink-0 cursor-pointer"
+              >
+                새로 시작
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Simulated Viewport / Content Area (Light/Dark Glassmorphism Compatible) */}
         <div className="flex-1 relative bg-gradient-to-br from-slate-100 via-white to-indigo-100/70 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/80 border-b border-gray-200 dark:border-slate-800 flex items-center justify-center overflow-hidden pt-16 min-h-[480px] transition-colors">
@@ -1006,25 +1165,19 @@ export default function InboundScannerPage() {
                   if (inputVal.toUpperCase().startsWith('LPN-')) {
                     const lpn = inputVal.toUpperCase();
                     setCurrentLpn(lpn);
-                    
-                    const localEvals = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
-                    const existingBook = [...localEvals].reverse().find((e: any) => e.lpn === lpn);
-                    
+                    setIsLoadingBook(true);
+
+                    // 스캐너 경로와 동일하게 원장(서버) 우선 조회 (lookupBookByLpn 주석 참조).
+                    const existingBook = await lookupBookByLpn(lpn);
+
                     if (existingBook) {
                       setIsbn(existingBook.isbn || '');
-                      setBookInfo({
-                        isbn: existingBook.isbn,
-                        title: existingBook.title,
-                        author: existingBook.author,
-                        publisher: existingBook.publisher,
-                        categoryName: existingBook.category,
-                        isRescan: true
-                      });
+                      setBookInfo(existingBook);
                     } else {
                       setIsbn('');
                       setBookInfo({ title: '정보 없음 (재촬영 진행)', categoryName: 'LPN 재스캔', isRescan: true });
                     }
-                    
+
                     setIsLoadingBook(false);
                     setStep('PRINT_STICKER');
                     return;
@@ -1327,6 +1480,8 @@ export default function InboundScannerPage() {
                 setIsPrinting(false);
                 setIsAnalyzing(false);
                 setCapturedImages([]);
+                clearDraft();
+                setResumedDraft(null);
               }}
               className="w-full bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white py-4 rounded-xl font-bold flex items-center justify-center transition-all shadow-lg shadow-gray-300 dark:shadow-none"
             >

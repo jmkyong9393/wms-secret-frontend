@@ -33,6 +33,18 @@ import type { InventoryItem, LpnPrintData, StockRole } from '../types';
 import { formatKSTDate, formatZone, gradeMeta, isNewBookItem } from '../utils';
 import { LpnPrintModal } from './LpnPrintModal';
 
+/**
+ * 확정 트랙 색상. 사람이 개입한 경로(HITL)와 자동 확정(AI)을 한눈에 가른다.
+ * Tailwind JIT가 동적 조립 클래스를 인식하지 못하므로 완성된 클래스명을 반환한다.
+ */
+const trackTone = (track: string): string => {
+  if (track === 'HITL') return 'text-amber-600 dark:text-amber-400';
+  if (track === 'HITL 대기') return 'text-orange-500 dark:text-orange-400';
+  if (track === '신품') return 'text-blue-600 dark:text-blue-400';
+  if (track === '수기') return 'text-slate-600 dark:text-slate-300';
+  return 'text-emerald-600 dark:text-emerald-400'; // AI
+};
+
 type SearchField = 'ALL' | 'BOOK_INFO' | 'AUTHOR' | 'PUBLISHER' | 'LPN' | 'ISBN' | 'TITLE' | 'ZONE';
 type SortKey = 'LATEST' | 'OLDEST' | 'QTY_DESC' | 'QTY_ASC' | 'UBCI_DESC' | 'TITLE_ASC';
 type BookType = 'ALL' | 'NEW' | 'USED';
@@ -91,6 +103,11 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
               // 백엔드가 실제 등급 확정 주체(AI 자동 판정 / HITL 결재자)를 내려주므로
               // 사번 리터럴로 덮어쓰지 않는다 (목록과 상세가 다른 담당자를 표시하던 원인).
               worker_id: item.worker_id || '미기록',
+              // [2026-08-10] 작업자(사람)와 확정 트랙을 분리 표기한다. 종전에는
+              // "Nexus Vision AI (LangGraph 4-Agent)" 한 줄이 작업자 칸을 차지해
+              // 실제로 검수한 사람이 목록에 드러나지 않았다. 자세한 근거는 상세 화면이 맡는다.
+              worker_label: item.worker_label || '작업자 미기록',
+              track: item.track || 'AI',
               date: item.date || '',
             };
           });
@@ -255,7 +272,8 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
     UBCI점수: item.ubci_score ?? '-',
     보관구역: formatZone(item.zone),
     재고수량: item.quantity,
-    작업자: item.worker_id,
+    작업자: item.worker_label,
+    확정트랙: item.track,
     입고일시: item.date,
   });
 
@@ -526,7 +544,146 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
           </div>
         </div>
 
-        <div className="overflow-x-auto w-full">
+        {/*
+          [수정 이력 2026-08-10] 모바일 뷰포트 대응 카드 리스트 신설.
+          이 데스크톱 <table>은 좁은 화면에서 가로 스크롤 없이는 열이 잘려 조회 자체가
+          어려웠다(작업자가 실제로 쓰는 화면인데도). md 미만에서는 카드 리스트로, md 이상에서는
+          기존 테이블로 전환한다 - 데스크톱 동작은 그대로 두고 좁은 화면에서만 레이아웃을 바꾼다.
+        */}
+        <div className="md:hidden space-y-3">
+          {loading ? (
+            <p className="py-16 text-center text-gray-400 font-bold text-sm">재고 데이터를 불러오는 중...</p>
+          ) : paginatedItems.length === 0 ? (
+            <div className="py-16 text-center text-gray-400 dark:text-gray-500">
+              <p className="text-sm font-bold">조회 조건에 해당하는 재고 데이터가 없습니다.</p>
+              <p className="text-xs mt-1">검색 키워드나 UBCI 점수대 필터를 초기화해 보세요.</p>
+            </div>
+          ) : (
+            paginatedItems.map((item) => {
+              const isSelected = selectedIds.includes(item.id);
+              const isNew = isNewBookItem(item);
+              const meta = gradeMeta(item.grade, item.ubci_score);
+              const href = detailHref(item);
+
+              return (
+                <div
+                  key={item.id}
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest('button, a, input, select, label, [data-row-stop]')) return;
+                    if (href) router.push(href);
+                    else openZoom(item);
+                  }}
+                  className={`p-3.5 rounded-xl border space-y-2.5 active:scale-[0.99] transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-blue-50/60 dark:bg-blue-950/30 border-blue-300 dark:border-blue-800'
+                      : 'bg-gray-50/60 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {isAdmin && (
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectItem(item.id)}
+                        data-row-stop
+                        className="w-4 h-4 mt-1 rounded text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+                      />
+                    )}
+                    <span data-row-stop className="contents">
+                      <BookCover
+                        key={`cover-m-${item.id}-${item.book.isbn}`}
+                        src={item.book.cover_image_url}
+                        title={item.book.title}
+                        author={item.book.author}
+                        isbn={item.book.isbn}
+                        className="w-12 h-16 shadow-sm shrink-0"
+                        onClick={() => openZoom(item)}
+                      />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black text-gray-900 dark:text-white text-sm leading-snug truncate">{item.book.title}</p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 font-extrabold truncate">
+                        {item.book.author} · {item.book.publisher}
+                      </p>
+                      <p className="text-[10px] font-mono text-gray-400">{item.book.isbn}</p>
+                    </div>
+                    {isNew ? (
+                      <span className="shrink-0 px-2 py-1 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                        신품
+                      </span>
+                    ) : (
+                      <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-black border ${meta.badge}`}>
+                        {meta.display}{item.ubci_score != null ? ` ${item.ubci_score}점` : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-gray-700 dark:text-gray-300">
+                      {!isNew ? item.lpn_barcode : 'LPN 미발급 (신품)'}
+                    </span>
+                    <span className="flex items-center gap-1 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
+                      <MapPin className="w-3 h-3" /> {formatZone(item.zone)}
+                    </span>
+                    <span className="font-black text-gray-900 dark:text-white">{item.quantity}권</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 font-medium border-t border-gray-200/70 dark:border-gray-700/60 pt-2">
+                    <span className="truncate font-mono">
+                      {item.worker_label} / <span className={trackTone(item.track)}>{item.track}</span>
+                    </span>
+                    <span className="flex items-center gap-1 shrink-0">
+                      <Clock className="w-3 h-3" /> {formatKSTDate(item.date)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-0.5" data-row-stop>
+                    {href ? (
+                      <Link
+                        href={href}
+                        className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-extrabold rounded-lg text-xs flex items-center justify-center gap-1 border border-gray-200 dark:border-gray-700 active:scale-95"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> 상세
+                      </Link>
+                    ) : (
+                      <button
+                        onClick={() => openZoom(item)}
+                        className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-extrabold rounded-lg text-xs flex items-center justify-center gap-1 border border-gray-200 dark:border-gray-700 active:scale-95 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> 상세
+                      </button>
+                    )}
+                    {!isNew && (
+                      <button
+                        onClick={() => handlePrintLabel(item)}
+                        className="flex-1 py-2 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-extrabold rounded-lg text-xs flex items-center justify-center gap-1 active:scale-95 cursor-pointer"
+                      >
+                        <Printer className="w-3.5 h-3.5" /> 인쇄
+                      </button>
+                    )}
+                    {isAdmin && !isNew && (
+                      <>
+                        <button onClick={() => handleSingleAiRetry(item)} className="p-2 bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-lg active:scale-95 shrink-0" title="AI 재검수 요청">
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleSingleReshoot(item)} className="p-2 bg-cyan-50 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 rounded-lg active:scale-95 shrink-0" title="현장 재촬영 요청">
+                          <Camera className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                    {isAdmin && (
+                      <button onClick={() => handleSingleDelete(item.id, item.lpn_barcode)} className="p-2 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg active:scale-95 shrink-0" title="재고 삭제">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto w-full">
           <table className="w-full text-left border-collapse">
             <thead className="bg-gray-50/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 uppercase border-y border-gray-200 dark:border-gray-800 font-bold text-xs tracking-wider">
               <tr>
@@ -677,9 +834,13 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                         )}
                       </td>
 
-                      {/* 작업자/일시 */}
+                      {/* 작업자/트랙 · 일시 (긴 서술 대신 `사번(이름) / 트랙` 한 줄) */}
                       <td className="py-4 px-4 whitespace-nowrap">
-                        <p className="text-gray-900 dark:text-white font-mono text-sm font-black">{item.worker_id}</p>
+                        <p className="text-gray-900 dark:text-white font-mono text-sm font-black">
+                          {item.worker_label}
+                          <span className="text-gray-400 dark:text-gray-500 font-bold"> / </span>
+                          <span className={trackTone(item.track)}>{item.track}</span>
+                        </p>
                         <p className="text-gray-500 dark:text-gray-400 text-xs font-mono flex items-center gap-1 mt-1 font-medium">
                           <Clock className="w-3.5 h-3.5 text-gray-400" />
                           {formatKSTDate(item.date)}
