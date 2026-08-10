@@ -591,7 +591,8 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                         {!isNew ? (
                           <div className="flex items-center gap-2.5">
                             <div className="bg-gray-100 dark:bg-gray-800 p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 shrink-0 shadow-2xs">
-                              <QRCodeSVG value={`${typeof window !== 'undefined' ? window.location.origin : ''}/certificate/${item.lpn_barcode}`} size={42} />
+                              {/* QR 진입점은 /lpn/[lpn] (행 클릭 링크와 동일 경로) */}
+                              <QRCodeSVG value={`${typeof window !== 'undefined' ? window.location.origin : ''}/lpn/${item.lpn_barcode}`} size={42} />
                             </div>
                             <div>
                               <p className="font-mono font-black text-gray-900 dark:text-white text-sm">{item.lpn_barcode}</p>

@@ -499,10 +499,11 @@ export default function HistoryDataGrid() {
                     </div>
                     <div className="flex flex-col items-center gap-1">
                       <div className="bg-white p-1 rounded border border-gray-200">
-                        <QRCodeSVG 
-                          id="lpn-qr-code" 
-                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/certificate/${selectedBook.lpn}`} 
-                          size={64} 
+                        {/* QR 진입점은 /lpn/[lpn] */}
+                        <QRCodeSVG
+                          id="lpn-qr-code"
+                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/lpn/${selectedBook.lpn}`}
+                          size={64}
                         />
                       </div>
                       <button 

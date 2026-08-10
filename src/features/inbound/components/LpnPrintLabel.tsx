@@ -20,11 +20,9 @@ interface LpnPrintLabelProps {
 
 export const LpnPrintLabel: React.FC<LpnPrintLabelProps> = ({ data }) => {
   // 선부착(Label First, Inspect Later) 규격: DB 적치 전 라벨이므로 Location(Zone)은 제외하고 LPN/ISBN/도서명/작업자 정보만 QR에 유기적 인코딩
-  // Real working QR code payload for smartphone camera scanning -> opens digital certificate
-  // [2026-08-09 수정] localhost 하드코딩이면 다른 기기(작업자 스캐너, 고객 휴대폰)에서
-  // 스캔하면 그 기기의 localhost로 열려서 항상 실패한다. window.location.origin으로 교정
-  // (InventoryDataTable/HistoryDataGrid가 이미 쓰는 패턴과 통일).
-  const qrPayload = `${typeof window !== 'undefined' ? window.location.origin : ''}/certificate/${data.lpn_barcode}`;
+  // QR 진입점은 /lpn/[lpn] — 직원은 내부 상세, 그 외에는 고객 보증서로 자동 전환된다.
+  // origin을 붙이는 이유: localhost 하드코딩이면 스캔한 기기의 localhost로 열려 실패한다.
+  const qrPayload = `${typeof window !== 'undefined' ? window.location.origin : ''}/lpn/${data.lpn_barcode}`;
 
   // 50x31mm 열전사 프린터 규격 (가로형)
   const containerStyle: React.CSSProperties = {
