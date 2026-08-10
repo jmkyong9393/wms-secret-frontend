@@ -20,7 +20,7 @@ import {
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { ShieldAlert, Lightbulb, ScrollText } from 'lucide-react';
+import { ShieldAlert, Lightbulb, ScrollText, ChevronDown, ChevronUp } from 'lucide-react';
 import { 
   AreaChart, 
   Area, 
@@ -91,6 +91,45 @@ export default function AdvancedDashboardPage() {
     queryFn: async () => (await apiClient.get('/api/v1/dashboard/weekly-insights')).data,
     staleTime: 10 * 60 * 1000,
   });
+
+  // 지난 주간 인사이트 이력 (2026-08-09 신설).
+  //
+  // weekly_insights는 실제로 방문한 주만 쌓이므로(1년에 최대 52행) DB 용량 문제는 아니다.
+  // 다만 HITL 대기열처럼 "전체를 한 번에 fetch"하는 패턴을 반복하면 나중에 몇 년치가
+  // 쌓였을 때 프론트가 그 전부를 한 번에 렌더링하게 된다 - 그래서 처음부터 배치
+  // 페이지네이션(limit/offset)만 쓰고, "더보기"를 누른 만큼만 이어붙인다.
+  const HISTORY_PAGE_SIZE = 10;
+  const [historyItems, setHistoryItems] = React.useState<any[]>([]);
+  const [historyTotal, setHistoryTotal] = React.useState(0);
+  const [historyLoading, setHistoryLoading] = React.useState(false);
+  const [historyExpanded, setHistoryExpanded] = React.useState(false);
+
+  const loadMoreHistory = React.useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await apiClient.get('/api/v1/dashboard/weekly-insights/history', {
+        params: { limit: HISTORY_PAGE_SIZE, offset: historyItems.length },
+      });
+      setHistoryItems((prev) => [...prev, ...(res.data.items ?? [])]);
+      setHistoryTotal(res.data.total ?? 0);
+    } catch (err) {
+      console.warn('주간 인사이트 이력 조회 실패:', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [historyItems.length]);
+
+  const toggleHistory = () => {
+    const next = !historyExpanded;
+    setHistoryExpanded(next);
+    if (next && historyItems.length === 0) {
+      loadMoreHistory();
+    }
+  };
+
+  // 이번 주 카드와 중복 표시되지 않도록 이력 목록에서는 제외한다.
+  const pastHistoryItems = historyItems.filter((h) => h.report_week !== weekly?.report_week);
+  const hasMoreHistory = historyItems.length < historyTotal;
 
   // 로그 비우기 기준 시각.
   //
@@ -396,6 +435,58 @@ export default function AdvancedDashboardPage() {
                   <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500">차주 반품 예측</p>
                   <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 font-mono">{weekly.predicted_returns ?? 0}건</p>
                 </div>
+              </div>
+              {/* 지난 주간 인사이트 - 최신순, "더보기"로 배치 로딩 (§전체 fetch 지양) */}
+              <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+                <button
+                  type="button"
+                  onClick={toggleHistory}
+                  className="flex items-center gap-1.5 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                >
+                  {historyExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  지난 주간 인사이트
+                </button>
+
+                {historyExpanded && (
+                  <div className="mt-3 space-y-2.5">
+                    {pastHistoryItems.length === 0 && !historyLoading && (
+                      <p className="text-xs text-gray-400 py-2">지난 주 이력이 없습니다.</p>
+                    )}
+                    {pastHistoryItems.map((h) => (
+                      <div
+                        key={h.report_week}
+                        className="border border-gray-100 dark:border-gray-800 rounded-xl p-3 space-y-1.5 bg-gray-50/50 dark:bg-gray-800/30"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300 font-mono">{h.report_week}</span>
+                          <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                            {h.generated_at ? new Date(h.generated_at).toLocaleDateString('ko-KR') : ''}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                          {h.ai_narrative || '서사가 생성되지 않았습니다.'}
+                        </p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+                          <span>절감 {(h.saved_labor_cost_krw ?? 0).toLocaleString()}원</span>
+                          <span>검수 {h.logistics?.week_inspections ?? 0}건</span>
+                          <span>주문 {h.logistics?.week_orders ?? 0}건</span>
+                          <span>반품예측 {h.predicted_returns ?? 0}건</span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {hasMoreHistory && (
+                      <button
+                        type="button"
+                        onClick={loadMoreHistory}
+                        disabled={historyLoading}
+                        className="w-full py-2 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        {historyLoading ? '불러오는 중...' : `더보기 (${historyItems.length}/${historyTotal})`}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           ) : (
