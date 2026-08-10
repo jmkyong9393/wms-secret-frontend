@@ -75,7 +75,7 @@ export default function LpnInternalLookupPage() {
 
   if (!isInternalViewer) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-dvh bg-gray-50 flex items-center justify-center p-4">
         <p className="text-gray-500 text-sm">고객용 품질 보증서로 이동 중입니다...</p>
       </div>
     );
@@ -83,7 +83,7 @@ export default function LpnInternalLookupPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-dvh bg-gray-50 flex flex-col items-center justify-center p-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4" />
         <p className="text-gray-500 font-medium text-sm">LPN 내부 정보를 조회하는 중...</p>
       </div>
@@ -92,7 +92,7 @@ export default function LpnInternalLookupPage() {
 
   if (error || !item) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div className="min-h-dvh bg-gray-50 p-6">
         <div className="max-w-2xl mx-auto bg-rose-50 border border-rose-200 rounded-2xl p-6 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
           <div>
@@ -112,7 +112,7 @@ export default function LpnInternalLookupPage() {
   const totalDefects = defectCoords.reduce((n, c) => n + c.bboxes.length, 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans pb-12">
+    <div className="min-h-dvh bg-gray-50 font-sans pb-12">
       <div className="bg-slate-900 text-white p-5 shadow-md">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">

@@ -44,8 +44,11 @@ export default function WorkerMobileShell({
     }
   };
 
+  // h-dvh를 쓴다. h-screen(100vh)은 모바일 브라우저의 주소창을 높이에 포함해 실제 보이는
+  // 영역보다 커지고, 그만큼 하단 탭바가 화면 밖으로 밀려 사라진다. dvh는 주소창이 접히고
+  // 펴지는 것을 따라 줄었다 늘었다 한다.
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden font-sans transition-colors duration-200">
+    <div className="flex flex-col h-dvh bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden font-sans transition-colors duration-200">
       {/* SessionAutoLogout은 루트 레이아웃에서 단일 마운트한다 (app/layout.tsx) */}
 
       {/* 알림·다크모드·사용자 메뉴는 공용 Header를 그대로 쓴다 (제목은 pathname 기반 자동) */}

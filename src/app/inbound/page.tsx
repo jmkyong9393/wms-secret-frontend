@@ -925,6 +925,21 @@ export default function InboundScannerPage() {
               </div>
             </div>
 
+            {/* 화면 안 셔터.
+                카드 하단의 촬영 버튼은 한 손으로 폰을 들고 책을 잡은 자세에서 엄지가
+                닿지 않는다. 프리뷰 위에 큰 원형 셔터를 겹쳐 두어 손을 옮기지 않고 찍는다.
+                (썸네일 갤러리보다 위에 배치해 서로 가리지 않게 한다.) */}
+            <button
+              type="button"
+              onClick={takePhoto}
+              disabled={isAnalyzing}
+              aria-label="사진 촬영"
+              className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 w-20 h-20 rounded-full bg-white/95 disabled:bg-white/40 shadow-2xl ring-4 ring-white/40 active:scale-90 transition-transform flex flex-col items-center justify-center cursor-pointer"
+            >
+              <Camera className="w-7 h-7 text-slate-900" />
+              <span className="text-[10px] font-black text-slate-900 mt-0.5">{capturedImages.length}장</span>
+            </button>
+
             {/* 썸네일 갤러리 */}
             <div className="absolute bottom-4 left-4 right-4 z-20 flex space-x-2 overflow-x-auto pb-2">
               {capturedImages.map((img, idx) => (
@@ -1274,6 +1289,7 @@ export default function InboundScannerPage() {
               >
                 <Camera className="w-6 h-6 mb-1" />
                 <span>사진 촬영 ({capturedImages.length}장)</span>
+                <span className="text-[10px] font-medium opacity-70 mt-0.5">화면 셔터 · Space/Enter</span>
               </button>
 
               <button 

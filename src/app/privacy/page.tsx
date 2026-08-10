@@ -9,7 +9,7 @@ import { PRIVACY_OFFICER } from '@/lib/contact';
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 space-y-8 font-sans text-gray-900 bg-gray-50/50 min-h-screen">
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 space-y-8 font-sans text-gray-900 bg-gray-50/50 min-h-dvh">
       {/* Header Back Link */}
       <div className="flex items-center justify-between">
         <Link

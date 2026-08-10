@@ -35,7 +35,7 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
+    <div className="flex min-h-dvh items-center justify-center bg-gray-100 p-4">
       <div className="w-full max-w-md bg-white p-8 shadow-lg rounded-lg border-t-4 border-blue-600">
         <h1 className="text-2xl font-bold mb-2 text-center text-gray-800">환영합니다! 🎉</h1>
 

@@ -90,7 +90,7 @@ export default function LoginPage() {
 
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/30 flex items-center justify-center p-4 sm:p-6 lg:p-12 relative overflow-hidden font-sans text-gray-900 transition-colors duration-200">
+    <div className="min-h-dvh w-full bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50/30 flex items-center justify-center p-4 sm:p-6 lg:p-12 relative overflow-hidden font-sans text-gray-900 transition-colors duration-200">
 
       {/* 실패 사유 알림창 (사유 코드 + 조치 안내 포함) */}
       <LoginFailureAlert failure={failure} onClose={() => setFailure(null)} />
