@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { bboxToPercent } from "@/features/inspection/utils/inspectionImageService";
 import type { HitlTask } from "@/features/hitl/types/hitl";
 import { DEFECT_TYPE_OPTIONS } from "@/features/hitl/policy";
+import { useScorePreview } from "@/features/hitl/hooks/useScorePreview";
+import { ScorePreviewPanel } from "@/features/hitl/components/ScorePreviewPanel";
 
 export interface EditedBbox {
   xmin: number;
@@ -100,6 +102,11 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
   const cur: BBoxEdits = edits ?? EMPTY_BBOX_EDITS;
   // 이 값들은 아직 DB에 반영되지 않은 임시 편집분이다 - 목록 화면의 처분결정 제출이 실제 저장 시점.
   const pendingEditCount = cur.excluded.length + cur.adopted.length + Object.keys(cur.edited).length + cur.added.length;
+  const hasEdits = pendingEditCount > 0;
+  // 편집분의 점수는 서버 Policy Agent가 계산한다 (LLM 미사용이라 호출 비용 없음).
+  // 프론트가 UBCI 산식을 흉내 내면 화면과 실제 저장값이 갈린다.
+  const scorePreview = useScorePreview(task?.id, edits, editable && hasEdits);
+
   const toggle = (list: number[], i: number) =>
     list.includes(i) ? list.filter((x) => x !== i) : [...list, i];
   const toggleExcluded = (i: number) =>
@@ -722,6 +729,18 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
               <Bot className="w-3.5 h-3.5" /> AI 판정 근거
             </button>
           </div>
+
+          {/* 편집 반영 점수. 탭과 무관하게 항상 보여야 결재자가 판단할 수 있다. */}
+          {editable && hasEdits && (
+            <div className="p-3 pb-0 shrink-0">
+              <ScorePreviewPanel
+                preview={scorePreview.preview}
+                loading={scorePreview.loading}
+                error={scorePreview.error}
+                hasEdits={hasEdits}
+              />
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {sidePanel === "defects" ? (

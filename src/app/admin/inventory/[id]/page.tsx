@@ -5,11 +5,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import Link from 'next/link';
-import { ArrowLeft, Printer, ShieldCheck, MapPin, Tag, UserCheck, Package, ExternalLink, Bot, Image as ImageIcon, AlertTriangle, Eye, EyeOff, ScanSearch } from 'lucide-react';
+import { ArrowLeft, Printer, ShieldCheck, MapPin, Tag, UserCheck, Package, ExternalLink, Bot, Image as ImageIcon, AlertTriangle, Eye, EyeOff, ScanSearch, RotateCcw } from 'lucide-react';
 
 import BookCover from '@/components/BookCover';
 import { LpnPrintLabel, LpnLabelData } from '@/features/inbound/components/LpnPrintLabel';
-import { labelsAPI } from '@/lib/api';
+import { labelsAPI, adminAPI } from '@/lib/api';
 import {
   resolveInspectionImages,
   resolveDefectCoordinates,
@@ -93,6 +93,10 @@ export default function InventoryDetailPage() {
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [selectedImgIdx, setSelectedImgIdx] = useState<number>(0);
   const [isReinspecting, setIsReinspecting] = useState<boolean>(false);
+  // HITL 회수. 되돌리기는 판매 가능 재고에서 빼는 동작이라 확인 절차를 거친다.
+  const [recallOpen, setRecallOpen] = useState<boolean>(false);
+  const [recallReason, setRecallReason] = useState<string>('');
+  const [isRecalling, setIsRecalling] = useState<boolean>(false);
   // AI 판독 오버레이 표시 여부. Vision 확정 결함과 YOLO 사전탐지 후보를 각각 껐다 켤 수 있다
   // (원본 사진 그대로도 봐야 하고, AI가 무엇을 기각했는지도 대조해야 하므로 분리한다).
   const [showVisionBoxes, setShowVisionBoxes] = useState<boolean>(true);
@@ -141,6 +145,23 @@ export default function InventoryDetailPage() {
     }
   };
 
+  const handleRecall = async () => {
+    if (!data) return;
+    try {
+      setIsRecalling(true);
+      // 재고 ID를 보내면 백엔드가 source_job_id로 원본 검수 작업을 찾아간다.
+      const res = await adminAPI.recallToHitl(data.id, recallReason.trim() || undefined);
+      setRecallOpen(false);
+      setRecallReason('');
+      await fetchDetail();
+      alert(res.message);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err?.message || 'HITL 회수에 실패했습니다.');
+    } finally {
+      setIsRecalling(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-8 max-w-4xl mx-auto text-center space-y-4">
@@ -178,6 +199,9 @@ export default function InventoryDetailPage() {
     data.lpn_barcode.startsWith('ISBN') ||
     data.lpn_barcode.startsWith('NEW') ||
     (data.grade as string) === 'NEW_FASTTRACK';
+
+  // 이미 결재 대기면 되돌릴 것이 없다. 판정 원장은 inspector.inspection_source다.
+  const isPendingHitl = data.inspector?.inspection_source === 'PENDING_HITL';
 
   const images = resolveInspectionImages(data);
   const defectCoords: PerImageDefectCoordinate[] = resolveDefectCoordinates(data);
@@ -270,6 +294,22 @@ export default function InventoryDetailPage() {
                   <Bot className="w-4 h-4 mr-1.5" />
                 )}
                 {isReinspecting ? 'AI 재검수 진행 중...' : 'AI 재검수 요청'}
+              </button>
+
+              {/* 판정이 실물과 다를 때 사람이 되돌리는 경로. 되돌린 건은 관리자 결재
+                  전까지 판매 가능 재고에서 빠진다. */}
+              <button
+                onClick={() => setRecallOpen(true)}
+                disabled={isRecalling || isPendingHitl}
+                title={isPendingHitl ? '이미 관리자 결재 대기 상태입니다' : undefined}
+                className={`flex items-center px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-2xs ${
+                  isRecalling || isPendingHitl
+                    ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+                    : 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer'
+                }`}
+              >
+                <RotateCcw className="w-4 h-4 mr-1.5" />
+                {isPendingHitl ? '결재 대기 중' : isRecalling ? '되돌리는 중...' : 'HITL로 되돌리기'}
               </button>
 
               {/*
@@ -865,6 +905,70 @@ export default function InventoryDetailPage() {
                 className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold rounded-xl text-xs cursor-pointer"
               >
                 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HITL 회수 확인. 판매 가능 재고에서 빠지는 동작이라 한 번 더 묻는다. */}
+      {recallOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !isRecalling && setRecallOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 w-full max-w-md p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="p-2 bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 rounded-lg border border-amber-200 dark:border-amber-900">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">HITL 재검수로 되돌리기</h3>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">{data.lpn_barcode}</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 p-3 mb-3 space-y-1">
+              <p className="text-xs text-gray-700 dark:text-gray-300">
+                현재 판정{' '}
+                <strong className="text-gray-900 dark:text-white">
+                  {data.ubci_score ?? '—'}점 {data.grade}
+                </strong>
+                을 관리자 결재 대기로 되돌립니다.
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                판매 가능 재고에서 빠지며, 점수·결함·이미지는 비교 기준으로 그대로 남습니다.
+              </p>
+            </div>
+
+            <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-400 mb-1">
+              회수 사유 (선택 — 감사 기록에 남습니다)
+            </label>
+            <textarea
+              value={recallReason}
+              onChange={(e) => setRecallReason(e.target.value)}
+              rows={2}
+              placeholder="예: 실물 확인 결과 모서리 마모 없음"
+              className="w-full text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white px-3 py-2 mb-4 resize-none"
+            />
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleRecall}
+                disabled={isRecalling}
+                className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white font-bold rounded-xl text-xs cursor-pointer disabled:cursor-not-allowed"
+              >
+                {isRecalling ? '되돌리는 중...' : '되돌리기'}
+              </button>
+              <button
+                onClick={() => setRecallOpen(false)}
+                disabled={isRecalling}
+                className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold rounded-xl text-xs cursor-pointer"
+              >
+                취소
               </button>
             </div>
           </div>
