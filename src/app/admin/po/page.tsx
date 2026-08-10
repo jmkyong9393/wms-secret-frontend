@@ -5,8 +5,11 @@ import {
   RefreshCcw, PackageCheck, AlertTriangle, CheckCircle2, XCircle,
   ScanSearch, Download, Bot, ShieldAlert, TrendingDown, Sparkles, Trash2,
 } from 'lucide-react';
+import Link from 'next/link';
+import axios from 'axios';
 import { exportToCSV } from '@/lib/exportCsv';
 import { poAPI, OrderProposalCard, ProposalStatus } from '@/lib/api';
+import { apiClient } from '@/lib/api-client';
 
 const URGENCY_STYLE: Record<string, string> = {
   CRITICAL: 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
@@ -26,6 +29,15 @@ export default function PurchaseOrderPage() {
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
+  // 표시 전용 - 안전재고 값은 /admin/settings에서만 바꾼다 (2026-08-09)
+  const [safetyStockThreshold, setSafetyStockThreshold] = useState<number | null>(null);
+
+  useEffect(() => {
+    apiClient
+      .get('/api/v1/admin/settings')
+      .then((res) => setSafetyStockThreshold(res.data.safety_stock_threshold))
+      .catch(() => {});
+  }, []);
 
   // 칸반은 컬럼마다 카드가 쌓이는 구조라 페이지도 컬럼별로 따로 센다.
   // (한 컬럼만 30건이어도 나머지 두 컬럼까지 같이 넘어가면 조작이 어긋난다.)
@@ -68,7 +80,25 @@ export default function PurchaseOrderPage() {
       await fetchProposals();
     } catch (err) {
       console.error(err);
-      alert('저재고 스캔에 실패했습니다. 관리자 권한과 백엔드 상태를 확인해주세요.');
+      // [2026-08-09] 뭉뚱그린 에러 문구가 403(권한)과 타임아웃(백엔드는 진행 중)을
+      // 구분 못해 오진단을 유발했다 - 실측: 스캔이 12초 안팎 걸리는데 클라이언트
+      // 타임아웃이 그보다 짧으면 서버는 성공했는데도 실패로 보였다. 상황별로 분기한다.
+      if (axios.isAxiosError(err)) {
+        if (err.code === 'ECONNABORTED') {
+          alert(
+            '스캔이 예상보다 오래 걸리고 있습니다. 서버에서는 계속 진행 중일 수 있으니 ' +
+            '잠시 후 새로고침해서 결과를 확인해주세요.'
+          );
+          await fetchProposals();
+        } else if (err.response?.status === 403) {
+          alert('저재고 스캔은 관리자(MASTER/ADMIN) 권한이 필요합니다.');
+        } else {
+          const detail = err.response?.data?.detail;
+          alert(detail ? `저재고 스캔에 실패했습니다: ${detail}` : '저재고 스캔에 실패했습니다. 백엔드 상태를 확인해주세요.');
+        }
+      } else {
+        alert('저재고 스캔에 실패했습니다.');
+      }
     } finally {
       setScanning(false);
     }
@@ -201,6 +231,15 @@ export default function PurchaseOrderPage() {
             <Download className="w-4 h-4 mr-2" />
             발주 내역 엑셀 다운로드
           </button>
+          {safetyStockThreshold !== null && (
+            <Link
+              href="/admin/settings"
+              className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 font-mono ml-1"
+              title="설정에서 변경"
+            >
+              현재 안전재고 기준: {safetyStockThreshold}권 · 설정에서 변경
+            </Link>
+          )}
         </div>
       </div>
 
