@@ -30,6 +30,14 @@ export interface BBoxItem {
   deduction?: number;
   /** 좌표계 기준값. Vision Agent는 0~1000 상대좌표를 산출한다. */
   coord_space?: number;
+  /** HITL 관리자가 오탐으로 제외한 결함. 확정 결과 오버레이에서 빠진다. */
+  hitl_excluded?: boolean;
+  /** HITL 관리자가 직접 추가한 결함. */
+  hitl_added?: boolean;
+  /** HITL 관리자가 YOLO 후보를 채택한 결함. */
+  hitl_adopted?: boolean;
+  /** HITL 관리자가 좌표를 수정한 결함. */
+  hitl_bbox_edited?: boolean;
 }
 
 export interface PerImageDefectCoordinate {
@@ -84,17 +92,39 @@ export function resolveInspectionImages(itemOrJob: any): string[] {
  * 2순위: agent_logs.defects[] 평면 배열을 image_index 기준으로 직접 묶음
  *        (백엔드 재검수 전의 과거 데이터 호환)
  * 데이터가 없으면 빈 배열 - 절대 좌표를 생성하지 않는다.
+ *
+ * **HITL 관리자가 오탐으로 제외한 결함(`hitl_excluded`)은 제외한다.** 이 화면이 보여줄
+ * 것은 검수의 **최종 확정 결과**이지 AI의 1차 판독이 아니다. 사람이 "결함 아님"이라고
+ * 판정한 박스를 그대로 그리면 확정 등급·감점과 화면이 어긋난다.
+ * 제외분은 삭제하지 않고 `resolveExcludedDefectCoordinates()`로 따로 꺼내 쓴다 —
+ * 판정 근거를 남겨야 감사 추적이 된다.
  */
 export function resolveDefectCoordinates(itemOrJob: any): PerImageDefectCoordinate[] {
+  return collectDefectCoordinates(itemOrJob, false);
+}
+
+/** HITL 관리자가 오탐으로 제외한 BBox만 반환한다 (대조 표시용). */
+export function resolveExcludedDefectCoordinates(itemOrJob: any): PerImageDefectCoordinate[] {
+  return collectDefectCoordinates(itemOrJob, true);
+}
+
+function collectDefectCoordinates(
+  itemOrJob: any,
+  wantExcluded: boolean,
+): PerImageDefectCoordinate[] {
   const logs = itemOrJob?.agent_logs ?? {};
+  const keep = (b: any) => Boolean(b?.hitl_excluded) === wantExcluded;
 
   const normalized = logs.defect_coordinates;
   if (Array.isArray(normalized) && normalized.length > 0) {
-    return normalized as PerImageDefectCoordinate[];
+    return (normalized as PerImageDefectCoordinate[])
+      .map((entry) => ({ ...entry, bboxes: (entry.bboxes || []).filter(keep) }))
+      .filter((entry) => entry.bboxes.length > 0);
   }
 
-  const defects = logs.defects ?? itemOrJob?.defects;
-  if (!Array.isArray(defects) || defects.length === 0) return [];
+  const all = logs.defects ?? itemOrJob?.defects;
+  const defects = Array.isArray(all) ? all.filter(keep) : [];
+  if (defects.length === 0) return [];
 
   const grouped = new Map<number, PerImageDefectCoordinate>();
   for (const d of defects) {
@@ -116,6 +146,12 @@ export function resolveDefectCoordinates(itemOrJob: any): PerImageDefectCoordina
       label: d.label ?? d.type ?? '상태 결함',
       confidence: d.confidence,
       deduction: d.preliminary_deduction,
+      // HITL 편집 표식을 그대로 옮긴다. 화면이 "AI 판독"과 "관리자 확정"을 구분해
+      // 표기하려면 이 정보가 박스까지 따라와야 한다.
+      hitl_excluded: d.hitl_excluded,
+      hitl_added: d.hitl_added,
+      hitl_adopted: d.hitl_adopted,
+      hitl_bbox_edited: d.hitl_bbox_edited,
     });
   }
 

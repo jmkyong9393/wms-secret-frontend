@@ -37,8 +37,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     }
   }, [user, router, pathname]);
 
+  // h-dvh: 모바일 주소창이 접힐 때 100vh는 실제 뷰포트보다 커져 하단이 잘린다.
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden font-sans transition-colors duration-200">
+    <div className="flex h-dvh bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden font-sans transition-colors duration-200">
       {/* SessionAutoLogout은 루트 레이아웃(app/layout.tsx)에서 단일 마운트한다.
           여기(인증 셸)에만 두면 로그인 화면에서 탭 마커가 설정되지 않아,
           로그인 직후 첫 진입이 새 탭으로 오판되어 즉시 로그아웃된다. */}

@@ -128,7 +128,7 @@ export default function AdvancedDashboardPage() {
   const categoryDataChart = charts?.category_data ?? [];
 
   return (
-    <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 font-sans min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-200">
+    <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 font-sans min-h-dvh text-gray-900 dark:text-gray-100 transition-colors duration-200">
       {/* High-Tech Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
         <div>

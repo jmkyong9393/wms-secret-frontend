@@ -14,6 +14,7 @@ import {
   resolveInspectionImages,
   resolveDefectCoordinates,
   bboxToPercent,
+  resolveExcludedDefectCoordinates,
   type PerImageDefectCoordinate,
 } from '@/features/inspection/utils/inspectionImageService';
 
@@ -180,6 +181,10 @@ export default function InventoryDetailPage() {
 
   const images = resolveInspectionImages(data);
   const defectCoords: PerImageDefectCoordinate[] = resolveDefectCoordinates(data);
+  // HITL 관리자가 "결함 아님"으로 제외한 건. 확정 오버레이에서는 빠지지만,
+  // 몇 건을 왜 걷어냈는지는 남겨야 판정 근거를 추적할 수 있다.
+  const excludedCoords: PerImageDefectCoordinate[] = resolveExcludedDefectCoordinates(data);
+  const excludedCount = excludedCoords.reduce((n, c) => n + c.bboxes.length, 0);
   const logs = data.agent_logs || {};
   const executedAgents: string[] = logs.executed_agents || [];
   const totalDefects = defectCoords.reduce((n, c) => n + c.bboxes.length, 0);
@@ -219,7 +224,7 @@ export default function InventoryDetailPage() {
       : inspectionTime;
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 font-sans bg-gray-50 dark:bg-gray-950 min-h-screen text-gray-900 dark:text-gray-100 transition-colors">
+    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 font-sans bg-gray-50 dark:bg-gray-950 min-h-dvh text-gray-900 dark:text-gray-100 transition-colors">
       {/* Top Bar */}
       {/* [2026-08-06 모바일 대응] 좁은 화면에서 버튼 4개가 가로로 넘치던 것을 줄바꿈 허용으로 교체 */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -456,16 +461,16 @@ export default function InventoryDetailPage() {
             </div>
 
             {/*
-              검수 이미지 + AI 판독 오버레이.
-              Vision 확정 결함(빨강 실선)과 YOLO 사전탐지 후보(주황 점선)를 각각 on/off 한다.
-              원본 사진 그대로도 확인해야 하고, YOLO가 잡았는데 Vision이 기각한 항목까지
-              대조해야 검수 판단이 빨라지므로 두 레이어를 분리했다.
+              검수 이미지 + 결함 오버레이.
+              확정 결함(빨강 실선)과 YOLO 사전탐지 후보(주황 점선)를 각각 on/off 한다.
+              확정 결함은 HITL 관리자 결재까지 반영된 최종 결과이며, 관리자가 오탐으로
+              제외한 박스는 그리지 않는다(건수만 배지에 병기).
             */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-4 transition-colors">
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3 gap-3 flex-wrap">
                 <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <ImageIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                  검수 촬영 이미지 및 AI 판독 오버레이
+                  검수 촬영 이미지 및 최종 확정 결함
                 </h3>
                 <span
                   className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
@@ -476,7 +481,10 @@ export default function InventoryDetailPage() {
                       : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
                   }`}
                 >
-                  {images.length === 0 ? '검수 이미지 없음' : `촬영 ${images.length}장 / 확정 결함 ${totalDefects}건`}
+                  {images.length === 0
+                    ? '검수 이미지 없음'
+                    : `촬영 ${images.length}장 / 확정 결함 ${totalDefects}건`
+                      + (excludedCount > 0 ? ` (관리자 제외 ${excludedCount}건)` : '')}
                 </span>
               </div>
 
@@ -496,10 +504,10 @@ export default function InventoryDetailPage() {
                           ? 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
                           : 'bg-gray-50 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700'
                       }`}
-                      title="GPT-4o Vision이 최종 확정해 UBCI 감점에 반영한 결함"
+                      title="UBCI 감점에 실제로 반영된 확정 결함. HITL 관리자가 제외한 오탐은 빠져 있다."
                     >
                       {showVisionBoxes ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      {showVisionBoxes ? 'AI 결함 영역 숨기기' : 'AI 결함 영역 표시'} ({totalDefects}건)
+                      {showVisionBoxes ? '확정 결함 숨기기' : '확정 결함 표시'} ({totalDefects}건)
                     </button>
 
                     <button

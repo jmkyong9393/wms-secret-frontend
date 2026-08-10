@@ -88,7 +88,7 @@ export default function CertificatePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-dvh bg-gray-50 flex flex-col items-center justify-center p-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4" />
         <p className="text-gray-500 font-medium text-sm">AI 비전 검수 보증서를 불러오는 중...</p>
       </div>
@@ -97,7 +97,7 @@ export default function CertificatePage() {
 
   if (error || !item) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="min-h-dvh bg-slate-50 flex items-center justify-center p-6">
         <div className="max-w-sm w-full bg-white border border-rose-200 rounded-2xl p-6 text-center space-y-2 shadow-sm">
           <AlertTriangle className="w-8 h-8 text-rose-500 mx-auto" />
           <h2 className="font-bold text-gray-900">보증서를 열 수 없습니다</h2>
@@ -134,7 +134,7 @@ export default function CertificatePage() {
   return (
     // print-color-adjust: exact - 등급 배지 그라데이션/배경색이 PDF 출력물에서 날아가지 않게 강제
     <div
-      className="min-h-screen bg-slate-50 flex flex-col font-sans pb-12 print:pb-0"
+      className="min-h-dvh bg-slate-50 flex flex-col font-sans pb-12 print:pb-0"
       style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}
     >
       {/* Header */}

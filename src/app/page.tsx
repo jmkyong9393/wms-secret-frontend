@@ -46,7 +46,7 @@ export default function RootIndexPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+    <div className="min-h-dvh bg-slate-950 flex flex-col items-center justify-center p-4">
       <div className="flex flex-col items-center gap-3">
         <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
         <p className="text-sm font-mono text-indigo-300 font-bold">Nexus WMS 권한 확인 및 자동 이동 중...</p>
