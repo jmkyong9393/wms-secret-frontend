@@ -18,9 +18,10 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Settings, Cpu, Printer, Sun, Moon, BellRing, Save, CheckCircle2, Zap, ShieldAlert, Lock,
+  Settings, Cpu, Printer, Sun, Moon, BellRing, Save, CheckCircle2, Zap, ShieldAlert, Lock, Package,
 } from 'lucide-react';
 import { getSystemSettings, saveSystemSettings } from '@/lib/systemSettings';
+import { apiClient } from '@/lib/api-client';
 // 정책 상수는 HITL 화면과 공유한다 (features/hitl/policy.ts 단일 정의)
 import { UBCI_GRADE_POLICY, HITL_ROUTING_POLICY } from '@/features/hitl/policy';
 
@@ -34,6 +35,12 @@ export default function SystemSettingsPage() {
   // 테마 (기존 실연동 유지)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  // SCM 자동발주 안전재고 (백엔드 system_settings 테이블 - localStorage가 아니라
+  // 서버가 직접 읽어야 하므로 별도 API로 조회/저장한다. §systemSettings.ts와 혼동 금지)
+  const [safetyStock, setSafetyStock] = useState<number>(3);
+  const [safetyStockLoaded, setSafetyStockLoaded] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -41,6 +48,17 @@ export default function SystemSettingsPage() {
     setAutoPrintTrigger(s.autoPrintTrigger);
     setHitlAlertCount(s.hitlAlertThreshold);
     setNotifMuted(localStorage.getItem('nexus-notif-muted') === 'true');
+
+    apiClient
+      .get('/api/v1/admin/settings')
+      .then((res) => {
+        setSafetyStock(res.data.safety_stock_threshold);
+        setSafetyStockLoaded(true);
+      })
+      .catch(() => {
+        // 조회 실패 시 기본값(3) 표시만 하고 loaded는 세우지 않는다 - 저장을 눌러도
+        // 확인 안 된 값으로 서버 상태를 덮어쓰지 않기 위함 (handleSave에서 재확인).
+      });
 
     const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('nexus-theme') === 'dark';
     setIsDarkMode(isDark);
@@ -81,11 +99,27 @@ export default function SystemSettingsPage() {
     window.dispatchEvent(new CustomEvent('nexus-notif-mute-change', { detail: { isMuted: next } }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     saveSystemSettings({
       autoPrintTrigger,
       hitlAlertThreshold: Math.max(1, Math.floor(hitlAlertCount) || 10),
     });
+
+    if (safetyStockLoaded) {
+      setIsSaving(true);
+      try {
+        const res = await apiClient.put('/api/v1/admin/settings', {
+          safety_stock_threshold: Math.max(0, Math.floor(safetyStock) || 0),
+        });
+        setSafetyStock(res.data.safety_stock_threshold);
+      } catch {
+        alert('안전재고 설정 저장에 실패했습니다. 관리자 권한을 확인해주세요.');
+        setIsSaving(false);
+        return;
+      }
+      setIsSaving(false);
+    }
+
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
@@ -112,9 +146,10 @@ export default function SystemSettingsPage() {
           )}
           <Button
             onClick={handleSave}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-5 py-2 rounded-xl shadow-md flex items-center gap-2"
+            disabled={isSaving}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-5 py-2 rounded-xl shadow-md flex items-center gap-2 disabled:opacity-60"
           >
-            <Save className="w-4 h-4" /> 설정값 즉시 적용
+            <Save className="w-4 h-4" /> {isSaving ? '저장 중...' : '설정값 즉시 적용'}
           </Button>
         </div>
       </div>
@@ -342,6 +377,50 @@ export default function SystemSettingsPage() {
                 }`} />
               </button>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* 5. SCM 자동발주 - 안전재고 (서버 system_settings 실연동, 2026-08-09 신설) */}
+        <Card className="border-gray-200 dark:border-gray-700 shadow-sm bg-white dark:bg-gray-800 rounded-2xl">
+          <CardHeader className="border-b border-gray-100 dark:border-gray-700/60 pb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-black text-gray-900 dark:text-white">SCM 자동발주 - 안전재고</CardTitle>
+                  <CardDescription className="text-xs">저재고 스캔 대상 선정 기준 겸 발주 제안 수량의 안전선</CardDescription>
+                </div>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-800">
+                SCM
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">안전재고 기준 (권)</p>
+                <p className="text-[11px] text-gray-400">
+                  가용 재고(신품+중고)가 이 값 미만이면 /admin/po 저재고 스캔의 발주 후보가 되고,
+                  같은 값이 발주 제안 수량 산식의 최소 안전선으로도 쓰입니다.
+                </p>
+              </div>
+              <input
+                type="number"
+                min={0}
+                value={safetyStock}
+                onChange={(e) => setSafetyStock(Number(e.target.value))}
+                disabled={!safetyStockLoaded}
+                className="w-16 p-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs font-mono font-bold text-center disabled:opacity-50"
+              />
+            </div>
+            {!safetyStockLoaded && (
+              <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                서버 설정을 불러오는 중이거나 조회에 실패했습니다 - 값이 확인되기 전에는 저장되지 않습니다.
+              </p>
+            )}
           </CardContent>
         </Card>
 

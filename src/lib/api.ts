@@ -245,8 +245,18 @@ export const poAPI = {
     );
     return res.data;
   },
+  /**
+   * 저재고 스캔. 1회당 최대 8권을 순차로 gpt-4o-mini 호출하며 실측 12초 안팎 걸린다
+   * (2026-08-09 실측). api-client 전역 타임아웃(10초)보다 길어서 스캔 자체는 서버에서
+   * 성공했는데 클라이언트가 먼저 포기해 "실패"로 오인되는 문제가 있었다 - 이 호출에만
+   * 개별 타임아웃을 넉넉히 준다(다른 빠른 API의 전역 기본값은 그대로 둔다).
+   */
   scanSafetyStock: async () => {
-    const res = await apiClient.post<ProposalScanResult>("/api/v1/po/proposals/scan");
+    const res = await apiClient.post<ProposalScanResult>(
+      "/api/v1/po/proposals/scan",
+      undefined,
+      { timeout: 60000 }
+    );
     return res.data;
   },
 };
