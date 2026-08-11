@@ -4,6 +4,15 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Tailwind v4는 preflight에서 버튼 기본 커서를 pointer로 주지 않는다(브라우저 기본 유지).
+   클릭 가능한 버튼이 화살표 커서로 보인다는 피드백에 따라 v3 동작을 전역 복원. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

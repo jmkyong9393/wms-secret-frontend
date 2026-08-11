@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCcw, PackageCheck, AlertTriangle, CheckCircle2, XCircle,
   ScanSearch, Download, Bot, ShieldAlert, TrendingDown, Sparkles, Trash2,
+  ChevronDown,
 } from 'lucide-react';
 import Link from 'next/link';
 import axios from 'axios';
@@ -44,9 +45,19 @@ export default function PurchaseOrderPage() {
   const [pageByCol, setPageByCol] = useState<Record<string, number>>({});
   const [pageSize, setPageSize] = useState(5);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // 카드 상세(수치 그리드·AI 사유) 펼침 상태 — 기본 접힘. 카드가 길어 컬럼 스캔이
+  // 어렵다는 피드백 반영. 결재 버튼은 접힌 상태에도 항상 노출한다.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggleSelect = (id: string) =>
     setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+
+  const toggleExpand = (id: string) =>
+    setExpanded(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
@@ -390,47 +401,71 @@ export default function PurchaseOrderPage() {
                     </span>
                   </div>
 
-                  {/* 도서 정보 */}
-                  <div>
-                    <p className="font-bold text-sm text-gray-900 dark:text-white leading-snug line-clamp-2">{card.title}</p>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 font-mono mt-0.5">
-                      ISBN {card.isbn} | {card.publisher}
-                    </p>
-                    {card.rejectReasonCode && (
-                      <p className="text-[10px] font-mono text-rose-500 dark:text-rose-400 mt-0.5">
-                        반려 사유: {card.rejectReasonCode}
-                      </p>
-                    )}
+                  {/* 도서 정보 — 클릭하면 상세 접기/펼치기 */}
+                  <div
+                    onClick={() => toggleExpand(card.id)}
+                    className="flex items-start justify-between gap-2 cursor-pointer group"
+                    title={expanded.has(card.id) ? '상세 접기' : '상세 펼치기'}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm text-gray-900 dark:text-white leading-snug line-clamp-2">{card.title}</p>
+                      {/* 접힌 상태 핵심 요약: AI 제안 수량만 한 줄로 */}
+                      {!expanded.has(card.id) && (
+                        <p className="text-[10px] font-mono mt-0.5 text-blue-600 dark:text-blue-400 font-bold">
+                          AI 제안 +{card.proposedQuantity}권
+                          {card.rejectReasonCode ? <span className="text-rose-500 dark:text-rose-400 font-normal"> · {card.rejectReasonCode}</span> : null}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronDown
+                      className={`w-4 h-4 mt-0.5 shrink-0 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-transform ${expanded.has(card.id) ? 'rotate-180' : ''}`}
+                    />
                   </div>
 
-                  {/* 수치 그리드 */}
-                  <div className="grid grid-cols-4 gap-1.5 text-center">
-                    <div className="bg-gray-50 dark:bg-gray-800/70 rounded-lg py-1.5">
-                      <p className="text-[9px] text-gray-400 dark:text-gray-500 font-bold">가용 재고</p>
-                      <p className="text-xs font-mono font-bold text-rose-600 dark:text-rose-400">{card.currentStock}권</p>
-                    </div>
-                    <div className="bg-gray-50 dark:bg-gray-800/70 rounded-lg py-1.5">
-                      <p className="text-[9px] text-gray-400 dark:text-gray-500 font-bold">30일 출고</p>
-                      <p className="text-xs font-mono font-bold text-gray-700 dark:text-gray-200">{card.salesVelocity30d}권</p>
-                    </div>
-                    <div className="bg-gray-50 dark:bg-gray-800/70 rounded-lg py-1.5">
-                      <p className="text-[9px] text-gray-400 dark:text-gray-500 font-bold">반려 소실</p>
-                      <p className="text-xs font-mono font-bold text-gray-700 dark:text-gray-200">{card.rejectedQuantity}권</p>
-                    </div>
-                    <div className="bg-blue-50 dark:bg-blue-950/60 rounded-lg py-1.5 border border-blue-100 dark:border-blue-900">
-                      <p className="text-[9px] text-blue-500 dark:text-blue-400 font-bold">AI 제안</p>
-                      <p className="text-xs font-mono font-black text-blue-600 dark:text-blue-400">+{card.proposedQuantity}권</p>
-                    </div>
-                  </div>
+                  {/* 상세 영역 (기본 접힘) */}
+                  {expanded.has(card.id) && (
+                    <>
+                      <div>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+                          ISBN {card.isbn} | {card.publisher}
+                        </p>
+                        {card.rejectReasonCode && (
+                          <p className="text-[10px] font-mono text-rose-500 dark:text-rose-400 mt-0.5">
+                            반려 사유: {card.rejectReasonCode}
+                          </p>
+                        )}
+                      </div>
 
-                  {/* AI 사유 */}
-                  <div className="bg-amber-50/70 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900 rounded-lg px-2.5 py-2">
-                    <p className="flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 mb-0.5">
-                      <Sparkles className="w-3 h-3" />
-                      {card.aiSource === 'LLM_GPT4O_MINI' ? 'Restock Agent (gpt-4o-mini)' : '결정론적 안전재고 산식 (LLM 폴백)'}
-                    </p>
-                    <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">{card.reasoning}</p>
-                  </div>
+                      {/* 수치 그리드 */}
+                      <div className="grid grid-cols-4 gap-1.5 text-center">
+                        <div className="bg-gray-50 dark:bg-gray-800/70 rounded-lg py-1.5">
+                          <p className="text-[9px] text-gray-400 dark:text-gray-500 font-bold">가용 재고</p>
+                          <p className="text-xs font-mono font-bold text-rose-600 dark:text-rose-400">{card.currentStock}권</p>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800/70 rounded-lg py-1.5">
+                          <p className="text-[9px] text-gray-400 dark:text-gray-500 font-bold">30일 출고</p>
+                          <p className="text-xs font-mono font-bold text-gray-700 dark:text-gray-200">{card.salesVelocity30d}권</p>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800/70 rounded-lg py-1.5">
+                          <p className="text-[9px] text-gray-400 dark:text-gray-500 font-bold">반려 소실</p>
+                          <p className="text-xs font-mono font-bold text-gray-700 dark:text-gray-200">{card.rejectedQuantity}권</p>
+                        </div>
+                        <div className="bg-blue-50 dark:bg-blue-950/60 rounded-lg py-1.5 border border-blue-100 dark:border-blue-900">
+                          <p className="text-[9px] text-blue-500 dark:text-blue-400 font-bold">AI 제안</p>
+                          <p className="text-xs font-mono font-black text-blue-600 dark:text-blue-400">+{card.proposedQuantity}권</p>
+                        </div>
+                      </div>
+
+                      {/* AI 사유 */}
+                      <div className="bg-amber-50/70 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900 rounded-lg px-2.5 py-2">
+                        <p className="flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 mb-0.5">
+                          <Sparkles className="w-3 h-3" />
+                          {card.aiSource === 'LLM_GPT4O_MINI' ? 'Restock Agent (gpt-4o-mini)' : '결정론적 안전재고 산식 (LLM 폴백)'}
+                        </p>
+                        <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">{card.reasoning}</p>
+                      </div>
+                    </>
+                  )}
 
                   {/* 푸터: 금액 + 결재 */}
                   <div className="flex items-center justify-between pt-1">
