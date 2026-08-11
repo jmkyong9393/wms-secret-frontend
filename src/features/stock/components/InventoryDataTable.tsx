@@ -600,7 +600,25 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                       />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="font-black text-gray-900 dark:text-white text-sm leading-snug truncate">{item.book.title}</p>
+                      {/* 데스크톱 행과 동일 규칙: 카드 전체 탭은 막고 제목만 상세 진입점 */}
+                      {href ? (
+                        <Link
+                          href={href}
+                          title="상세 정보 조회"
+                          className="block font-black text-gray-900 dark:text-white text-sm leading-snug truncate hover:text-blue-600 dark:hover:text-blue-400"
+                        >
+                          {item.book.title}
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openZoom(item)}
+                          title="도서 상세정보 (표지 확대)"
+                          className="block w-full text-left font-black text-gray-900 dark:text-white text-sm leading-snug truncate hover:text-blue-600 dark:hover:text-blue-400"
+                        >
+                          {item.book.title}
+                        </button>
+                      )}
                       <p className="text-[11px] text-gray-500 dark:text-gray-400 font-extrabold truncate">
                         {item.book.author} · {item.book.publisher}
                       </p>
@@ -782,9 +800,27 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                           />
                           </span>
                           <div className="space-y-1">
-                            <p className="font-black text-gray-900 dark:text-white text-base leading-snug hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                              {item.book.title}
-                            </p>
+                            {/* 제목은 상세 진입점으로 유지한다 — 행 전체 라우팅은 뺐지만
+                                (다중 선택 중 오클릭 방지), 의도적으로 제목을 누르는 동작은
+                                살려둔다. 링크라 새 탭 열기도 가능. */}
+                            {href ? (
+                              <Link
+                                href={href}
+                                title="상세 정보 조회"
+                                className="block font-black text-gray-900 dark:text-white text-base leading-snug hover:text-blue-600 dark:hover:text-blue-400 hover:underline underline-offset-2 transition-colors"
+                              >
+                                {item.book.title}
+                              </Link>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openZoom(item)}
+                                title="도서 상세정보 (표지 확대)"
+                                className="block text-left font-black text-gray-900 dark:text-white text-base leading-snug hover:text-blue-600 dark:hover:text-blue-400 hover:underline underline-offset-2 transition-colors"
+                              >
+                                {item.book.title}
+                              </button>
+                            )}
                             <p className="text-xs text-gray-500 dark:text-gray-400 font-extrabold">
                               {item.book.author} · {item.book.publisher}
                             </p>
