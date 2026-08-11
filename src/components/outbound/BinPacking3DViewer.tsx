@@ -192,10 +192,15 @@ export default function BinPacking3DViewer({
     return cushionCatalog.find(c => c.id === "CUSH-01") || cushionCatalog[cushionCatalog.length - 1];
   }, [boxW, boxD, boxH, maxBookW, maxBookD, getStackHeightForCushion]);
 
-  // Reset user manual override when books or box change to restore AI recommendation
+  // Reset user manual override when books or box change to restore AI recommendation.
+  // 객체 참조가 아닌 내용 키로 비교한다 — 부모가 렌더마다 selectedBooks 배열을 새로
+  // 만들어 넘기므로, 참조 비교로 두면 무관한 리렌더(박스 카테고리 탭 전환 등)에도
+  // 완충재 수동 선택이 초기화된다.
+  const selectedBoxId = selectedBox?.id;
+  const booksContentKey = (selectedBooks ?? []).map(b => `${b.id}:${(b as { quantity?: number }).quantity ?? 1}`).join('|');
   useEffect(() => {
     setUserSelectedCushionId(null);
-  }, [selectedBox, selectedBooks]);
+  }, [selectedBoxId, booksContentKey]);
 
   const activeCushion = userSelectedCushionId
     ? (cushionCatalog.find(c => c.id === userSelectedCushionId) || recommendedCushion)
@@ -894,7 +899,8 @@ export default function BinPacking3DViewer({
         <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs font-sans ${sortedBooks.length > 10 ? 'max-h-60 overflow-y-auto p-1 bg-gray-50/50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800' : ''}`}>
           {/* Integrated AI Smart Cushion Packaging Metadata Card */}
           <div className="flex items-start gap-2 p-2.5 bg-emerald-50/80 dark:bg-emerald-950/40 rounded-xl border border-emerald-300 dark:border-emerald-800/80 min-w-0 shadow-2xs">
-            <div className="w-3.5 h-3.5 mt-0.5 rounded bg-emerald-600 shrink-0 shadow-xs border border-emerald-700" />
+            {/* 3D 뷰 색상 범례 점 — 사각형이면 체크박스로 오인되므로 원형 유지 */}
+            <div className="w-2.5 h-2.5 mt-1 rounded-full bg-emerald-600 shrink-0" aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <span className="font-extrabold text-emerald-950 dark:text-emerald-200 block text-[11px] leading-tight break-words">
                 완충 패키징: {activeCushion.name}
@@ -927,7 +933,7 @@ export default function BinPacking3DViewer({
             
             return (
               <div key={book.id || idx} className={`flex items-start gap-2 p-2.5 rounded-xl border ${theme[0]} ${theme[1]} min-w-0 shadow-2xs`}>
-                <div className={`w-3.5 h-3.5 mt-0.5 rounded ${idx === 0 ? 'bg-purple-600 border-purple-700' : 'bg-emerald-500 border-emerald-600'} shrink-0 shadow-xs border`} />
+                <div className={`w-2.5 h-2.5 mt-1 rounded-full ${idx === 0 ? 'bg-purple-600' : 'bg-emerald-500'} shrink-0`} aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <span title={book.title} className={`font-black ${theme[2]} ${theme[3]} block text-[11px] leading-snug break-words`}>
                     {levelLabel}: {book.title}

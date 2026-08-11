@@ -570,12 +570,9 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
               return (
                 <div
                   key={item.id}
-                  onClick={(e) => {
-                    if ((e.target as HTMLElement).closest('button, a, input, select, label, [data-row-stop]')) return;
-                    if (href) router.push(href);
-                    else openZoom(item);
-                  }}
-                  className={`p-3.5 rounded-xl border space-y-2.5 active:scale-[0.99] transition-all cursor-pointer ${
+                  // 카드 탭 라우팅 제거 — 상세 진입은 카드 하단 "상세" 버튼 전담.
+                  // (체크 선택 중 오탭으로 페이지가 이동해 선택이 초기화되는 사고 방지, 데스크톱 행과 동일 규칙)
+                  className={`p-3.5 rounded-xl border space-y-2.5 transition-all ${
                     isSelected
                       ? 'bg-blue-50/60 dark:bg-blue-950/30 border-blue-300 dark:border-blue-800'
                       : 'bg-gray-50/60 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700'
@@ -729,15 +726,10 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                   return (
                     <tr
                       key={item.id}
-                      // 행 어디를 눌러도 상세로 이동한다. 버튼/링크/체크박스/표지 등 자체 동작이
-                      // 있는 요소는 closest 가드로 제외해 기존 동작(인쇄, 확대, 선택)을 보존한다.
-                      onClick={(e) => {
-                        if ((e.target as HTMLElement).closest('button, a, input, select, label, [data-row-stop]')) return;
-                        if (href) router.push(href);
-                        else openZoom(item);
-                      }}
-                      title="클릭하여 도서 상세정보 조회"
-                      className={`cursor-pointer hover:bg-gray-50/80 dark:hover:bg-gray-800/50 transition-colors ${isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''}`}
+                      // 행 클릭 라우팅은 두지 않는다 — 상세 진입은 우측 "상세" 버튼 전담.
+                      // 체크박스로 다중 선택하다 행을 잘못 누르면 페이지가 이동해 선택이
+                      // 전부 날아가는 사고가 있어, 파괴적 행 단위 내비게이션을 제거했다.
+                      className={`hover:bg-gray-50/80 dark:hover:bg-gray-800/50 transition-colors ${isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''}`}
                     >
                       {isAdmin && (
                         <td className="py-4 px-4 text-center" data-row-stop>
