@@ -211,7 +211,10 @@ export default function OutboundDashboard() {
     const cleanTerm = term.replace(/[^a-z0-9]/g, '');
     const titleMatch = b.title && b.title.toLowerCase().includes(term);
     const isbnMatch = b.isbn && b.isbn.includes(term);
-    const lpnMatch = (b.lpn || b.id || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanTerm);
+    // cleanTerm이 비면(한글 검색어 등) LPN 매칭을 시도하지 않는다 — ''.includes('')는
+    // 항상 true라서 한글 검색 시 전 도서가 LPN 매칭으로 통과해 필터가 무력화됐다.
+    const lpnMatch = cleanTerm.length > 0
+      && (b.lpn || b.id || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanTerm);
     return titleMatch || isbnMatch || lpnMatch;
   });
 
@@ -516,6 +519,12 @@ export default function OutboundDashboard() {
   const [issuedWaybillNo, setIssuedWaybillNo] = useState<string | null>(null);
 
   const handleConfirmPacking = async () => {
+    // 적재 품목이 없으면 확정 불가 — 0권짜리 운송장은 유효한 출고 문서가 아니다
+    if (!activeInstruction && totalBooksCount === 0) {
+      alert('출고할 도서를 먼저 선택하세요. 선택 수량이 0권이면 운송장을 발급할 수 없습니다.');
+      return;
+    }
+
     // 피킹 지시서 연동 시: 실제 출고 확정 API (재고 차감 + CJ 송장 발급 + 주문 SHIPPED 전이)
     if (activeInstruction) {
       const notFullyPicked = activeInstruction.status !== 'PICKED';
@@ -836,17 +845,21 @@ export default function OutboundDashboard() {
                   return (
                     <div
                       key={b.id}
-                      className={`p-2.5 rounded-xl border text-left transition-all space-y-1.5 min-w-0 ${
+                      // 카드 전체가 선택 토글 영역 — 제목 행만 클릭되고 금액·배지 행은 반응하지
+                      // 않던 불일치 해소 (우측 박스 선택 카드와 동일한 상호작용). 수량 스테퍼 등
+                      // 자체 동작이 있는 버튼은 가드로 제외.
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('button')) return;
+                        toggleBookSelection(b.id);
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition-all space-y-1.5 min-w-0 cursor-pointer ${
                         isChecked
                           ? 'bg-indigo-50/90 dark:bg-indigo-950/80 border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs'
                           : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-indigo-300'
                       }`}
                     >
                       {/* Row 1: BookCover + Title & Checkbox */}
-                      <div 
-                        onClick={() => toggleBookSelection(b.id)}
-                        className="flex items-start justify-between gap-2 cursor-pointer"
-                      >
+                      <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <input
                             type="checkbox"
@@ -1230,14 +1243,22 @@ export default function OutboundDashboard() {
           <div className="pt-2 flex justify-end">
             <button
               onClick={handleConfirmPacking}
-              className={`px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
-                confirmed 
-                  ? 'bg-emerald-600 text-white' 
-                  : 'bg-gray-900 hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700 text-white'
+              disabled={!activeInstruction && totalBooksCount === 0}
+              title={!activeInstruction && totalBooksCount === 0 ? '출고할 도서를 먼저 선택하세요' : undefined}
+              className={`px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 ${
+                !activeInstruction && totalBooksCount === 0
+                  ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                  : confirmed
+                    ? 'bg-emerald-600 text-white cursor-pointer'
+                    : 'bg-gray-900 hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700 text-white cursor-pointer'
               }`}
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{confirmed ? '3D Bin Packing 확정 완료' : '패킹 박스 확정'}</span>
+              <span>
+                {!activeInstruction && totalBooksCount === 0
+                  ? '도서 선택 필요'
+                  : confirmed ? '3D Bin Packing 확정 완료' : '패킹 박스 확정'}
+              </span>
             </button>
           </div>
         </div>
