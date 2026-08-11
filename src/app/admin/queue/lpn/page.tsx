@@ -60,28 +60,28 @@ export default function LpnDashboardPage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
-      <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <div className="flex justify-between items-center bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-800 flex items-center">
+          <h1 className="text-2xl font-extrabold text-slate-800 dark:text-gray-100 flex items-center">
             <Barcode className="w-8 h-8 mr-3 text-blue-600" />
             LPN 바코드 관리 (Dashboard)
           </h1>
-          <p className="text-slate-500 mt-1">발급된 전체 LPN 이력을 조회하고 누락된 라벨을 재출력할 수 있습니다.</p>
+          <p className="text-slate-500 dark:text-gray-400 mt-1">발급된 전체 LPN 이력을 조회하고 누락된 라벨을 재출력할 수 있습니다.</p>
         </div>
-        <button 
+        <button
           onClick={fetchLpns}
           disabled={isLoading}
-          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl flex items-center font-bold transition-colors"
+          className="bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 px-4 py-2 rounded-xl flex items-center font-bold transition-colors"
         >
           <RefreshCcw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
           새로고침
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800 overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold text-sm">
+            <tr className="bg-slate-50 dark:bg-gray-800/60 border-b border-slate-200 dark:border-gray-800 text-slate-600 dark:text-gray-300 font-bold text-sm">
               <th className="p-4">LPN 바코드</th>
               <th className="p-4">도서 ID (Book UUID)</th>
               <th className="p-4">상태</th>

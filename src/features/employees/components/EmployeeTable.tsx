@@ -82,10 +82,10 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-100 text-left text-gray-500">
+          <tr className="border-b border-gray-100 dark:border-gray-800 text-left text-gray-500 dark:text-gray-400">
             <th className="px-4 py-3 font-medium">사번</th>
             <th className="px-4 py-3 font-medium">이름</th>
             <th className="px-4 py-3 font-medium">역할</th>
@@ -97,7 +97,7 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
         <tbody>
           {employees.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+              <td colSpan={6} className="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
                 조건에 맞는 직원이 없습니다.
               </td>
             </tr>
@@ -110,11 +110,11 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
             const showRoleSelect = employee.role !== "MASTER";
 
             return (
-              <tr key={employee.employee_id} className="border-b border-gray-50 last:border-0">
-                <td className="px-4 py-3 font-medium text-gray-800">{employee.employee_id}</td>
+              <tr key={employee.employee_id} className="border-b border-gray-50 dark:border-gray-800/60 last:border-0">
+                <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">{employee.employee_id}</td>
                 {/* ISMS-P 2.6.3 표시제한: 타인의 성명은 조회 화면에서 마스킹한다.
                     (본인 확인용 원본은 마이페이지에서 정보주체 본인에게만 노출) */}
-                <td className="px-4 py-3 text-gray-700" title="개인정보 표시제한 적용">
+                <td className="px-4 py-3 text-gray-700 dark:text-gray-300" title="개인정보 표시제한 적용">
                   {maskName(employee.name)}
                 </td>
                 <td className="px-4 py-3">
@@ -177,7 +177,7 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
                     />
                   </div>
                 </td>
-                <td className="px-4 py-3 text-gray-500">
+                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
                   {new Date(employee.created_at).toLocaleDateString("ko-KR")}
                 </td>
                 <td className="px-4 py-3 text-center">
@@ -193,7 +193,7 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
                       })
                     }
                   >
-                    <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-600" />
+                    <Trash2 className="w-4 h-4 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400" />
                   </Button>
                 </td>
               </tr>

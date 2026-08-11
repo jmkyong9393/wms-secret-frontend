@@ -143,17 +143,17 @@ export function SingleCreateEmployeeModal({ open, onClose, currentUser }: Single
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={handleClose}>
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col overflow-hidden"
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="text-base font-bold text-gray-800">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+          <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">
             {isSuccess ? "직원 계정 생성 완료" : "직원 단일 등록"}
           </h3>
           <button
             type="button"
             onClick={handleClose}
-            className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
+            className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -169,17 +169,17 @@ export function SingleCreateEmployeeModal({ open, onClose, currentUser }: Single
                 </p>
               </div>
 
-              <div className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-100">
+              <div className="space-y-3 bg-gray-50 dark:bg-gray-800/60 p-4 rounded-lg border border-gray-100 dark:border-gray-800">
                 <div>
-                  <span className="block text-xs font-medium text-gray-500 mb-1">사번 (아이디)</span>
-                  <div className="text-sm font-bold text-gray-900">{employeeId}</div>
+                  <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">사번 (아이디)</span>
+                  <div className="text-sm font-bold text-gray-900 dark:text-gray-100">{employeeId}</div>
                 </div>
                 <div>
-                  <span className="block text-xs font-medium text-gray-500 mb-1">초기 비밀번호</span>
-                  <div className="flex items-center justify-between bg-white px-3 py-2 rounded border border-gray-200">
+                  <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">초기 비밀번호</span>
+                  <div className="flex items-center justify-between bg-white dark:bg-gray-900 px-3 py-2 rounded border border-gray-200 dark:border-gray-700">
                     <span className="text-sm font-mono font-bold text-indigo-900">{generatedPassword}</span>
                     <Button variant="ghost" size="sm" onClick={handleCopyPassword} title="클립보드에 비밀번호 복사">
-                      <Copy className={`w-4 h-4 ${isCopied ? "text-green-600" : "text-gray-400"}`} />
+                      <Copy className={`w-4 h-4 ${isCopied ? "text-green-600" : "text-gray-400 dark:text-gray-500"}`} />
                     </Button>
                   </div>
                 </div>
@@ -211,7 +211,7 @@ export function SingleCreateEmployeeModal({ open, onClose, currentUser }: Single
                     placeholder="사번을 입력하세요"
                   />
                 </div>
-                <p className="text-xs text-gray-500">자동 추천된 사번입니다. 필요시 수정 가능합니다.</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">자동 추천된 사번입니다. 필요시 수정 가능합니다.</p>
               </div>
 
               <div className="space-y-1">
@@ -245,7 +245,7 @@ export function SingleCreateEmployeeModal({ open, onClose, currentUser }: Single
 
               <div className="space-y-1">
                 <Label>비밀번호</Label>
-                <div className="px-3 py-2 bg-gray-50 rounded-md border border-gray-200 text-sm text-gray-500">
+                <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800/60 rounded-md border border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400">
                   무작위 조합으로 자동 생성됩니다.
                 </div>
               </div>
@@ -255,7 +255,7 @@ export function SingleCreateEmployeeModal({ open, onClose, currentUser }: Single
           )}
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-gray-100 bg-gray-50 p-4 sm:flex-row sm:justify-end">
+        <div className="flex flex-col-reverse gap-2 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-4 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={handleClose}>
             닫기
           </Button>

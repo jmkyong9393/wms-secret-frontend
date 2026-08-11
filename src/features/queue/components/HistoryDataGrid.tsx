@@ -195,9 +195,9 @@ export default function HistoryDataGrid() {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h2 className="text-xl font-bold text-gray-800 flex items-center">
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center">
           <FileText className="mr-2 w-6 h-6 text-indigo-600" />
           상세 작업 내역 (Data Grid)
         </h2>
@@ -237,7 +237,7 @@ export default function HistoryDataGrid() {
             <select 
               value={itemsPerPage}
               onChange={handleItemsPerPageChange}
-              className="pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 appearance-none bg-white cursor-pointer"
+              className="pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500 appearance-none bg-white dark:bg-gray-800 dark:text-gray-200 cursor-pointer"
             >
               <option value={5}>5건 보기</option>
               <option value={10}>10건 보기</option>
@@ -432,9 +432,9 @@ export default function HistoryDataGrid() {
       {/* Book Info Modal */}
       {selectedBook && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-5xl w-full flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
             {/* Header */}
-            <div className="px-6 py-4 border-b flex items-center justify-between bg-gray-50">
+            <div className="px-6 py-4 border-b dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-800/60">
               <h3 className="text-xl font-bold text-gray-900 flex items-center">
                 <FileText className="w-5 h-5 mr-2 text-indigo-600" />
                 도서 상세 검수 리포트
