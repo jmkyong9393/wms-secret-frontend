@@ -513,7 +513,14 @@ export default function AdminHitlDashboard() {
         primaryReasonCode,
         reasonComment: comment,
         defectCoordinates: task.agent_logs?.defect_coordinates || [],
-        reviewDurationMs: Math.floor((Date.now() - pageEnterTime.current)),
+        // 건당 검토 시간. 페이지 체류시간을 이번 배치 건수로 나눈다.
+        // [수정 이력 2026-08-12] 종전에는 체류시간 전체를 배치 **전 건에 동일하게** 실었다.
+        // 5분 보고 20건을 일괄 승인하면 20건 모두 "5분 검토"로 기록돼, 실제 건당 15초를
+        // 20배 부풀렸다. FDS R1(블라인드 결재)이 이 값을 보므로 탐지가 사실상 불가능했다.
+        reviewDurationMs: Math.max(
+          1,
+          Math.floor((Date.now() - pageEnterTime.current) / Math.max(1, selectedIds.size)),
+        ),
         // 검수자가 고친 판정. 백엔드가 이 목록으로 감점을 재산정한다.
         excludedDefectIndexes: bboxEdits[id]?.excluded ?? [],
         adoptedCandidateIndexes: bboxEdits[id]?.adopted ?? [],
@@ -1294,14 +1301,21 @@ export default function AdminHitlDashboard() {
               {/* Stepper Progress */}
               <div className="grid grid-cols-5 gap-2 text-center text-xs">
                 {[
-                  { step: 1, label: "Vision 👁️", desc: "VLM 2차검증+4o-mini예비" },
-                  { step: 2, label: "Policy ⚖️", desc: "사내WMS룰+B2B평가" },
-                  { step: 3, label: "Critic 🛡️", desc: "프로세스/루프검증" },
+                  // 모델 배정은 wms-secret-backend/.claude/rules/01-freeze-zones.md가 정본.
+                  // Vision 박스는 Detector(YOLO, LLM 미사용)까지 시각적으로 묶어 보여준다 -
+                  // 백엔드 그래프 노드는 그대로 분리돼 있고 여기 라벨만 축약한 것.
+                  // [정정 2026-08-12] "VLM 2차검증+4o-mini예비"는 증거 대조 검증이 2026-08-07
+                  // GPT-4o-mini→GPT-4o로 상향된 뒤 실제와 어긋나 있었다.
+                  { step: 1, label: "Vision 👁️", desc: "YOLO탐지+GPT-4o 판독·증거검증" },
+                  // Policy는 LLM을 쓰지 않는 UBCI v2.0 매트릭스 결정론적 산식이다.
+                  { step: 2, label: "Policy ⚖️", desc: "UBCI 매트릭스(결정론적)" },
+                  // Stage A(정합성 게이트, LLM 미사용) 통과 + 결함 1건 이상일 때만 Stage B(GPT-4o-mini) 심사.
+                  { step: 3, label: "Critic 🛡️", desc: "정합성게이트+4o-mini 심사" },
                   // HITL이 Report보다 앞이다. Supervisor가 HITL로 이관하면 그래프는
                   // human_node에서 끝나고, 보증서(Report)는 관리자 결재가 확정된 뒤에야
                   // 생성된다. 종전 순서(Report → HITL)는 실제 흐름과 반대였다.
-                  { step: 4, label: "HITL 👤", desc: "관리자결재" },
-                  { step: 5, label: "Report 📋", desc: "디지털품질보증서" },
+                  { step: 4, label: "HITL 👤", desc: "관리자결재(Supervisor 이관)" },
+                  { step: 5, label: "Report 📋", desc: "GPT-4o-mini 보증서생성" },
                 ].map((s) => {
                   const isActive = activeReinspectionTask.step >= s.step;
                   const isCurrent = activeReinspectionTask.step === s.step;
