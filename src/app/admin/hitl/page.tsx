@@ -402,10 +402,19 @@ export default function AdminHitlDashboard() {
   }, []);
 
   // 검색어 필터링
+  // PENDING = AI 파이프라인이 아직 도는 중(판정 전). 결재 대상(HITL_REQUIRED)이 아니므로
+  // 결재 목록에 섞지 않는다. 섞으면 "판정 정보 없음" 행이 결재 대기처럼 보여, 워커 장애로
+  // 검수가 멈춘 것을 HITL 이관으로 오인하게 된다 (2026-08-12 실사례).
+  const inFlightTasks = useMemo(
+    () => tasks.filter((t) => t.status === 'PENDING'),
+    [tasks],
+  );
+
   const filteredTasks = useMemo(() => {
-    if (!keyword.trim()) return tasks;
+    const decidable = tasks.filter((t) => t.status !== 'PENDING');
+    if (!keyword.trim()) return decidable;
     const kw = keyword.trim().toLowerCase();
-    return tasks.filter(
+    return decidable.filter(
       (t) =>
         (t.book_title && t.book_title.toLowerCase().includes(kw)) ||
         (t.isbn && t.isbn.includes(kw)) ||
@@ -838,6 +847,15 @@ export default function AdminHitlDashboard() {
           <h2 className="text-sm font-black text-gray-900 dark:text-white">
             결재 대기 목록: <strong className="text-blue-600 dark:text-blue-400 font-mono">{filteredTasks.length}</strong>건
           </h2>
+          {inFlightTasks.length > 0 && (
+            <span
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-900"
+              title="AI 파이프라인이 아직 판정 중인 건. 완료되면 자동 확정되거나 이 목록으로 이관됩니다. 오래 머물면 워커 상태를 확인하세요."
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" />
+              AI 검수 진행 중 {inFlightTasks.length}건
+            </span>
+          )}
         </div>
         {loading ? (
           <div className="py-12 text-center text-gray-400 dark:text-gray-500 text-sm">데이터를 불러오는 중...</div>
