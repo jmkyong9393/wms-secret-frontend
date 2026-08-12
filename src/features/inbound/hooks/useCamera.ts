@@ -23,21 +23,45 @@ const QUALITY_PRESETS: Record<CameraQuality, { width: number; height: number }> 
 const BARCODE_ZOOM = 2.0;
 
 /**
- * 바코드 모드에서만 줌을 건다. 검수 촬영은 반드시 원본 화각으로 되돌린다 —
- * 줌이 남은 채 촬영하면 책이 프레임을 벗어나고 AI 판독 입력이 왜곡된다.
- * zoom 미지원 기기(구형 iOS 등)에서는 조용히 넘어간다 - 스캔 자체는 계속 가능해야 한다.
+ * 줌과 연속 초점을 **한 번에** 건다.
+ *
+ * [2026-08-13 수정 — 초점 유실 버그]
+ * 종전에는 줌만 `applyConstraints({ advanced: [{ zoom }] })`로 걸었다. `advanced`는
+ * 병합이 아니라 **집합 전체를 교체**하므로, getUserMedia 시점에 걸어둔
+ * `focusMode: "continuous"`가 이 호출로 지워졌다. 바코드 모드는 항상 줌을 걸기 때문에
+ * **스캔 화면에서만 연속 초점이 꺼지는** 상태였다 — 조장 실측 "초점을 못 잡는 것 같다",
+ * "카메라 좋은 S23 Ultra는 거의 이상 없다"와 정확히 맞는 증상이다(AF가 강한 기기는
+ * 연속 초점이 꺼져도 단발 AF로 버티지만, 그렇지 않은 기기는 흐린 프레임이 계속 남는다).
+ * 흐린 프레임은 디코더가 바를 잘못 읽게 만들어 6->9 같은 광학 오독으로 이어진다.
+ *
+ * 기기가 지원하는 항목만 골라 넣는다 - 미지원 키가 섞이면 브라우저가 호출 전체를
+ * 거부해 줌도 초점도 못 걸리기 때문이다.
  */
-async function applyZoomForQuality(track: MediaStreamTrack | undefined, quality: CameraQuality) {
+async function applyCameraTuning(track: MediaStreamTrack | undefined, quality: CameraQuality) {
   if (!track) return;
   try {
-    const caps = (track.getCapabilities?.() ?? {}) as { zoom?: { min: number; max: number } };
-    if (!caps.zoom) return;
-    const target = quality === 'barcode'
-      ? Math.min(BARCODE_ZOOM, caps.zoom.max)
-      : caps.zoom.min;
-    await track.applyConstraints({ advanced: [{ zoom: target } as any] } as any);
+    const caps = (track.getCapabilities?.() ?? {}) as {
+      zoom?: { min: number; max: number };
+      focusMode?: string[];
+    };
+
+    const advanced: Record<string, unknown>[] = [];
+
+    // 연속 초점은 두 모드 모두에 필요하다 (검수 촬영도 초점이 맞아야 결함이 보인다).
+    if (caps.focusMode?.includes('continuous')) {
+      advanced.push({ focusMode: 'continuous' });
+    }
+    if (caps.zoom) {
+      const target = quality === 'barcode'
+        ? Math.min(BARCODE_ZOOM, caps.zoom.max)
+        : caps.zoom.min;
+      advanced.push({ zoom: target });
+    }
+
+    if (advanced.length === 0) return;
+    await track.applyConstraints({ advanced } as any);
   } catch (e) {
-    console.warn(`zoom(${quality}) 적용 실패 - 기본 화각 유지:`, e);
+    console.warn(`카메라 튜닝(${quality}) 적용 실패 - 기본값 유지:`, e);
   }
 }
 
@@ -62,7 +86,7 @@ export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions 
         } catch (e) {
           console.warn(`Camera quality switch(${quality}) failed, keeping current resolution:`, e);
         }
-        await applyZoomForQuality(track, quality);
+        await applyCameraTuning(track, quality);
       }
       return;
     }
@@ -85,8 +109,9 @@ export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions 
       setStream(mediaStream);
       setError(null);
 
-      // 바코드 모드면 스트림 확보 직후 줌을 건다 (지원 기기 한정, 실패해도 스캔 계속)
-      await applyZoomForQuality(mediaStream.getVideoTracks()[0], quality);
+      // 스트림 확보 직후 줌 + 연속 초점을 함께 건다 (지원 기기 한정, 실패해도 스캔 계속).
+      // getUserMedia의 advanced는 best-effort라 여기서 실제 capabilities 기준으로 다시 확정한다.
+      await applyCameraTuning(mediaStream.getVideoTracks()[0], quality);
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
