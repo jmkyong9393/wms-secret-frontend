@@ -617,7 +617,9 @@ export default function InboundScannerPage() {
           BarcodeFormat.QR_CODE // LPN 재촬영을 위해 QR코드 인식 추가
         ]);
         hints.set(DecodeHintType.TRY_HARDER, true);
-        codeReader.current = new ZXingBrowserReader(hints);
+        // 스캔 시도 간격 기본 500ms → 200ms. 손에 든 폰은 미세하게 흔들려서 초점이
+        // 맞는 순간이 짧다 - 시도 빈도를 올려 그 순간을 잡을 확률을 높인다.
+        codeReader.current = new ZXingBrowserReader(hints, { delayBetweenScanAttempts: 200 });
       }
 
       let scanning = true;

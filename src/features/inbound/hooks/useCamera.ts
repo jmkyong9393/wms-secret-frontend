@@ -6,17 +6,40 @@ interface UseCameraOptions {
 
 /**
  * 카메라 품질 모드 - 용도별 해상도 분리.
- * - barcode: ZXing 1D 바코드(EAN-13) 픽셀 연산의 스윗스팟인 720p. 해상도가 높으면
- *   오히려 스캔 속도/인식률이 떨어진다.
- * - inspection: AI 검수 촬영용 FHD. S3 원본 화질을 확보해 백엔드 책 ROI 크롭 후에도
- *   미세 결함(Wornout) 픽셀이 보존되게 한다. (그 이상은 GPT-4o 타일 과금만 늘어 비추천)
+ * - barcode: FHD + 광학/디지털 줌 2x. 스마트폰 후면 기본 렌즈는 웹캠보다 화각이 넓어
+ *   같은 거리에서 바코드가 차지하는 픽셀이 훨씬 적다. 720p에서는 EAN-13 최소 바 폭이
+ *   1px 아래로 떨어져 디코딩이 안 되고, 가까이 대면 최소 초점거리(약 8~10cm) 안쪽이라
+ *   초점이 안 잡히는 딜레마가 생긴다. 줌으로 초점거리 밖에서 픽셀 밀도를 확보한다.
+ * - inspection: AI 검수 촬영용 FHD, 줌 없음(원본 화각). S3 원본 화질을 확보해 백엔드
+ *   책 ROI 크롭 후에도 미세 결함(Wornout) 픽셀이 보존되게 한다.
  */
 export type CameraQuality = 'barcode' | 'inspection';
 
 const QUALITY_PRESETS: Record<CameraQuality, { width: number; height: number }> = {
-  barcode: { width: 1280, height: 720 },
+  barcode: { width: 1920, height: 1080 },
   inspection: { width: 1920, height: 1080 },
 };
+
+const BARCODE_ZOOM = 2.0;
+
+/**
+ * 바코드 모드에서만 줌을 건다. 검수 촬영은 반드시 원본 화각으로 되돌린다 —
+ * 줌이 남은 채 촬영하면 책이 프레임을 벗어나고 AI 판독 입력이 왜곡된다.
+ * zoom 미지원 기기(구형 iOS 등)에서는 조용히 넘어간다 - 스캔 자체는 계속 가능해야 한다.
+ */
+async function applyZoomForQuality(track: MediaStreamTrack | undefined, quality: CameraQuality) {
+  if (!track) return;
+  try {
+    const caps = (track.getCapabilities?.() ?? {}) as { zoom?: { min: number; max: number } };
+    if (!caps.zoom) return;
+    const target = quality === 'barcode'
+      ? Math.min(BARCODE_ZOOM, caps.zoom.max)
+      : caps.zoom.min;
+    await track.applyConstraints({ advanced: [{ zoom: target } as any] } as any);
+  } catch (e) {
+    console.warn(`zoom(${quality}) 적용 실패 - 기본 화각 유지:`, e);
+  }
+}
 
 export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions = {}) {
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -39,6 +62,7 @@ export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions 
         } catch (e) {
           console.warn(`Camera quality switch(${quality}) failed, keeping current resolution:`, e);
         }
+        await applyZoomForQuality(track, quality);
       }
       return;
     }
@@ -60,6 +84,9 @@ export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions 
       streamRef.current = mediaStream;
       setStream(mediaStream);
       setError(null);
+
+      // 바코드 모드면 스트림 확보 직후 줌을 건다 (지원 기기 한정, 실패해도 스캔 계속)
+      await applyZoomForQuality(mediaStream.getVideoTracks()[0], quality);
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
