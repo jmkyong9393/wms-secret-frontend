@@ -239,13 +239,21 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
     alert(`[📸 선택 항목 일괄 현장 재촬영 요청]\n선택된 ${selectedIds.length}건에 대해 현장 작업자 푸시 알림이 발송되었습니다.`);
   };
 
-  const handleBatchDelete = () => {
+  const handleBatchDelete = async () => {
     if (!selectedIds.length) return;
-    if (confirm(`⚠️ [경고] 선택한 ${selectedIds.length}건의 도서 항목을 정말로 일괄 삭제 하시겠습니까?`)) {
-      setItems((prev) => prev.filter((i) => !selectedIds.includes(i.id)));
-      setSelectedIds([]);
-      alert(`선택한 항목이 삭제되었습니다.`);
+    if (!confirm(`⚠️ [경고] 선택한 ${selectedIds.length}건을 검수 이력·원장·알림까지 포함해 완전히 삭제합니다.\n복구할 수 없습니다. 진행할까요?`)) return;
+    const failed: string[] = [];
+    for (const id of selectedIds) {
+      try {
+        await inventoryAPI.deleteItem(id);
+        setItems((prev) => prev.filter((i) => i.id !== id));
+      } catch (e: unknown) {
+        const msg = (e as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
+        failed.push(msg?.message || msg?.detail || id);
+      }
     }
+    setSelectedIds([]);
+    if (failed.length) alert(`일부 항목을 삭제하지 못했습니다:\n${failed.join('\n')}`);
   };
 
   const handleSingleAiRetry = (item: InventoryItem) =>
@@ -254,10 +262,15 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
   const handleSingleReshoot = (item: InventoryItem) =>
     alert(`[📸 현장 재촬영 요청 완료]\nLPN: ${item.lpn_barcode}\n담당 작업자(${item.worker_id}) PDA 모바일 앱으로 촬영 알림이 전송되었습니다.`);
 
-  const handleSingleDelete = (id: string, lpn: string) => {
-    if (confirm(`⚠️ [경고] LPN [${lpn}] 항목을 정말로 재고 목록에서 삭제(폐기)하시겠습니까?\n이 작업은 복구할 수 없습니다.`)) {
+  const handleSingleDelete = async (id: string, lpn: string) => {
+    if (!confirm(`⚠️ [경고] [${lpn}] 항목을 검수 이력·원장·알림까지 포함해 완전히 삭제합니다.\n복구할 수 없습니다. 진행할까요?`)) return;
+    try {
+      await inventoryAPI.deleteItem(id);
       setItems((prev) => prev.filter((i) => i.id !== id));
       setSelectedIds((prev) => prev.filter((i) => i !== id));
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string; detail?: string } } })?.response?.data;
+      alert(`삭제 실패: ${msg?.message || msg?.detail || '서버 오류'}`);
     }
   };
 

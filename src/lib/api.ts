@@ -142,6 +142,14 @@ export const inventoryAPI = {
     const res = await apiClient.get<LpnListItem[]>("/api/v1/inventory/lpn");
     return res.data;
   },
+  // 하드 삭제 캐스케이드 (관리자 전용): 검수 이력·원장·알림까지 함께 지운다.
+  // row_id = 재고 목록 행 id (중고 InventoryUsedItem.id / 신품 Inventory.id 모두 허용)
+  deleteItem: async (rowId: string) => {
+    const res = await apiClient.delete<{ status: string; deleted: Record<string, number> }>(
+      `/api/v1/inventory/items/${rowId}`,
+    );
+    return res.data;
+  },
 };
 
 // --- app/domains/po/router.py (/po/proposals*) 응답 타입 ---
