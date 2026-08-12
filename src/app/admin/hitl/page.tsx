@@ -381,7 +381,11 @@ export default function AdminHitlDashboard() {
         // 아무 결함도 못 찾은 상태에서 결함 코드를 기본 선택해 두면 검수자가 안 고치고
         // 제출할 위험이 있다. 빈 값으로 두어 검수자가 육안 확인 후 직접 고르게 한다.
         initReasons[t.id] = getPrimaryDefectReason(t) || "";
-        initComments[t.id] = t.human_issue_notes || "관리자 검수 오버라이드";
+        // 서버가 회수 사유/직전 결재 코멘트를 human_issue_notes로 내려준다 (2026-08-13 배선).
+        // 종전에는 서버가 이 필드를 채우지 않아 항상 "관리자 검수 오버라이드" 고정 문구로
+        // 덮였고, 팀원이 회수하며 남긴 사유가 화면에서 보이지 않았다. 메모가 없으면 빈 칸
+        // 그대로 둔다 - 제출 시 폴백 문구는 handleSubmit이 따로 갖고 있다.
+        initComments[t.id] = t.human_issue_notes || "";
       });
 
       setDecisions(initDecisions);
