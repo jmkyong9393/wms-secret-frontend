@@ -47,7 +47,29 @@ jobs:
         username: ubuntu
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
+          # [2026-08-13] set -e가 없었다. 그래서 `set image`가 실패해도 다음 줄로 넘어갔고,
+          # **바뀌지 않은 디플로이에 rollout status를 걸면 즉시 "successfully rolled out"**이
+          # 돌아와 워크플로가 성공으로 끝났다. 조용한 실패의 정확한 경로다
+          # (실측: e7e059d가 배포 안 됐는데 아무도 몰랐고, 사람이 화면을 보고 알아챘다).
+          set -e
           REG=${{ steps.ecr.outputs.registry }}
           SHA=${{ github.sha }}
+          SHORT=$(echo $SHA | cut -c1-12)
+
           kubectl set image deployment/wms-frontend frontend=$REG/nexus-frontend-repo:$SHA
-          kubectl rollout status deployment/wms-frontend --timeout=180s
+          # 180초는 이미지 pull이 캐시 미스일 때 부족하다. 백엔드와 같은 여유를 준다.
+          kubectl rollout status deployment/wms-frontend --timeout=600s
+
+          # --- 배포 검증 ---
+          # spec이 아니라 **실행 중인 파드의 이미지**를 본다. spec은 set image 직후 바뀌지만
+          # 파드는 안 떴을 수 있으므로, 둘을 구분해야 "반영됐다"를 주장할 수 있다.
+          RUNNING=$(kubectl get pods -l app=wms-frontend \
+            -o jsonpath='{range .items[?(@.status.phase=="Running")]}{.status.containerStatuses[0].image}{"\n"}{end}' 2>/dev/null \
+            | sed 's|.*:||' | sort -u | tr '\n' ' ')
+          if echo "$RUNNING" | grep -q "$SHA"; then
+            echo "배포 검증 통과: wms-frontend -> $SHORT"
+          else
+            echo "::error::wms-frontend 가 새 이미지로 뜨지 않았습니다 (실행 중: ${RUNNING:-없음} / 기대: $SHORT)"
+            kubectl get pods -l app=wms-frontend 2>&1 | tail -5
+            exit 1
+          fi
