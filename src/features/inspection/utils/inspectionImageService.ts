@@ -38,6 +38,10 @@ export interface BBoxItem {
   hitl_adopted?: boolean;
   /** HITL 관리자가 좌표를 수정한 결함. */
   hitl_bbox_edited?: boolean;
+  /** 감점 반영 범위. 'excluded'면 AI 증거 대조 검증이 오탐 지목해 감점 0 처리된 결함. */
+  deduction_scope?: string;
+  /** AI 증거 대조 검증(크롭 건별 심사)이 오탐으로 지목한 결함. */
+  evidence_suspect?: boolean;
 }
 
 export interface PerImageDefectCoordinate {
@@ -113,7 +117,14 @@ function collectDefectCoordinates(
   wantExcluded: boolean,
 ): PerImageDefectCoordinate[] {
   const logs = itemOrJob?.agent_logs ?? {};
-  const keep = (b: any) => Boolean(b?.hitl_excluded) === wantExcluded;
+  // "제외" = 감점에 반영되지 않은 결함. 두 경로가 있다:
+  //  1) HITL 관리자가 오탐 판정 (hitl_excluded)
+  //  2) AI 증거 대조 검증이 오탐 지목 (deduction_scope='excluded', applied_deduction=0)
+  // 종전에는 1)만 걸러서, AI가 감점 제외한 박스까지 "확정 결함"으로 세고 그렸다
+  // (실측: UBCI 40점 = 확정 6건 감점인데 화면은 "확정 결함 23건" 표기).
+  const isExcluded = (b: any) =>
+    Boolean(b?.hitl_excluded) || b?.deduction_scope === 'excluded';
+  const keep = (b: any) => isExcluded(b) === wantExcluded;
 
   const normalized = logs.defect_coordinates;
   if (Array.isArray(normalized) && normalized.length > 0) {
@@ -152,6 +163,9 @@ function collectDefectCoordinates(
       hitl_added: d.hitl_added,
       hitl_adopted: d.hitl_adopted,
       hitl_bbox_edited: d.hitl_bbox_edited,
+      // AI 증거 대조 검증의 감점 제외 표식도 박스까지 따라와야 필터가 동작한다.
+      deduction_scope: d.deduction_scope,
+      evidence_suspect: d.evidence_suspect,
     });
   }
 

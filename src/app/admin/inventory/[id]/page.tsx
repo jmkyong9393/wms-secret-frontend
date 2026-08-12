@@ -216,6 +216,9 @@ export default function InventoryDetailPage() {
   const totalDefects = defectCoords.reduce((n, c) => n + c.bboxes.length, 0);
   const currentCoords = defectCoords.find((c) => c.image_index === selectedImgIdx);
   const currentBBoxes = currentCoords?.bboxes || [];
+  // 오탐 제외분(AI 증거검증·HITL)은 확정과 분리해 회색 점선으로만 그린다.
+  const currentExcludedBBoxes =
+    excludedCoords.find((c) => c.image_index === selectedImgIdx)?.bboxes || [];
 
   // WBF 3-YOLO 앙상블 사전탐지 후보. Vision이 채택하지 않은 것도 그대로 남아 있어,
   // 검수자가 "AI가 무엇을 보고 무엇을 기각했는지"까지 대조할 수 있다.
@@ -526,7 +529,7 @@ export default function InventoryDetailPage() {
                   {images.length === 0
                     ? '검수 이미지 없음'
                     : `촬영 ${images.length}장 / 확정 결함 ${totalDefects}건`
-                      + (excludedCount > 0 ? ` (관리자 제외 ${excludedCount}건)` : '')}
+                      + (excludedCount > 0 ? ` / 오탐 제외 ${excludedCount}건` : '')}
                 </span>
               </div>
 
@@ -546,7 +549,7 @@ export default function InventoryDetailPage() {
                           ? 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
                           : 'bg-gray-50 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700'
                       }`}
-                      title="UBCI 감점에 실제로 반영된 확정 결함. HITL 관리자가 제외한 오탐은 빠져 있다."
+                      title="UBCI 감점에 실제로 반영된 확정 결함. AI 증거 대조 검증·HITL 관리자가 오탐으로 제외한 건은 빠져 있다."
                     >
                       {showVisionBoxes ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                       {showVisionBoxes ? '확정 결함 숨기기' : '확정 결함 표시'} ({totalDefects}건)
@@ -647,6 +650,27 @@ export default function InventoryDetailPage() {
                             );
                           })}
 
+                        {/* 오탐 제외 - 회색 점선. AI 증거 대조 검증(또는 HITL 관리자)이
+                            "감점 반영 안 함"으로 걷어낸 박스. 규정상 목록에서 지우지 않고
+                            표식만 남기므로, 확정(빨강)과 반드시 구분해 그린다. */}
+                        {showVisionBoxes &&
+                          currentExcludedBBoxes.map((box, i) => {
+                            const { left, top, width, height } = bboxToPercent(box);
+                            const exLabelPos = top < 8 ? 'top-1' : '-top-6';
+                            const exLabelAnchor = left > 50 ? 'right-0' : 'left-0';
+                            return (
+                              <div
+                                key={`ex-${i}`}
+                                className="absolute border-2 border-dashed border-gray-400 bg-gray-400/10 rounded z-10 group"
+                                style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
+                              >
+                                <span className={`absolute ${exLabelPos} ${exLabelAnchor} bg-gray-500 text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-30`}>
+                                  오탐 제외: {box.label} (감점 미반영)
+                                </span>
+                              </div>
+                            );
+                          })}
+
                         {/*
                           Vision 확정 결함 - 빨강 실선.
                           [수정 이력] 예전에는 좌표계를 값 크기로 추측(xmin>1이면 1000, ...)했고,
@@ -693,9 +717,18 @@ export default function InventoryDetailPage() {
                           </p>
                         </div>
                       ) : currentBBoxes.length === 0 ? (
-                        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded-lg text-xs font-bold">
-                          [CLEAN] 이 이미지에서 검출된 결함 없음
-                        </div>
+                        currentExcludedBBoxes.length > 0 ? (
+                          <div className="p-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg text-xs space-y-1">
+                            <p className="font-bold">확정 결함 없음 — 오탐 제외 {currentExcludedBBoxes.length}건</p>
+                            <p className="text-[11px] leading-relaxed">
+                              AI가 1차 보고한 결함이 증거 대조 검증에서 오탐으로 지목되어 감점에 반영되지 않았습니다.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded-lg text-xs font-bold">
+                            [CLEAN] 이 이미지에서 검출된 결함 없음
+                          </div>
+                        )
                       ) : (
                         <div className="space-y-2 text-xs">
                           <div className="p-2.5 bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-300 border border-red-200 dark:border-red-900 rounded-lg">
