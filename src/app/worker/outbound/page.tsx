@@ -385,7 +385,7 @@ export default function WorkerOutboundPage() {
               <Zap className="w-4 h-4 animate-pulse" /> 현장 도서 피킹 카메라 스캔
             </span>
             <span className="text-[10px] text-gray-400 flex items-center gap-1 font-mono">
-              <Barcode className="w-3 h-3 text-amber-400" /> LPN · ISBN 자동 인식
+              <Volume2 className="w-3 h-3 text-amber-400" /> 풋페달 추후 지원 예정
             </span>
           </div>
           <div className="w-full">
