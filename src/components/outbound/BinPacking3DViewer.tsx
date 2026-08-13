@@ -1079,20 +1079,21 @@ export default function BinPacking3DViewer({
               </div>
 
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setZoomLevel(prev => Math.min(2.5, prev + 0.2))}
-                  className="p-1.5 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 transition cursor-pointer"
-                  title="확대 (Zoom In)"
-                >
-                  <ZoomIn className="w-4 h-4" />
-                </button>
-                <span className="px-2 font-mono text-indigo-600 dark:text-indigo-400 font-bold">{Math.round(zoomLevel * 100)}%</span>
+                {/* 축소 - % - 확대 순서. 일반 뷰 툴바(§상단)와 배치를 맞춘다 */}
                 <button
                   onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.2))}
                   className="p-1.5 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 transition cursor-pointer"
                   title="축소 (Zoom Out)"
                 >
                   <ZoomOut className="w-4 h-4" />
+                </button>
+                <span className="px-2 font-mono text-indigo-600 dark:text-indigo-400 font-bold">{Math.round(zoomLevel * 100)}%</span>
+                <button
+                  onClick={() => setZoomLevel(prev => Math.min(2.5, prev + 0.2))}
+                  className="p-1.5 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 transition cursor-pointer"
+                  title="확대 (Zoom In)"
+                >
+                  <ZoomIn className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => { setZoomLevel(1.0); setRotX(25); setRotY(-35); }}
