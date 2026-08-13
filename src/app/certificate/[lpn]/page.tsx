@@ -232,6 +232,18 @@ export default function CertificatePage() {
                       <p className="text-xs text-gray-600 leading-relaxed">{cert.condition_detail}</p>
                     </div>
 
+                    {/* 반품 처분 안내 - Policy Stage B가 규정 근거로 판단한 결과.
+                        근거 조항이 함께 없으면 표시하지 않는다 (근거 없는 안내는 통보로 읽힌다). */}
+                    {cert.policy_notice && (cert.policy_basis?.length ?? 0) > 0 && (
+                      <div className="bg-white p-3.5 print:p-2 rounded-xl print:rounded-md border border-slate-100 shadow-2xs space-y-1.5">
+                        <p className="text-xs font-bold text-gray-800">반품 안내</p>
+                        <p className="text-xs text-gray-600 leading-relaxed">{cert.policy_notice}</p>
+                        <p className="text-[10px] text-gray-400 leading-relaxed">
+                          근거 · {cert.policy_basis!.join(' / ')}
+                        </p>
+                      </div>
+                    )}
+
                     {cert.care_tip && (
                       <div className="bg-indigo-50/70 p-3 print:p-1.5 rounded-xl print:rounded-md border border-indigo-100 print:hidden">
                         <p className="text-[11px] text-indigo-900 leading-relaxed">
