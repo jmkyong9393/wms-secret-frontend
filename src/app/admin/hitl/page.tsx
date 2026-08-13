@@ -12,7 +12,8 @@ import {
   Sparkles,
   Bot,
   Shield as ShieldIcon,
-  ShieldAlert
+  ShieldAlert,
+  Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +94,23 @@ const HITL_ESCALATION_LABELS: Record<string, { label: string; category: string; 
   AWAITING_HUMAN_REVIEW: { label: '관리자 판독 대기', category: 'HITL 이관 사유', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
   OK: { label: '정합성 확인됨', category: 'HITL 이관 사유', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
 };
+
+/**
+ * 결재 대기 목록의 정렬 기준 시각(HITL 이관/회수 시점)을 "08-13 09:15" 형태로 보여준다.
+ * 이 값이 화면에 없으면 목록이 최신순인지 결재자가 확인할 방법이 없다.
+ */
+function formatQueuedAt(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
 
 /**
  * agent_logs.defects[](Vision/YOLO가 실제로 낸 결함 목록)에서 hitl_excluded/evidence_suspect가
@@ -857,6 +875,9 @@ export default function AdminHitlDashboard() {
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
           <h2 className="text-sm font-black text-gray-900 dark:text-white">
             결재 대기 목록: <strong className="text-blue-600 dark:text-blue-400 font-mono">{filteredTasks.length}</strong>건
+            <span className="ml-2 font-medium text-[11px] text-gray-400 dark:text-gray-500">
+              이관 시각 최신순
+            </span>
           </h2>
           {inFlightTasks.length > 0 && (
             <span
@@ -969,6 +990,18 @@ export default function AdminHitlDashboard() {
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px]">Task: {t.id.slice(0, 8)}...</span>
+                          {(() => {
+                            const queuedAt = formatQueuedAt(t.updated_at || t.created_at);
+                            return queuedAt ? (
+                              <span
+                                className="flex items-center gap-1 text-gray-500 dark:text-gray-400 font-mono text-[10px] tabular-nums"
+                                title="이 건이 결재 대기열에 올라온 시각. 목록은 이 시각 기준 최신순으로 정렬됩니다."
+                              >
+                                <Clock className="w-3 h-3" />
+                                {queuedAt}
+                              </span>
+                            ) : null;
+                          })()}
                           {t.ubci_score !== undefined && (
                             <span className="bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded">
                               UBCI: {t.ubci_score}점
