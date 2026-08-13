@@ -25,6 +25,8 @@ export interface HitlTask {
     [key: string]: any;
   };
   created_at: string;
+  /** 상태가 마지막으로 바뀐 시각(HITL 이관·회수 시점). 결재 대기 목록의 정렬 기준이다. */
+  updated_at?: string;
 }
 
 
