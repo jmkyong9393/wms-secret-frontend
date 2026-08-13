@@ -18,7 +18,7 @@ import {
   Bot,
   CheckCircle2,
 } from 'lucide-react';
-import CameraScanner from '@/features/inbound/components/CameraScanner';
+import PickingBarcodeScanner from '@/features/outbound/components/PickingBarcodeScanner';
 import { useAtomValue } from 'jotai';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
 
@@ -385,12 +385,24 @@ export default function WorkerOutboundPage() {
               <Zap className="w-4 h-4 animate-pulse" /> 현장 도서 피킹 카메라 스캔
             </span>
             <span className="text-[10px] text-gray-400 flex items-center gap-1 font-mono">
-              <Volume2 className="w-3 h-3 text-amber-400" /> 풋페달/버튼 지원
+              <Barcode className="w-3 h-3 text-amber-400" /> LPN · ISBN 자동 인식
             </span>
           </div>
           <div className="w-full">
-            <CameraScanner />
+            {/* 스캔 결과는 아래 입력창에 채우기만 한다. 피킹 확정은 작업자가
+                검증 버튼을 눌러야 이뤄진다 - 잘못 스친 바코드가 자동으로
+                피킹 완료로 찍히면 되돌리기가 번거롭다. */}
+            <PickingBarcodeScanner
+              paused={isScanning}
+              onDetected={(code) => {
+                setManualLpn(formatBarcodeOrIsbn(code));
+                setScanError(null);
+              }}
+            />
           </div>
+          <p className="text-[11px] text-gray-400 font-bold text-center">
+            바코드가 잡히면 아래 입력창에 자동으로 채워집니다. 확인 후 검증 버튼을 누르세요.
+          </p>
         </div>
       )}
 
