@@ -19,6 +19,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import PickingBarcodeScanner from '@/features/outbound/components/PickingBarcodeScanner';
+import { validateIsbn13, isLpnCode } from '@/features/inbound/isbnValidation';
 import { useAtomValue } from 'jotai';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
 
@@ -415,6 +416,16 @@ export default function WorkerOutboundPage() {
                 피킹 완료로 찍히면 되돌리기가 번거롭다. */}
             <PickingBarcodeScanner
               paused={isScanning}
+              validate={(raw) => {
+                const code = extractScannedCode(raw);
+                if (isLpnCode(code)) return { ok: true };
+                const verdict = validateIsbn13(code);
+                if (verdict.valid) return { ok: true };
+                return {
+                  ok: false,
+                  message: verdict.message || 'LPN 또는 ISBN 바코드가 아닙니다.',
+                };
+              }}
               onDetected={(code) => {
                 setManualLpn(formatBarcodeOrIsbn(extractScannedCode(code)));
                 setScanError(null);
