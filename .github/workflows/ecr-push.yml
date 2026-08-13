@@ -1,8 +1,16 @@
-name: Deploy Frontend to ECR
+name: Deploy Frontend to ECR (Manual Rebuild)
 
+# deploy.yml이 main 푸시마다 nexus-frontend-repo를 자동 빌드/푸시/배포하므로,
+# 이 워크플로우는 코드 변경 없이 이미지만 다시 빌드/푸시하고 싶을 때(캐시 무효화,
+# 베이스 이미지 갱신 등) 쓰는 수동 전용 경로다. 자동 push 트리거는 두지 않는다 -
+# 켜두면 deploy.yml과 이중 빌드가 된다.
+#
+# [2026-08-13 수정] 종전에는 main 푸시마다 자동 실행되면서 존재하지 않는 ECR 레포
+# `secret-frontend-repo`로 push를 시도해 **매 푸시마다 실패**했다. 실제 배포는
+# deploy.yml이 하고 있었으므로 기능 장애는 아니었지만, 커밋마다 빨간 X가 찍혀
+# 진짜 실패를 가리고 있었다. 백엔드 ecr-push.yml과 동일한 규약으로 맞춘다.
 on:
-  push:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -12,7 +20,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -27,9 +35,18 @@ jobs:
       - name: Build, tag, and push Frontend image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: secret-frontend-repo
+          # deploy.yml이 배포하는 레포와 반드시 같아야 한다. 다른 이름으로 밀면
+          # 빌드는 성공해도 클러스터가 절대 그 이미지를 쓰지 않는다.
+          ECR_REPOSITORY: nexus-frontend-repo
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest -f Dockerfile .
+          # 빌드 인자는 deploy.yml과 동일하게 준다. 빠뜨리면 API 주소가 비어 있는
+          # 이미지가 만들어져, 수동 롤백 시 화면이 백엔드를 찾지 못한다.
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=https://nexus-wms.p-e.kr \
+            --build-arg BACKEND_ORIGIN=http://wms-api-svc:8000 \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            -f Dockerfile .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
