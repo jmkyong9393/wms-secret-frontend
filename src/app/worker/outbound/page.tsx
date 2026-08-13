@@ -29,6 +29,27 @@ const API_BASE = `${API_BASE_URL}/api/v1`;
  * - 978/979 시작 13자리 숫자는 ISBN으로 판정해 그대로 유지
  * - 그 외에는 LPN-YYMMDD-XXXX 규격으로 자동 하이픈 생성
  */
+/**
+ * 스캔 원문에서 실제 코드만 뽑는다.
+ * LPN 라벨 QR은 코드가 아니라 `{origin}/lpn/{LPN-...}` URL을 담고 있어,
+ * 그대로 포맷터에 넣으면 URL이 통째로 LPN으로 재조립된다(LPN-HTTPSN-EXUS).
+ */
+function extractScannedCode(raw: string): string {
+  const text = (raw || '').trim();
+  const fromUrl = text.match(/\/lpn\/([^/?#\s]+)/i);
+  if (fromUrl) {
+    try {
+      return decodeURIComponent(fromUrl[1]);
+    } catch {
+      return fromUrl[1];
+    }
+  }
+  // URL이 아니어도 LPN-YYMMDD-XXXX가 섞여 있으면 그 부분만 취한다.
+  const embedded = text.toUpperCase().match(/LPN-?\d{6}-?[A-Z0-9]{3,4}/);
+  if (embedded) return embedded[0];
+  return text;
+}
+
 function formatBarcodeOrIsbn(input: string): string {
   if (!input) return '';
   let clean = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -395,7 +416,7 @@ export default function WorkerOutboundPage() {
             <PickingBarcodeScanner
               paused={isScanning}
               onDetected={(code) => {
-                setManualLpn(formatBarcodeOrIsbn(code));
+                setManualLpn(formatBarcodeOrIsbn(extractScannedCode(code)));
                 setScanError(null);
               }}
             />
