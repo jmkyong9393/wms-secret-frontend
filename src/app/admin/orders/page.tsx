@@ -101,16 +101,16 @@ export default function OrdersPickingPage() {
   useEffect(() => { fetchInstructions(); }, [fetchInstructions]);
 
   const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const cancelInstruction = async (id: string) => {
-    if (!confirm('이 피킹 지시서를 취소할까요? 주문은 대기 상태로, 할당된 중고 재고는 재고로 복귀합니다.')) return;
+  const deleteInstruction = async (id: string, instructionNo: string) => {
+    if (!confirm(`${instructionNo} 지시서를 삭제할까요?\n발행 이전 상태로 되돌립니다 — 할당된 중고 재고가 재고로 복귀하고 발행 알림도 함께 지워집니다.`)) return;
     setCancellingId(id);
     try {
-      const res = await fetch(`${API_BASE}/orders/picking-instructions/${id}/cancel`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/orders/picking-instructions/${id}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchInstructions();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(`취소 실패: ${data.detail || res.statusText}`);
+        alert(`삭제 실패: ${data.detail || data.message || res.statusText}`);
       }
     } catch (e) {
       alert('백엔드 연결에 실패했습니다.');
@@ -459,13 +459,13 @@ export default function OrdersPickingPage() {
                           출고 진행 <ArrowRight className="w-3 h-3" />
                         </Link>
                       )}
-                      {ins.status === 'PENDING' && (
+                      {['PENDING', 'CANCELLED'].includes(ins.status) && (
                         <button
                           type="button"
-                          onClick={e => { e.stopPropagation(); cancelInstruction(ins.id); }}
+                          onClick={e => { e.stopPropagation(); deleteInstruction(ins.id, ins.instruction_no); }}
                           disabled={cancellingId === ins.id}
                           className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer disabled:opacity-40"
-                          title="지시서 취소 (주문 대기 복귀 + 중고 재고 반환)"
+                          title="지시서 삭제 (발행 이전 상태로 롤백 + 중고 재고 반환)"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
