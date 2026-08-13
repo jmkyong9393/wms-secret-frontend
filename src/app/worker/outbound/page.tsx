@@ -8,7 +8,6 @@ import {
   Barcode,
   Smartphone,
   Zap,
-  Volume2,
   FileCheck,
   PackageCheck,
   MapPin,
@@ -406,8 +405,8 @@ export default function WorkerOutboundPage() {
             <span className="flex items-center gap-1.5 text-indigo-400">
               <Zap className="w-4 h-4 animate-pulse" /> 현장 도서 피킹 카메라 스캔
             </span>
-            <span className="text-[10px] text-gray-400 flex items-center gap-1 font-mono">
-              <Volume2 className="w-3 h-3 text-amber-400" /> 풋페달 추후 지원 예정
+            <span className="text-[10px] text-gray-400 font-mono">
+              자동 인식 · 촬영 없음
             </span>
           </div>
           <div className="w-full">
