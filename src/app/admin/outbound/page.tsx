@@ -150,7 +150,9 @@ export default function OutboundDashboard() {
       setSelectedBookIds(ids);
       setBookQuantities(prev => ({ ...prev, ...quantities }));
     }
-  }, [selectedInstructionId, inventoryBooks.length]);
+    // 목록 재조회(할당 중고 포함)로 배열이 갈리면 다시 맞춘다 - length만 보면
+    // 지시서를 바꿨는데 권수가 같을 때 재매칭이 건너뛰어진다.
+  }, [selectedInstructionId, inventoryBooks]);
 
   // Fetch real DB outbound summary KPI
   useEffect(() => {
@@ -179,7 +181,11 @@ export default function OutboundDashboard() {
     const fetchDbBooks = async () => {
       try {
         setIsBooksLoading(true);
-        const res = await fetch(`${API_BASE_URL}/api/v1/orders/available-books`, {
+        // 지시서를 연 상태면 그 지시서에 할당(ALLOCATED)된 중고 LPN도 함께 받는다.
+        // 할당된 중고는 판매 가능 목록에서 빠지므로, 안 넘기면 중고 라인이 매칭에 실패해
+        // 신품만 선택되고 가격·패킹이 중고 0권으로 산정된다.
+        const qs = selectedInstructionId ? `?instruction_id=${selectedInstructionId}` : '';
+        const res = await fetch(`${API_BASE_URL}/api/v1/orders/available-books${qs}`, {
           cache: 'no-store',
           headers: { 'Cache-Control': 'no-cache' }
         });
@@ -203,7 +209,7 @@ export default function OutboundDashboard() {
       }
     };
     fetchDbBooks();
-  }, []);
+  }, [selectedInstructionId]);
 
   const filteredBooks = inventoryBooks.filter(b => {
     if (!searchTerm) return true;
