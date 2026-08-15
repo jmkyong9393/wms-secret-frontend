@@ -54,9 +54,25 @@ const nextConfig: NextConfig = {
 
   // 브라우저에 강제할 보안 정책. ALB가 TLS를 끊고 바로 Next로 오는 구조라 Nginx 같은
   // 중간 계층이 없으므로, 헤더를 붙일 곳은 여기뿐이다.
-  // CSP는 넣지 않는다 - Next의 인라인 스크립트와 충돌해 화면이 깨질 위험이 크고,
-  // nonce 기반 설정은 별도 검증이 필요하다.
   async headers() {
+    // CSP는 Report-Only로만 건다. 차단 모드로 켜면 Next의 인라인 스크립트와 충돌해
+    // 화면이 깨지므로, 먼저 "켰을 때 무엇이 걸리는지"를 관측한 뒤 nonce 설계로 넘어간다.
+    // script-src는 일부러 엄격하게 둔다 - 위반을 봐야 좁힐 대상을 알 수 있다.
+    // style-src만 인라인을 허용한다: Tailwind/Next가 스타일을 인라인으로 주입해 바꿀 수 없다.
+    const cdn = process.env.NEXT_PUBLIC_CDN_DOMAIN || "https://cdn.wms-ai.com";
+    const cspReportOnly = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      `img-src 'self' data: blob: ${cdn}`,   // 촬영 미리보기(blob) · 검수 사진(CDN)
+      "font-src 'self' data:",
+      `connect-src 'self' ${cdn}`,           // API·SSE는 동일 출처, Sentry는 tunnelRoute 경유
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "object-src 'none'",
+    ].join("; ");
+
     return [
       {
         source: "/:path*",
@@ -71,6 +87,8 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // 촬영 UI가 쓰는 카메라만 남기고 나머지 장치 권한은 닫는다.
           { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+          // 관측 전용. 위반해도 차단하지 않고 브라우저 콘솔에만 기록된다.
+          { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
         ],
       },
     ];
