@@ -16,6 +16,11 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+# NEXT_PUBLIC_ 변수는 빌드 시점에 번들로 구워진다. 런타임 environment로는 반영되지 않으므로
+# Sentry DSN도 빌드 인자로 받아야 한다. 값이 비면 Sentry는 초기화를 건너뛴다.
+ARG NEXT_PUBLIC_SENTRY_DSN
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
+
 # [2026-08-09 추가] next.config.ts의 rewrites()가 반환하는 프록시 대상은 standalone
 # 빌드 시 .next/routes-manifest.json에 문자열로 고정(bake)된다 - 컨테이너 런타임에
 # environment:로 BACKEND_ORIGIN을 줘도 이미 굳어진 값이라 반영되지 않는다. 빌드

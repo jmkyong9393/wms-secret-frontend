@@ -45,6 +45,7 @@ jobs:
           docker build \
             --build-arg NEXT_PUBLIC_API_URL=https://nexus-wms.p-e.kr \
             --build-arg BACKEND_ORIGIN=http://wms-api-svc:8000 \
+            --build-arg NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }} \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             -f Dockerfile .
