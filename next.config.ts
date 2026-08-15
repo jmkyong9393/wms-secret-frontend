@@ -48,12 +48,39 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
+  // 서버 종류를 광고하는 X-Powered-By 헤더를 제거한다. 공격자에게 스택을 알려줄 이유가 없다.
+  poweredByHeader: false,
+
+  // 브라우저에 강제할 보안 정책. ALB가 TLS를 끊고 바로 Next로 오는 구조라 Nginx 같은
+  // 중간 계층이 없으므로, 헤더를 붙일 곳은 여기뿐이다.
+  // CSP는 넣지 않는다 - Next의 인라인 스크립트와 충돌해 화면이 깨질 위험이 크고,
+  // nonce 기반 설정은 별도 검증이 필요하다.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          // HTTPS로만 접속하게 고정한다. 중간자가 HTTP로 끌어내리는 다운그레이드를 막는다.
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+          // 관리자 화면이 외부 사이트의 프레임 안에 뜨는 것을 차단한다(클릭재킹).
+          { key: "X-Frame-Options", value: "DENY" },
+          // 선언된 Content-Type을 브라우저가 임의로 다시 추측하지 못하게 한다.
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          // 외부로 나갈 때 경로를 떼고 도메인만 보낸다. URL에 담긴 LPN·작업 ID 유출 방지.
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // 촬영 UI가 쓰는 카메라만 남기고 나머지 장치 권한은 닫는다.
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+        ],
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {
   silent: true,
-  org: "wms-ai-platform",
-  project: "frontend",
+  org: "azrael-vs",
+  project: "nexus-wms",
   widenClientFileUpload: true,
   tunnelRoute: "/monitoring",
   sourcemaps: { disable: true },
