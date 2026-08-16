@@ -62,14 +62,16 @@ export default function LoginPage() {
         mustChangePassword: loginRes.must_change_password,
       });
 
-      // 초기 비밀번호 미변경 계정은 강제로 온보딩(비밀번호 변경) 화면으로 보낸다.
-      if (loginRes.must_change_password) {
-        router.push('/onboarding');
-      } else if (loginRes.role === 'WORKER') {
-        router.push('/inspections?scope=mine');
-      } else {
-        router.push('/admin/dashboard');
-      }
+      // 역할별 진입 경로. 이동은 전체 새로고침으로 한다 - router.push는 클라이언트
+      // 내비게이션이라 Next 라우터 캐시에 남은 **이전 역할의 RSC 페이로드**를 그대로
+      // 재사용한다. 레이아웃이 서버에서 role 쿠키를 읽어도 그 코드가 아예 돌지 않아,
+      // 다른 계정으로 다시 로그인하면 직전 사용자의 셸(예: WORKER 모바일 셸)이 뜬다.
+      const next = loginRes.must_change_password
+        ? '/onboarding'
+        : loginRes.role === 'WORKER'
+          ? '/inspections?scope=mine'
+          : '/admin/dashboard';
+      window.location.href = next;
 
     } catch (err: any) {
       // [수정 이력] 종전에는 모든 실패를 문구 하나로 뭉개, 시도 제한(429)조차

@@ -94,7 +94,9 @@ function toInspectionDefects(raw: unknown): InspectionItem['defects_found'] {
 export function InspectionDataTable({ role, scope }: { role: StockRole; scope: 'ALL' | 'MINE' }) {
   const isMine = scope === 'MINE';
   const currentUser = useAtomValue(currentUserAtom);
-  const workerId = currentUser?.employeeId || 'WM2608001';
+  // 세션이 아직 로드되지 않았을 때 특정 사번으로 폴백하면 그 계정의 검수 이력이
+  // 조회된다. 값이 없으면 조회 자체를 하지 않는다.
+  const workerId = currentUser?.employeeId ?? null;
 
   const [inspections, setInspections] = useState<InspectionItem[]>([]);
   const [selectedReportItem, setSelectedReportItem] = useState<InspectionItem | null>(null);
@@ -118,12 +120,20 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
   // 이 화면의 소스가 될 수 없다. 백엔드가 점수·등급·담당자를 null로 내려주면 null 그대로
   // 두고 화면에서 미산출로 표기한다.
   useEffect(() => {
+    // 세션이 아직 없으면 조회하지 않는다. 이전 사용자의 목록이 남지 않도록 비운다.
+    if (isMine && !workerId) {
+      setInspections([]);
+      return;
+    }
     (async () => {
       try {
         const qs = new URLSearchParams({ limit: '200' });
-        if (isMine && workerId) qs.set('worker_id', workerId);
+        // 서버가 세션에서 대상자를 정한다. 이 값은 화면 표시용 힌트일 뿐이며,
+        // 남의 사번을 넣어도 서버가 무시한다(returns/router.py의 인가 참조).
+        if (isMine) qs.set('scope', 'mine');
 
         const res = await fetch(`${API_BASE_URL}/api/v1/returns/inspections?${qs}`, {
+          credentials: 'include',   // 쿠키 세션을 실어야 서버가 조회자를 식별한다
           cache: 'no-store',
           headers: { 'Cache-Control': 'no-cache' },
         });
@@ -180,7 +190,8 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
       const matchStatus = statusFilter === 'ALL' || i.status === statusFilter;
 
       // 관리자 [내 검수만] 토글: 본인 사번이 담당자로 기록된 건만
-      if (mineOnly && !(i.worker_id || '').includes(workerId)) return false;
+      // 세션이 없으면(workerId=null) 본인 판정이 불가능하므로 아무것도 통과시키지 않는다.
+      if (mineOnly && (!workerId || !(i.worker_id || '').includes(workerId))) return false;
 
       let matchDate = true;
       if (dateFilter === 'TODAY') {
