@@ -215,20 +215,23 @@ export default function AdvancedDashboardPage() {
           </div>
         </div>
 
-        {/* Widget 2: 실시간 자동 승인율 */}
+        {/* Widget 2: AI 단독 승인율 - 관리자 결재를 거친 건은 자동이 아니므로 분자에서 뺀다 */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-800 shadow-xs flex flex-col hover:shadow-md transition-all">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">실시간 자동 승인율</span>
+            <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">AI 단독 승인율</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="flex items-end justify-between">
             <div>
               <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tight">
-                {kpi?.approval_rate !== undefined ? `${kpi.approval_rate}%` : '-'}
+                {kpi?.auto_approval_rate !== undefined ? `${kpi.auto_approval_rate}%` : '-'}
+              </span>
+              <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+                {kpi?.auto_approved ?? 0}/{kpi?.decided_total ?? 0}건
               </span>
             </div>
             <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 flex items-center">
-              <TrendingUp className="w-3 h-3 mr-1" />전체 {kpi?.decided_total ?? 0}건 기준
+              <TrendingUp className="w-3 h-3 mr-1" />최종 승인율 {kpi?.approval_rate ?? 0}%
             </span>
           </div>
         </div>
