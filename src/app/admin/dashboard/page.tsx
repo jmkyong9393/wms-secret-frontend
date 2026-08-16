@@ -267,8 +267,11 @@ export default function AdvancedDashboardPage() {
               </span>
               <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">건</span>
             </div>
-            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800">
-              실시간 조율
+            {/* 누가 올렸는지로 쪼갠다. 관리자 소환은 사람이 이미 의심한 건이라 성격이 다르다 */}
+            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-1 rounded-lg border border-amber-200 dark:border-amber-800 flex items-center gap-1.5">
+              <span>AI 이관 {kpi?.pending_by_ai ?? 0}</span>
+              <span className="text-amber-400 dark:text-amber-700">·</span>
+              <span>관리자 소환 {kpi?.pending_by_admin ?? 0}</span>
             </span>
           </div>
         </div>
