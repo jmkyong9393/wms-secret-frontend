@@ -62,10 +62,17 @@ export default function LoginPage() {
         mustChangePassword: loginRes.must_change_password,
       });
 
-      // 역할별 진입 경로. 이동은 전체 새로고침으로 한다 - router.push는 클라이언트
-      // 내비게이션이라 Next 라우터 캐시에 남은 **이전 역할의 RSC 페이로드**를 그대로
-      // 재사용한다. 레이아웃이 서버에서 role 쿠키를 읽어도 그 코드가 아예 돌지 않아,
-      // 다른 계정으로 다시 로그인하면 직전 사용자의 셸(예: WORKER 모바일 셸)이 뜬다.
+      // role 쿠키를 클라이언트에서 직접 갱신한다.
+      // 서버는 token·role 두 개를 Set-Cookie로 내리는데, ALB가 동일 이름 헤더를 하나로
+      // 접어 **두 번째(role)가 라이브에서 유실**된다. 그러면 이전 계정의 role이 그대로
+      // 남아, 미들웨어와 레이아웃이 직전 역할로 화면을 그린다(MASTER인데 작업자 셸).
+      // role은 HttpOnly가 아니므로(RBAC 라우팅용) 여기서 설정할 수 있다.
+      const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie =
+        `role=${loginRes.role}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax${secure}`;
+
+      // 이동은 전체 새로고침으로 한다 - router.push는 클라이언트 내비게이션이라
+      // Next 라우터 캐시에 남은 이전 역할의 RSC 페이로드를 그대로 재사용한다.
       const next = loginRes.must_change_password
         ? '/onboarding'
         : loginRes.role === 'WORKER'
