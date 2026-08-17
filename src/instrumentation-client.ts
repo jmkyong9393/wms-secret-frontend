@@ -14,6 +14,21 @@ if (dsn) {
     // 오류가 난 세션만 재생을 남긴다.
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 1.0,
+    // Sentry Logs — 오류(Issues)와 별개로 구조화 로그를 Explore > Logs에 적재한다.
+    enableLogs: true,
+    integrations: [
+      // 샘플레이트만으로는 Replay가 동작하지 않는다 — 통합을 등록해야 세션 녹화가 붙는다
+      // (실측: 샘플레이트만 있던 동안 Replays 화면이 계속 비어 있었다).
+      Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
+      // console.warn/error를 로그로 자동 수집한다. log/info까지 열면 무료 플랜
+      // 볼륨을 순식간에 소진하므로 경고 이상만 담는다.
+      Sentry.consoleLoggingIntegration({ levels: ["warn", "error"] }),
+      // 브라우저 프로파일링. next.config.ts의 Document-Policy: js-profiling 헤더와 짝이다.
+      Sentry.browserProfilingIntegration(),
+    ],
+    // 추적되는 트랜잭션 중 프로파일을 남길 비율. traces에 종속이므로 실효 수집률은
+    // tracesSampleRate × profilesSampleRate다.
+    profilesSampleRate: 1.0,
     debug: false,
   });
 }

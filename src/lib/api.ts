@@ -1,5 +1,16 @@
+import * as Sentry from "@sentry/nextjs";
+
 import { apiClient } from "@/lib/api-client";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
+
+/** Sentry Application Metrics 카운터. 계측 실패가 업무 동작을 막으면 안 되므로 삼킨다. */
+const metricCount = (name: string, attributes?: Record<string, string | number>) => {
+  try {
+    Sentry.metrics?.count?.(name, 1, attributes ? { attributes } : undefined);
+  } catch {
+    /* 계측은 부가 기능 - 실패해도 무시 */
+  }
+};
 
 // --- app/domains/admin/router.py (/admin/hitl/*) 응답 타입 ---
 
@@ -51,10 +62,14 @@ export const adminAPI = {
   },
   submitHitlOverrides: async (items: HitlOverrideRequest[]) => {
     const res = await apiClient.post<HitlOverrideResult>("/api/v1/admin/hitl/override", { items });
+    // 관리자 결재 처리량 — HITL 운영 부하를 Sentry Metrics에서 추적한다.
+    metricCount("hitl.override.submitted", { batch_size: items.length });
     return res.data;
   },
   triggerAiReinspection: async (jobId: string) => {
     const res = await apiClient.post<HitlReinspectResult>(`/api/v1/admin/hitl/${jobId}/re-inspect`);
+    // AI 재검수 요청 빈도 — 재검수 폭주(비용)를 조기에 본다.
+    metricCount("inspection.reinspect.triggered");
     return res.data;
   },
   /**

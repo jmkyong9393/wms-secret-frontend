@@ -89,6 +89,8 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
           // 관측 전용. 위반해도 차단하지 않고 브라우저 콘솔에만 기록된다.
           { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
+          // Sentry 브라우저 프로파일링용. JS Self-Profiling API는 이 문서 정책이 있어야 열린다.
+          { key: "Document-Policy", value: "js-profiling" },
         ],
       },
     ];
