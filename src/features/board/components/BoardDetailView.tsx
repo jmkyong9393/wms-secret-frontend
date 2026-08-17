@@ -9,7 +9,7 @@ import { useBoardPostQuery } from "@/features/board/hooks/useBoardPostQuery";
 import { useDeleteBoardPostMutation } from "@/features/board/hooks/useBoardPostMutations";
 import { canDeletePost, canEditPost } from "@/features/board/utils/permissions";
 import { CATEGORY_BADGE_CLASS, CATEGORY_LABEL } from "@/features/board/components/categoryLabels";
-import { boardAttachmentDisplayName, boardAttachmentUrl } from "@/features/board/utils/attachmentUrl";
+import { boardAttachmentDisplayName, useBoardAttachmentUrls } from "@/features/board/utils/attachmentUrl";
 import { isImageAttachment } from "@/features/board/utils/attachmentValidation";
 import { BoardCommentList } from "@/features/board/components/BoardCommentList";
 import { BoardCommentForm } from "@/features/board/components/BoardCommentForm";
@@ -37,6 +37,8 @@ export function BoardDetailView({ postId }: BoardDetailViewProps) {
   const { data: post, isLoading, isError } = useBoardPostQuery(postId);
   const deleteMutation = useDeleteBoardPostMutation();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // 첨부 열람 URL은 만료가 있어 매번 서버에서 발급받는다. 훅이므로 아래 조기 반환보다 앞에 둔다.
+  const attachmentUrl = useBoardAttachmentUrls(post?.attachment_paths ?? []);
 
   if (isLoading) {
     return <p className="max-w-3xl mx-auto text-sm text-gray-400 p-4">불러오는 중...</p>;
@@ -123,9 +125,9 @@ export function BoardDetailView({ postId }: BoardDetailViewProps) {
           <div className="flex flex-wrap gap-2 pt-2">
             {post.attachment_paths.map((path, idx) =>
               isImageAttachment(path) ? (
-                <a key={path} href={boardAttachmentUrl(path)} target="_blank" rel="noopener noreferrer">
+                <a key={path} href={attachmentUrl(path)} target="_blank" rel="noopener noreferrer">
                   <img
-                    src={boardAttachmentUrl(path)}
+                    src={attachmentUrl(path)}
                     alt={`첨부 ${idx + 1}`}
                     className="w-24 h-24 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
                   />
@@ -133,7 +135,7 @@ export function BoardDetailView({ postId }: BoardDetailViewProps) {
               ) : (
                 <a
                   key={path}
-                  href={boardAttachmentUrl(path)}
+                  href={attachmentUrl(path)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors max-w-[220px]"

@@ -64,10 +64,12 @@ export function validateAttachmentFile(
 }
 
 /**
- * 업로드 파일명을 CDN 키로 쓰기 안전한 형태로 정규화한다 (경로 구분자 제거, 허용 문자 외
- * 치환). 백엔드 uploads/router.py의 sanitize_upload_filename()과 동일한 규칙이다 -
- * uploadImageToCloudFront()가 서버 검증 없이 파일명을 그대로 CDN 경로에 이어붙이므로,
- * 여기서 정규화하지 않으면 "../" 등이 섞인 파일명이 의도하지 않은 CDN 경로에 쓰일 수 있다.
+ * 업로드 파일명을 S3 키로 쓰기 안전한 형태로 정규화한다 (경로 구분자 제거, 허용 문자 외
+ * 치환). 백엔드 uploads/router.py의 sanitize_upload_filename()과 동일한 규칙이다.
+ *
+ * [미사용/확장예정] 게시판 첨부는 서버가 presign 단계에서 normalize_filename() +
+ * sanitize_upload_filename()으로 직접 정규화하므로 더 이상 호출하지 않는다 (BiDi 제어문자
+ * 같은 위장은 서버만 잡는다). 검수 사진 등 다른 업로드 경로에서 재사용할 수 있어 남긴다.
  */
 export function sanitizeAttachmentFilename(fileName: string): string {
   const base = fileName.replace(/\\/g, "/").split("/").pop() ?? "upload";
