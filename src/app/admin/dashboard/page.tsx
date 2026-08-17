@@ -285,7 +285,7 @@ export default function AdvancedDashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> 최근 7일간 일별 입출고 물동량 추이
+                <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> 최근 14일간 일별 입출고 물동량 추이
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">입고(Inbound) 및 출고(Outbound) 일별 처리 수량 듀얼 곡선입니다.</p>
             </div>
