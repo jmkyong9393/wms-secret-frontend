@@ -8,6 +8,9 @@ if (dsn) {
     dsn,
     environment: process.env.NODE_ENV,
     tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+    // Sentry Logs — 클라이언트(instrumentation-client.ts)와 동일 정책.
+    enableLogs: true,
+    integrations: [Sentry.consoleLoggingIntegration({ levels: ["warn", "error"] })],
     debug: false,
   });
 }
