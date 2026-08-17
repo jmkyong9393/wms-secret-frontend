@@ -11,8 +11,9 @@ if (dsn) {
     environment: process.env.NODE_ENV,
     // 운영은 10%만 추적한다. 무료 플랜 트랜잭션 한도를 지키기 위한 값이다.
     tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
-    // 오류가 난 세션만 재생을 남긴다.
-    replaysSessionSampleRate: 0,
+    // [검증 기간 한시] 전 세션을 녹화한다 — Sentry 가이드 권고. 종전 0(오류 세션만)이라
+    // 오류가 없으면 Replay가 하나도 쌓이지 않았다. 리허설 종료 후 0.1로 낮출 것.
+    replaysSessionSampleRate: 1.0,
     replaysOnErrorSampleRate: 1.0,
     // Sentry Logs — 오류(Issues)와 별개로 구조화 로그를 Explore > Logs에 적재한다.
     enableLogs: true,
