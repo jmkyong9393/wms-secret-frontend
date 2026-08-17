@@ -137,9 +137,35 @@ export default function InventoryDetailPage() {
       const res = await fetch(`${API_BASE}/api/v1/admin/hitl/${data.id}/re-inspect`, { method: 'POST' });
       if (!res.ok) throw new Error('AI 재검수 요청에 실패했습니다.');
       await res.json();
-      // 재검수는 Celery 비동기이므로 응답 일부만 병합하지 않고 상세를 통째로 다시 읽는다.
-      await fetchDetail();
-      alert('AI 재검수가 완료되었습니다. 상세 결과가 화면에 반영되었습니다.');
+
+      // 재검수는 Celery 비동기다(실측 54초). 큐 등록 직후 재조회하면 이전 데이터가
+      // 그대로 보여 "완료됐는데 안 바뀐다"로 읽힌다 - 판정 갱신 시각(agent_logs의
+      // 마지막 node_timings)이 바뀔 때까지 폴링하고, 그때까지 완료를 선언하지 않는다.
+      const stampOf = (d: InventoryDetailData | null) => {
+        const t = d?.agent_logs?.node_timings;
+        return Array.isArray(t) && t.length ? String(t[t.length - 1]?.at ?? '') : String(d?.date ?? '');
+      };
+      const before = stampOf(data);
+      const POLL_MS = 5000;
+      const MAX_WAIT_MS = 180000; // YOLO 콜드스타트 포함 최악 케이스 여유
+      const t0 = Date.now();
+      let done = false;
+      while (Date.now() - t0 < MAX_WAIT_MS) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        const poll = await fetch(`${API_BASE}/api/v1/inventory/${inventoryId}`);
+        if (!poll.ok) continue;
+        const fresh: InventoryDetailData = await poll.json();
+        if (stampOf(fresh) !== before) {
+          setData(fresh);
+          done = true;
+          break;
+        }
+      }
+      if (done) {
+        alert('AI 재검수가 완료되었습니다. 상세 결과가 화면에 반영되었습니다.');
+      } else {
+        alert('재검수가 아직 진행 중입니다. 큐 등록은 완료됐으니 잠시 후 새로고침으로 확인해 주세요.');
+      }
     } catch (err: any) {
       alert(err.message);
     } finally {

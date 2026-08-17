@@ -276,27 +276,45 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
 
   const images = task.image_urls && task.image_urls.length > 0 ? task.image_urls : [];
   const defectsMeta: any[] = Array.isArray(task.agent_logs?.defects) ? task.agent_logs.defects : [];
-  const metaIndexFor = (b: any) =>
-    defectsMeta.findIndex(
-      (d) =>
-        d?.bbox &&
-        Number(d.bbox.xmin) === Number(b.xmin) &&
-        Number(d.bbox.ymin) === Number(b.ymin) &&
-        Number(d.bbox.xmax) === Number(b.xmax) &&
-        Number(d.bbox.ymax) === Number(b.ymax)
+  // 좌표만으로 결함을 식별하면 서로 다른 컷의 결함이 같은 defectIndex로 묶인다.
+  // VLM이 여러 컷에 동일 좌표를 반환하는 경우가 실제로 있고(LPN-260810-A030:
+  // 컷 0·1·2 모두 xmin 0 / ymin 0 / xmax 1000 / ymax 100), 그때 한 BBox를 옮기면
+  // 나머지 컷의 BBox까지 함께 움직였다. image_index를 매칭 키에 포함한다.
+  const bboxEq = (a: any, b: any) =>
+    Number(a?.xmin) === Number(b?.xmin) &&
+    Number(a?.ymin) === Number(b?.ymin) &&
+    Number(a?.xmax) === Number(b?.xmax) &&
+    Number(a?.ymax) === Number(b?.ymax);
+
+  const metaIndexFor = (b: any, imageIndex: number, used: Set<number>) => {
+    // 1순위 — 같은 컷의 결함 중 좌표가 같은 것
+    let i = defectsMeta.findIndex(
+      (d, idx) =>
+        !used.has(idx) && d?.bbox && Number(d.image_index ?? 0) === Number(imageIndex) && bboxEq(d.bbox, b)
     );
+    if (i >= 0) return i;
+    // 2순위 — image_index가 없는 레거시 결함은 좌표로만 맞춘다. 단 이미 쓴 것은 건너뛴다.
+    i = defectsMeta.findIndex(
+      (d, idx) => !used.has(idx) && d?.bbox && d.image_index === undefined && bboxEq(d.bbox, b)
+    );
+    return i;
+  };
+
   // defect_coordinates는 이미지별 그룹({image_index, bboxes:[...]})이라, 그룹이 아니라
   // 그 안의 개별 bboxes[]에 defectIndex를 매칭해야 한다.
+  // 한 결함이 두 BBox에 중복 배정되지 않도록 사용한 인덱스를 그룹 간에 공유한다.
+  const usedMeta = new Set<number>();
   const rawList: any[] = (task.agent_logs?.defect_coordinates || []).map((group: any) => {
     if (!group || !Array.isArray(group.bboxes)) return group;
+    const gi = Number(group.image_index ?? 0);
     return {
       ...group,
       bboxes: group.bboxes.map((b: any) => {
-        const mi = metaIndexFor(b);
-        const m = mi >= 0 ? defectsMeta[mi] : null;
-        return m
-          ? { ...b, defectIndex: mi, evidence_suspect: m.evidence_suspect, conf_copied_from_candidate: m.conf_copied_from_candidate }
-          : b;
+        const mi = metaIndexFor(b, gi, usedMeta);
+        if (mi < 0) return b;
+        usedMeta.add(mi);
+        const m = defectsMeta[mi];
+        return { ...b, defectIndex: mi, evidence_suspect: m.evidence_suspect, conf_copied_from_candidate: m.conf_copied_from_candidate };
       }),
     };
   });
