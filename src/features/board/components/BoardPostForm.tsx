@@ -16,16 +16,15 @@ import type { CurrentUser } from "@/features/auth/types/authTypes";
 import type { BoardCategory } from "@/features/board/types/board";
 import { canWriteCategory } from "@/features/board/utils/permissions";
 import { CATEGORY_LABEL } from "@/features/board/components/categoryLabels";
-import { boardAttachmentDisplayName, boardAttachmentUrl } from "@/features/board/utils/attachmentUrl";
+import { boardAttachmentDisplayName, useBoardAttachmentUrls } from "@/features/board/utils/attachmentUrl";
 import {
   ALLOWED_ATTACHMENT_EXTENSIONS,
   isImageAttachment,
   MAX_ATTACHMENT_COUNT,
   MAX_ATTACHMENT_SIZE_BYTES,
-  sanitizeAttachmentFilename,
   validateAttachmentFile,
 } from "@/features/board/utils/attachmentValidation";
-import { uploadImageToCloudFront } from "@/lib/s3_helper";
+import { boardUploadErrorMessage, uploadBoardAttachment } from "@/lib/s3_helper";
 
 export interface BoardPostFormValues {
   category: BoardCategory;
@@ -64,7 +63,9 @@ export function BoardPostForm({
     initialValues?.attachmentPaths ?? []
   );
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentUrl = useBoardAttachmentUrls(attachmentPaths);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,13 +80,19 @@ export function BoardPostForm({
 
     try {
       setIsUploading(true);
-      const safeName = sanitizeAttachmentFilename(file.name);
-      const objectKey = await uploadImageToCloudFront(file, safeName, "board");
+      setUploadPercent(0);
+      // 파일명 정규화는 서버가 다시 수행한다 (BiDi 제어문자·이중 확장자까지). 여기서는
+      // 원본 파일명을 그대로 넘겨 서버가 판단할 근거를 남긴다.
+      const objectKey = await uploadBoardAttachment(file, {
+        onProgress: setUploadPercent,
+      });
       setAttachmentPaths((prev) => [...prev, objectKey]);
-    } catch {
-      alert("첨부파일 업로드에 실패했습니다.");
+    } catch (error) {
+      // 어떤 검사에 걸렸는지 서버 사유를 그대로 보여준다.
+      alert(boardUploadErrorMessage(error));
     } finally {
       setIsUploading(false);
+      setUploadPercent(0);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -153,7 +160,7 @@ export function BoardPostForm({
                 className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700"
               >
                 <img
-                  src={boardAttachmentUrl(path)}
+                  src={attachmentUrl(path)}
                   alt={`첨부 ${idx + 1}`}
                   className="w-full h-full object-cover"
                 />
@@ -192,7 +199,9 @@ export function BoardPostForm({
             className="w-16 h-16 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center text-gray-400 hover:text-indigo-600 hover:border-indigo-400 transition-colors disabled:opacity-40 disabled:hover:text-gray-400 disabled:hover:border-gray-300"
           >
             <Paperclip className="w-4 h-4" />
-            <span className="text-[10px] mt-0.5">{isUploading ? "업로드 중" : "첨부"}</span>
+            <span className="text-[10px] mt-0.5">
+              {isUploading ? (uploadPercent >= 100 ? "검사 중" : `${uploadPercent}%`) : "첨부"}
+            </span>
           </button>
           <input
             ref={fileInputRef}
