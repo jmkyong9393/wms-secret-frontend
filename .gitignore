@@ -45,3 +45,6 @@ archive/
 
 # claude
 .claude
+
+# Claude Code 로컬 지침 (커밋 금지)
+CLAUDE.md
