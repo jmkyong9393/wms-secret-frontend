@@ -25,6 +25,10 @@ jobs:
         
       - name: Lint (ESLint)
         run: npm run lint
-        
+
+      # vitest run — watch 모드 진입 방지 (CI가 타임아웃까지 매달리는 것 차단)
+      - name: Unit Test (Vitest)
+        run: npm run test:run
+
       - name: Build Test
         run: npm run build
