@@ -201,7 +201,7 @@ export default function AdminHitlDashboard() {
       //
       // 완료 판정은 트리거 전 스냅샷 대비 policy_text/report_text 두 필드의 변화로만 한다.
       // agent_logs 전체 비교는 큐잉 직전 hitl_locked 기록만으로도 '완료'로 오판한다.
-      // (경위: 33_코드_변경이력_설계배경_아카이브)
+      // (경위: 90_코드_변경이력_설계배경_아카이브)
       const t = () => new Date().toLocaleTimeString();
       const baseline = await adminAPI.getInspectionResult(jobId).catch(() => null);
       const baselinePolicyText = baseline?.agent_logs?.policy_text;
