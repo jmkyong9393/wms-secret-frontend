@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * FDS(Fraud Detection System) 이상거래 관제 콘솔 (2026-08-04 신설).
+ * FDS(Fraud Detection System) 이상거래 관제 콘솔.
  *
  * 백엔드 구조: 결정론적 룰 엔진 4종(R1 블라인드 결재 / R2 등급 오버라이드 남용 /
  * R3 야간 대량 주문 / R4 반품 남용)이 적발·위험점수를 확정하고,

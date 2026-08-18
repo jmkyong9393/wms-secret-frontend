@@ -40,7 +40,7 @@ export default function RootLayout({
           <A2HSBanner />
           <ReactQueryProvider>
             <Providers>
-              {/* [2026-08-06] 탭 생존 마커는 반드시 **모든 페이지**에서 설정되어야 한다.
+              {/* 탭 생존 마커는 반드시 **모든 페이지**에서 설정되어야 한다.
                   종전에는 MainLayout/WorkerMobileShell(인증 셸) 안에만 있어서 로그인
                   화면에서는 마커가 세팅되지 않았고, 로그인 직후 첫 인증 페이지 진입이
                   "마커 없는데 사용자 정보는 있음" = 새 탭으로 오판되어 즉시 로그아웃됐다.

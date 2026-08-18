@@ -4,7 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 /**
  * WORKER(현장 작업자) 전용 메뉴 정의 — 단일 출처(SSOT).
  *
- * [신설 2026-08-06] 종전에는 Sidebar.tsx 안에만 있어서, WORKER가 /inspections·/inventory로
+ * 종전에는 Sidebar.tsx 안에만 있어서, WORKER가 /inspections·/inventory로
  * 이동하면 WorkerMobileShell(사이드바 없음)로 셸이 바뀌며 **메뉴에 접근할 방법이 사라졌다.**
  * /inbound(MainLayout)로 돌아가야만 다른 메뉴로 갈 수 있었다.
  * 이 파일로 정의를 분리해 Sidebar(데스크톱)와 WorkerMobileShell(모바일 하단 탭바)이

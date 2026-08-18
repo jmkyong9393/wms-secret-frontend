@@ -92,7 +92,7 @@ export default function AdvancedDashboardPage() {
     staleTime: 10 * 60 * 1000,
   });
 
-  // 지난 주간 인사이트 이력 (2026-08-09 신설).
+  // 지난 주간 인사이트 이력.
   //
   // weekly_insights는 실제로 방문한 주만 쌓이므로(1년에 최대 52행) DB 용량 문제는 아니다.
   // 다만 HITL 대기열처럼 "전체를 한 번에 fetch"하는 패턴을 반복하면 나중에 몇 년치가

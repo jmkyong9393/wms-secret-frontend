@@ -91,7 +91,7 @@ export default function PurchaseOrderPage() {
       await fetchProposals();
     } catch (err) {
       console.error(err);
-      // [2026-08-09] 뭉뚱그린 에러 문구가 403(권한)과 타임아웃(백엔드는 진행 중)을
+      // 뭉뚱그린 에러 문구가 403(권한)과 타임아웃(백엔드는 진행 중)을
       // 구분 못해 오진단을 유발했다 - 실측: 스캔이 12초 안팎 걸리는데 클라이언트
       // 타임아웃이 그보다 짧으면 서버는 성공했는데도 실패로 보였다. 상황별로 분기한다.
       if (axios.isAxiosError(err)) {

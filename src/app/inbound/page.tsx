@@ -131,7 +131,7 @@ export default function InboundScannerPage() {
   /**
    * LPN 재검수 시 원본 도서 정보 조회.
    *
-   * [2026-08-10 수정] 종전에는 localStorage('local_evaluations')만 뒤졌다. 그 기록은
+   * 종전에는 localStorage('local_evaluations')만 뒤졌다. 그 기록은
    * **최초 입고를 수행한 그 브라우저에만** 남으므로, 다른 작업자 단말로 스캔하거나
    * 캐시가 지워졌거나 도메인이 바뀌면(터널 URL 변경 등) 항상 미스가 나
    * `{title:'정보 없음 (재촬영 진행)', categoryName:'LPN 재스캔'}`이 그대로 서버로 갔다.
@@ -258,7 +258,7 @@ export default function InboundScannerPage() {
       });
       const base64Images = await Promise.all(data.images.map(getBase64));
 
-      // [수정 이력 2026-08-10] worker_id 누락 - 백엔드는 이미 이 값을 받아 agent_logs.
+      // worker_id 누락 - 백엔드는 이미 이 값을 받아 agent_logs.
       // inbound_worker_id에 저장하고 "내 검수만" 필터(returns/inspections?worker_id=)가
       // 그 값을 기준으로 거른다. 이 필드가 빠져 있으면 서버에 저장되는 값이 항상 null이라,
       // 실제로 촬영·검수한 작업자 본인의 "나의 검수 내역"이 매번 0건으로 뜬다.
@@ -288,7 +288,7 @@ export default function InboundScannerPage() {
 
       // 카메라 뷰파인더 닫고, 즉시(0.001초만에) 다음 화면(RESULT)으로 전환하여 체감속도 극대화
       setStep('RESULT');
-      // [수정 이력 2026-08-10] 전송 시점에 이미지를 blob으로 이미 캡처해 mutate()에 넘겼으므로
+      // 전송 시점에 이미지를 blob으로 이미 캡처해 mutate()에 넘겼으므로
       // (위 mutationFn의 data.images) 여기서 비워도 전송에는 영향이 없다. 종전에는 "다음 도서
       // 스캔하기" 버튼이나 뒤로가기 버튼을 눌러야만 비워졌다 - RESULT 화면에서 SSE 진행이
       // 멈추거나(백그라운드 탭 스로틀링 등) 화면이 꺼졌다 켜진 뒤 그 버튼들을 거치지 않고
@@ -601,7 +601,7 @@ export default function InboundScannerPage() {
   // ref는 컴포넌트에 하나뿐이라 모든 세션·콜백이 같은 잠금을 공유한다.
   const isHandlingScanRef = useRef(false);
 
-  // --- 오독 방어 (2026-08-13 신설) ---
+  // --- 오독 방어 ---
   // 스캔 거절 사유를 화면에 띄운다. 아무 반응 없이 계속 스캔만 되면 작업자는
   // "왜 안 잡히지"만 반복하게 되므로, 무엇이 잘못됐는지 그 자리에서 알려준다.
   const [scanWarning, setScanWarning] = useState<string | null>(null);
@@ -944,7 +944,7 @@ export default function InboundScannerPage() {
 
   return (
     /*
-      [수정 이력 2026-08-06] 종전에는 이 페이지가 <Header />와 배경 래퍼를 직접 렌더했다
+      종전에는 이 페이지가 <Header />와 배경 래퍼를 직접 렌더했다
       (/inbound에 layout.tsx가 없었기 때문). 이제 app/inbound/layout.tsx가 역할 적응형
       셸(WORKER=모바일 셸+하단 탭바 / ADMIN=MainLayout)을 제공하므로 헤더·배경·스크롤
       컨테이너는 셸에 위임하고 여기서는 콘텐츠만 렌더한다 (헤더 이중 렌더 방지).
@@ -952,7 +952,7 @@ export default function InboundScannerPage() {
     <div className="space-y-6 pb-10 px-4 sm:px-0 pt-4 max-w-5xl mx-auto font-sans">
       {/*
         1. Top Banner Header (관제 표준 패턴)
-        [수정 이력 2026-08-04] 다크 그라데이션 고정 배너가 라이트 모드에서 겉돌아
+        다크 그라데이션 고정 배너가 라이트 모드에서 겉돌아
         admin/inventory 등과 동일한 화이트 카드 + dark: 변형 패턴으로 교체.
       */}
       <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4 transition-colors">

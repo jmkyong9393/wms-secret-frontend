@@ -4,7 +4,7 @@ import { API_BASE_URL } from '@/lib/api-client';
 /**
  * 검수 처리 내역 통합 데이터 그리드 (Admin 전체 / Worker 개인 공용 — B안 통합).
  *
- * [수정 이력 2026-08-04]
+ * 
  * - admin/inspections/page.tsx(365줄)와 worker/inspections/page.tsx(711줄)가 동일 API를
  *   호출하며 테이블/모달/내보내기를 중복 구현하던 것을 이 컴포넌트 1벌로 통합.
  *   scope='MINE'(Worker)일 때만 개인 KPI 카드와 HITL 대기 건 병합이 추가된다.
@@ -77,7 +77,7 @@ function toInspectionDefects(raw: unknown): InspectionItem['defects_found'] {
     if (d.level != null) parts.push(`강도 ${d.level}단계`);
     // 증거 대조 검증이 오탐으로 지목한 건은 감점에서 빠졌다는 사실을 같이 보여준다.
     if (d.evidence_suspect) parts.push('증거 대조 결과 오탐 의심 (감점 제외)');
-    // [2026-08-10 수정] HITL 관리자가 오탐으로 제외/직접 추가한 표식을 이 목록이 무시하고
+    // HITL 관리자가 오탐으로 제외/직접 추가한 표식을 이 목록이 무시하고
     // 있었다 - 관리자가 5건을 제외해 최종 1건만 반영됐어도 화면은 6건 전부를 "탐지된
     // 결함"으로 보여줘 점수(높은 점수)와 목록(많은 결함)이 서로 모순돼 보였다.
     if (d.hitl_excluded) parts.push('관리자 오탐 판정 (감점 미반영)');
@@ -234,7 +234,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
     exportToCSV(isMine ? `nexus_worker_inspection_audit_${workerId}` : 'admin_inspections_history', rows);
   };
 
-  // [2026-08-06] 종전에는 lpn_barcode 문자열에 '미발급'이 포함되는지로 신품을 판정했다.
+  // 종전에는 lpn_barcode 문자열에 '미발급'이 포함되는지로 신품을 판정했다.
   // 표시 문구를 바꾸는 순간 판정이 깨지는 구조라, 라벨 간소화('LPN 미발급 (신품)' -> '신품')와
   // 함께 문자열 의존을 끊는다. 등급 기반 판정을 우선하고, 라벨은 폴백으로만 본다.
   const isNewBook = (item: InspectionItem) =>
@@ -245,7 +245,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
   /**
    * 리포트 모달을 연다.
    *
-   * [2026-08-06 수정] 종전에는 목록 행 객체를 그대로 모달에 넘겼다. 그런데 목록의
+   * 종전에는 목록 행 객체를 그대로 모달에 넘겼다. 그런데 목록의
    * `defects_found`/`ai_confidence`/`image_urls`는 available-books 응답에 없는 값이라
    * **컴포넌트가 만들어낸 자리표시자**였다(모든 건이 "[DMG_NONE] 결함 없음, 신뢰도 0.98").
    * 그래서 결함 4건으로 HITL 이관된 건도 "결함 없음 · 자동 승인"으로 보였고,
@@ -461,7 +461,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
         </div>
 
         {/*
-          [신설 2026-08-06] 모바일 전용 카드 목록.
+          모바일 전용 카드 목록.
           현장 작업자는 스마트폰에서 이 화면을 보는데, 7컬럼 표는 가로 스크롤 없이는
           읽을 수 없고 우측 "작업 기능" 버튼이 화면 밖으로 밀려 사실상 접근 불가였다.
           좁은 화면에서는 표를 숨기고 카드로 세로 배치한다 (md 이상에서는 기존 표 유지).
@@ -534,7 +534,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
 
         <div className="hidden md:block overflow-x-auto">
           {/*
-            [수정 이력 2026-08-04] table-fixed 상태에서 고정 폭 컬럼 합이 테이블 전체 폭과
+            table-fixed 상태에서 고정 폭 컬럼 합이 테이블 전체 폭과
             같아지면 폭 미지정인 "도서 정보" 컬럼이 0px로 붕괴해 내용이 옆 컬럼과 겹쳐 보였다.
             재고 그리드와 동일하게 auto 레이아웃 + min-width로 전환.
           */}
@@ -562,7 +562,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                   const isNew = isNewBook(item);
                   const meta = gradeMeta(item.grade, item.ubci_score);
                   return (
-                    // [2026-08-06] 행 전체를 탭하면 상세가 열린다.
+                    // 행 전체를 탭하면 상세가 열린다.
                     // 모바일(Worker 셸)에서는 표가 가로로 넘쳐 우측 "작업 기능" 버튼이
                     // 화면 밖으로 밀려 사실상 접근 불가였다. 우측 버튼은 데스크톱용으로
                     // 그대로 두고, 행 클릭이라는 넓은 타겟을 추가한다.
