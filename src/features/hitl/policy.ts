@@ -57,7 +57,7 @@ export const UBCI_GRADE_POLICY: UbciGradePolicy[] = [
 ];
 
 /**
- * UBCI 점수 → 등급 (2026-08-08 신설).
+ * UBCI 점수 → 등급.
  *
  * HITL 결재 폼의 처분/등급 기본값을 여기서 산정한다 - 종전에는 AI가 실제로 낸 점수와
  * 무관하게 모든 행이 처분 "등급 하향 승인" · 목표 등급 "B"로 초기화됐다("B"는

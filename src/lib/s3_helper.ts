@@ -61,10 +61,7 @@ export async function uploadImageToCloudFront(
 // 게시판 첨부 — Presigned POST + 격리 검사 3단 업로드
 // ==========================================
 //
-// 종전에는 CloudFront 서명 쿠키로 cdn.wms-ai.com에 PUT 했으나 그 도메인이 존재하지 않아
-// 업로드가 항상 실패했다. 또한 5MB 제한이 프론트에만 있어 개발자도구로 우회할 수 있었다.
-//
-// 현재 흐름:
+// 흐름 (상세: 93_첨부파일_보안_업로드_아키텍처):
 //   ① presign : 서버가 크기·타입·키 접두사를 **서명에 박아** Presigned POST를 발급한다.
 //   ② upload  : 브라우저 → S3 직행. 파일 바이트가 API 서버를 거치지 않는다.
 //   ③ verify  : 서버가 격리본의 실제 바이트를 검사하고 통과분만 정상 구역으로 옮긴다.
@@ -121,8 +118,7 @@ function uploadToS3WithProgress(
     }
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) { resolve(); return; }
-      // 정책 위반은 서버까지 가지 않고 S3가 여기서 끊는다. 사유는 응답 XML의 <Code>에 있다
-      // (실측: 5MB 초과 400 EntityTooLarge · 0바이트 400 EntityTooSmall · 서명 조작 403).
+      // 정책 위반은 서버까지 가지 않고 S3가 여기서 끊는다. 사유는 응답 XML의 <Code>에 있다.
       reject(new Error(s3ErrorMessage(xhr.status, xhr.responseText)));
     };
     // S3가 응답 대신 연결을 끊는 경우도 있어 같은 사유로 안내한다.

@@ -5,7 +5,7 @@ import WorkerMobileShell from '@/components/layout/WorkerMobileShell';
 /**
  * 도서 입고 검수 — 역할 적응형 레이아웃.
  *
- * [신설 2026-08-06] /inbound에는 layout.tsx가 아예 없어 페이지가 <Header />를 직접
+ * /inbound에는 layout.tsx가 아예 없어 페이지가 <Header />를 직접
  * 렌더하고 있었다. 그 결과 WORKER가 이 화면에 들어오면 **하단 탭바가 사라져** 다른
  * 메뉴로 이동할 수단이 없었고(사이드바도 없음), ADMIN도 이 화면에서만 사이드바가
  * 유실되어 다른 관제 화면과 셸이 어긋났다. /inspections·/inventory와 동일한 역할

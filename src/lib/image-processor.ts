@@ -131,7 +131,7 @@ export async function processImage(video: HTMLVideoElement, guideBox?: HTMLDivEl
   const sourceH = Math.min(vh - sourceY, guideRect.height / scale);
 
   // 최종 캔버스 해상도 결정.
-  // [2026-08-05] 1080 -> 1920 상향: 백엔드가 책 ROI를 다시 크롭한 뒤 YOLO(imgsz=800)에
+  // 1080 -> 1920 상향: 백엔드가 책 ROI를 다시 크롭한 뒤 YOLO(imgsz=800)에
   // 넣으므로, 소스가 작으면 크롭 시점에 업샘플링이 일어나 미세 마모(Wornout) 픽셀이
   // 뭉개진다. 스마트폰 센서가 더 높아도 이 값이 하드 캡으로 규격화한다 (업스케일은 없음).
   const MAX_CANVAS_WIDTH = 1920;
@@ -183,7 +183,7 @@ export async function processImage(video: HTMLVideoElement, guideBox?: HTMLDivEl
         
         try {
           // 브라우저 이미지 압축 적용.
-          // [2026-08-05] 1MB -> 2.5MB 상향: FHD 디테일 이미지를 1MB로 누르면 JPEG
+          // 1MB -> 2.5MB 상향: FHD 디테일 이미지를 1MB로 누르면 JPEG
           // 아티팩트가 스크래치처럼 보여 Wornout 오탐을 유발한다. S3 비용은 무시 가능 수준.
           const options = {
             maxSizeMB: 2.5,

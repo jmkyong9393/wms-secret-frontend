@@ -156,7 +156,7 @@ export default function LoginPage() {
           </div>
 
           {/* 입고 파이프라인 요약 - 이 시스템의 핵심 흐름을 한 줄로 보여준다.
-              [2026-08-06] '랙 배정'에서 끝나면 입고 전용 시스템으로 읽혀 출고·배차까지 잇는
+              '랙 배정'에서 끝나면 입고 전용 시스템으로 읽혀 출고·배차까지 잇는
               전체 물류 범위가 드러나지 않는다. 마지막 단계를 출고로 확장한다. */}
           <div className="w-full max-w-md">
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-1.5 gap-y-1.5">
@@ -297,7 +297,7 @@ export default function LoginPage() {
               <a href="/opensource" className="text-gray-600 hover:text-blue-600">오픈소스라이선스</a>
             </div>
 
-            {/* [2026-08-06] 개인 이메일 원문 노출 제거.
+            {/* 개인 이메일 원문 노출 제거.
                 로그인 화면은 인증 없이 누구나 열람 가능해 수집 봇의 1순위 표적이다.
                 문의 경로는 법정 고지 문서인 개인정보 처리방침으로 유도한다. */}
             <div className="text-[10px] text-gray-400">

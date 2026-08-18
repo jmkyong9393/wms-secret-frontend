@@ -134,7 +134,7 @@ export default function CertificatePage() {
   return (
     // print-color-adjust: exact - 등급 배지 그라데이션/배경색이 PDF 출력물에서 날아가지 않게 강제
     //
-    // [2026-08-11] PDF 저장(window.print)이 화면과 같은 여백/폰트 크기로 그대로 찍혀 A4 두 장으로
+    // PDF 저장(window.print)이 화면과 같은 여백/폰트 크기로 그대로 찍혀 A4 두 장으로
     // 넘쳤다(실측: "명품 C++ Programming" 보증서). 화면용 레이아웃은 그대로 두고, print: 변형으로
     // 패딩/여백만 압축해 한 장에 들어가게 한다. 결함 사진은 세로가 긴 실물 촬영본이 많아
     // print:max-h로 높이를 별도 제한하지 않으면 이 블록 하나가 남은 페이지를 다 먹는다.
@@ -370,7 +370,7 @@ export default function CertificatePage() {
         </div>
 
         {/*
-          [수정 이력 2026-08-06] 아무 동작 없던 "확인 완료" 버튼을 보증서 저장 버튼으로 교체.
+          아무 동작 없던 "확인 완료" 버튼을 보증서 저장 버튼으로 교체.
           외부 캡처 라이브러리 없이 브라우저 인쇄 엔진으로 PDF를 만든다(window.print) -
           html2canvas 계열은 Tailwind v4의 oklch 색상과 외부 표지 이미지 CORS에서 깨지므로
           채택하지 않았다. 버튼 자체는 print:hidden으로 출력물에서 제외한다.

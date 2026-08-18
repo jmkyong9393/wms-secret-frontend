@@ -391,7 +391,7 @@ export default function Header() {
 
           {/* FDS Notification Popup Menu matching User Screenshot Specification */}
           {/*
-            [수정 이력 2026-08-05] w-80(320px) 고정 + 종 아이콘 기준 absolute right-0 배치라
+            w-80(320px) 고정 + 종 아이콘 기준 absolute right-0 배치라
             모바일에서 패널이 뷰포트 왼쪽 밖으로 밀려 잘렸다. 모바일(<sm)에서는 화면 폭에
             맞춘 fixed 배치(inset-x-3), sm 이상에서는 기존 앵커 드롭다운을 유지한다.
           */}

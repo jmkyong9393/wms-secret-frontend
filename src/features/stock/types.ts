@@ -1,7 +1,7 @@
 /**
  * 재고/검수 통합 데이터 그리드 공용 타입.
  *
- * [수정 이력 2026-08-04] admin/inventory, worker/inventory, admin/inspections,
+ * admin/inventory, worker/inventory, admin/inspections,
  * worker/inspections 4개 페이지가 각자 동일한 로컬 타입을 중복 선언하고 있었다
  * (약 3,100줄 중복). URL은 4개 그대로 유지하되 코드를 이 모듈 1벌로 통합한다 (B안).
  */
@@ -49,7 +49,7 @@ export interface InspectionItem {
   lpn_barcode: string;
   book: StockBook;
   /**
-   * [2026-08-07] 값이 없을 수 있다(null).
+   * 값이 없을 수 있다(null).
    *
    * 종전에는 `ubci_score or 85`, `condition_grade or 'GOOD'` 식으로 **없는 값을 지어내
    * 채웠고**, 그 결과 검수를 거치지 않은 재고까지 "AI 검수 완료"로 보였다.

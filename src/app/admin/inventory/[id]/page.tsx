@@ -71,7 +71,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || `${API_BASE_URL}`;
  * LangGraph 파이프라인 노드 표시 정의. executed_agents에 없으면 SKIPPED로 렌더한다.
  *
  * Detector(YOLO) ➔ Vision(GPT-4o) ➔ Policy ➔ Critic ➔ Supervisor ➔ Report
- * (MINT Fast-track 분기와 Auto-Refund 노드는 2026-08-04 구조 개편으로 제거됨 -
+ * (MINT Fast-track 분기와 Auto-Refund 노드는 구조 개편으로 제거됨 -
  *  검증을 건너뛰고 자동 매입이 확정되던 경로였다. 이제 전 건이 동일 경로를 통과한다.)
  */
 const PIPELINE_STEPS = [
@@ -268,7 +268,7 @@ export default function InventoryDetailPage() {
       confidence: c.confidence,
     }));
   const inspectionTime = data.date ? data.date.split(' ')[1] : 'KST';
-  // [수정 이력 2026-08-06] 타임라인 전 행이 검수 시각 하나로 찍히던 문제 - HITL 결재로 뒤늦게
+  // 타임라인 전 행이 검수 시각 하나로 찍히던 문제 - HITL 결재로 뒤늦게
   // 생성되는 Report Agent 행은 결재 시점(agent_logs.report_generated_at)을 별도 표시한다.
   // 재검수로 HITL에 재이관되면 이전 결재의 report_generated_at이 로그에 남아 있을 수 있으므로,
   // Report Agent가 실제 실행된 경우에만 결재 시각을 쓴다 (미실행 행은 검수 시각 유지).
@@ -656,7 +656,7 @@ export default function InventoryDetailPage() {
                         {showYoloBoxes &&
                           currentYoloBoxes.map((box, i) => {
                             const { left, top, width, height } = bboxToPercent(box);
-                            // [수정 이력 2026-08-06] 라벨이 무조건 박스 바깥(-bottom-6/-top-6)에 그려져
+                            // 라벨이 무조건 박스 바깥(-bottom-6/-top-6)에 그려져
                             // 이미지 가장자리 결함은 overflow-hidden 컨테이너에 잘려 안 보였다.
                             // 가장자리 근처(세로 8% 이내)면 박스 안쪽으로, 우측 절반이면 오른쪽
                             // 앵커로 뒤집어 라벨이 항상 이미지 프레임 안에 있게 한다.
@@ -801,7 +801,7 @@ export default function InventoryDetailPage() {
 
             {/*
               Multi-Agent Pipeline Trace
-              [수정 이력 2026-08-04] 페이지에서 이 섹션만 다크 터미널(bg-gray-950) 고정이라
+              페이지에서 이 섹션만 다크 터미널(bg-gray-950) 고정이라
               라이트 모드에서 붕 떠 보였다. 주변과 동일한 화이트 카드 + dark: 변형으로 통일.
             */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-4 transition-colors">

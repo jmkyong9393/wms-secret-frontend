@@ -144,9 +144,8 @@ export default function AdminHitlDashboard() {
     error?: string;
   } | null>(null);
 
-  // [수정 이력 2026-08-04] 구 명칭 "Explainer Agent"는 파이프라인 개편(Detector→Vision→
-  // Policy→Critic→Supervisor→Report)으로 사라진 노드다. 로그 패널을 실제 파이프라인
-  // 명칭 기준으로 정리 (저장 키도 교체, 구 키는 마운트 시 청소).
+  // 로그 패널은 실제 파이프라인 노드 명칭(Detector→Vision→Policy→Critic→Supervisor→Report)
+  // 기준. 구 명칭("Explainer Agent") 저장 키는 마운트 시 청소한다.
   const [pipelineLogs, setPipelineLogs] = useState<Array<{ time: string; agent: string; text: string; type: string }>>([]);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -200,24 +199,9 @@ export default function AdminHitlDashboard() {
       // 재검수는 Celery 비동기다. 큐 등록 응답에는 판독 결과가 없으므로(십수 초 뒤 완료),
       // 등록 직후에는 "진행 중"만 보여주고 **실제 결과가 DB에 반영되면 그때 렌더**한다.
       //
-      // [2026-08-06 수정] 종전에는 여기서 `const logs = {}`(빈 객체)와 `const score = 75`를
-      // 두고 `logs?.x || 폴백`으로 문자열을 만들었다. logs가 비어 있으니 다섯 줄 전부 고정
-      // 문구였고 점수도 상수였다 - 화면 전체가 연출이었다. 게다가 등록 즉시 step:5, isDone:true로
-      // "완료"를 선언해, 실제 파이프라인이 17초 뒤 내놓은 결과(예: UBCI 100, HITL 유지)와
-      // 무관하게 영원히 "UBCI 75점"을 말했다.
-      //
-      // [2026-08-10 수정] "policy_text/report_text가 있으면 완료"만으로는 이전 시도(예: 크레딧
-      // 소진으로 실패한 재검수)의 잔여 텍스트를 새 실행 완료로 오인한다 - 재트리거 2초 만에
-      // 옛 실패 로그를 "완료"로 표시해, 새 요청이 OpenAI에 도달하기도 전에 화면이 끝났다고
-      // 말했다(실측: 크레딧 충전 후에도 사용량 $0). 트리거 전 스냅샷을 기준선으로 잡아,
-      // 그 값과 달라졌을 때만 완료로 판단한다.
-      //
-      // [2026-08-10 재수정] agent_logs 전체(JSON.stringify)를 기준선으로 삼았더니 여전히
-      // 2~3초 만에 완료로 오판했다. 원인: 백엔드가 큐잉 직전 동기적으로
-      // agent_logs.hitl_locked=true를 써서 커밋한다(admin/router.py trigger_ai_reinspection).
-      // policy_text는 그대로 옛 값인데 hitl_locked 키 하나 때문에 전체 JSON이 달라져
-      // "changed"가 실제 재실행과 무관하게 즉시 참이 됐다. policy_text/report_text 두
-      // 필드만 정확히 비교한다 - 완료 판정에 실제로 쓰는 필드와 정확히 일치시킨다.
+      // 완료 판정은 트리거 전 스냅샷 대비 policy_text/report_text 두 필드의 변화로만 한다.
+      // agent_logs 전체 비교는 큐잉 직전 hitl_locked 기록만으로도 '완료'로 오판한다.
+      // (경위: 33_코드_변경이력_설계배경_아카이브)
       const t = () => new Date().toLocaleTimeString();
       const baseline = await adminAPI.getInspectionResult(jobId).catch(() => null);
       const baselinePolicyText = baseline?.agent_logs?.policy_text;
@@ -384,7 +368,7 @@ export default function AdminHitlDashboard() {
       const initComments: Record<string, string> = {};
 
       list.forEach((t: HitlTask) => {
-        // [2026-08-08] AI가 이미 산출한 UBCI 점수(t.ubci_score)를 등급 경계에 대입해
+        // AI가 이미 산출한 UBCI 점수(t.ubci_score)를 등급 경계에 대입해
         // 처분/목표등급 기본값을 추천한다. suggested_grade/suggested_decision이 있으면
         // (파이프라인이 명시적으로 내려준 값) 그쪽을 우선한다.
         const scoreGrade = gradeFromUbciScore(t.ubci_score);
@@ -394,15 +378,11 @@ export default function AdminHitlDashboard() {
         initGrades[t.id] = recommendedGrade;
         // 실제로 검증된 결함(agent_logs.defects) 중 감점 비중이 가장 큰 유형을 사유
         // 기본값으로 쓴다("AI 비전 감지 사유" 컬럼과 동일 소스 - §하단 렌더링 참조).
-        // [2026-08-09 수정] defects가 비어 있는 건(NO_VALID_IMAGE_HITL 등 판독 자체가
-        // 없던 경우)은 더 이상 "DMG_INT_DOODLE" 같은 결함을 지어내지 않는다 - 실제로
-        // 아무 결함도 못 찾은 상태에서 결함 코드를 기본 선택해 두면 검수자가 안 고치고
-        // 제출할 위험이 있다. 빈 값으로 두어 검수자가 육안 확인 후 직접 고르게 한다.
+        // defects가 빈 건(NO_VALID_IMAGE_HITL 등)은 결함 코드를 기본 선택하지 않는다 —
+        // 기본값이 있으면 검수자가 안 고치고 제출할 위험이 있어 빈 값으로 둔다.
         initReasons[t.id] = getPrimaryDefectReason(t) || "";
-        // 서버가 회수 사유/직전 결재 코멘트를 human_issue_notes로 내려준다 (2026-08-13 배선).
-        // 종전에는 서버가 이 필드를 채우지 않아 항상 "관리자 검수 오버라이드" 고정 문구로
-        // 덮였고, 팀원이 회수하며 남긴 사유가 화면에서 보이지 않았다. 메모가 없으면 빈 칸
-        // 그대로 둔다 - 제출 시 폴백 문구는 handleSubmit이 따로 갖고 있다.
+        // 회수 사유/직전 결재 코멘트는 서버의 human_issue_notes를 그대로 쓴다.
+        // 메모가 없으면 빈 칸 — 제출 시 폴백 문구는 handleSubmit이 따로 갖는다.
         initComments[t.id] = t.human_issue_notes || "";
       });
 
@@ -426,7 +406,7 @@ export default function AdminHitlDashboard() {
   // 검색어 필터링
   // PENDING = AI 파이프라인이 아직 도는 중(판정 전). 결재 대상(HITL_REQUIRED)이 아니므로
   // 결재 목록에 섞지 않는다. 섞으면 "판정 정보 없음" 행이 결재 대기처럼 보여, 워커 장애로
-  // 검수가 멈춘 것을 HITL 이관으로 오인하게 된다 (2026-08-12 실사례).
+  // 검수가 멈춘 것을 HITL 이관으로 오인하게 된다.
   const inFlightTasks = useMemo(
     () => tasks.filter((t) => t.status === 'PENDING'),
     [tasks],
@@ -535,10 +515,8 @@ export default function AdminHitlDashboard() {
         primaryReasonCode,
         reasonComment: comment,
         defectCoordinates: task.agent_logs?.defect_coordinates || [],
-        // 건당 검토 시간. 페이지 체류시간을 이번 배치 건수로 나눈다.
-        // [수정 이력 2026-08-12] 종전에는 체류시간 전체를 배치 **전 건에 동일하게** 실었다.
-        // 5분 보고 20건을 일괄 승인하면 20건 모두 "5분 검토"로 기록돼, 실제 건당 15초를
-        // 20배 부풀렸다. FDS R1(블라인드 결재)이 이 값을 보므로 탐지가 사실상 불가능했다.
+        // 건당 검토 시간 = 페이지 체류시간 ÷ 배치 건수. 전 건에 체류시간을 그대로 실으면
+        // FDS R1(블라인드 결재)이 보는 값이 배치 크기만큼 부풀어 탐지가 무력화된다.
         reviewDurationMs: Math.max(
           1,
           Math.floor((Date.now() - pageEnterTime.current) / Math.max(1, selectedIds.size)),
@@ -1012,12 +990,8 @@ export default function AdminHitlDashboard() {
 
                       <td className="p-3">
                         {(() => {
-                          // [2026-08-09 수정] 이 컬럼은 "AI 비전 감지 사유" - AI가 실제로
-                          // 찾아낸 결함이 있으면 그걸 보여줘야 한다(오버라이드 사유 초기값과
-                          // 동일 소스, getPrimaryDefectReason). reason_code/primary_reason_code는
-                          // "왜 HITL로 이관됐는가"(라우팅 사유)라 결함 분류가 아니다 - 종전에는
-                          // 이 라우팅 코드를 결함 칩처럼 그대로 노출해, 결함이 하나도 없는 건에도
-                          // 원시 코드가 결함인 것처럼 찍혔다. 실제 결함이 없을 때만 라우팅
+                          // 이 컬럼은 "AI 비전 감지 사유"(getPrimaryDefectReason와 동일 소스).
+                          // reason_code류는 결함 분류가 아니라 HITL 라우팅 사유다 — 실제 결함이 없을 때만 라우팅
                           // 사유를 정직하게 보여준다(HITL_ESCALATION_LABELS, 별도 톤).
                           const primaryDefect = getPrimaryDefectReason(t);
                           const routingCode = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code;
@@ -1049,7 +1023,7 @@ export default function AdminHitlDashboard() {
                               </p>
 
                               {/*
-                                [신설 2026-08-06] HITL 이관 근거를 검수자에게 노출한다.
+                                HITL 이관 근거를 검수자에게 노출한다.
                                 증거 대조 검증이 결함을 오탐으로 지목하면 Policy가 감점에서 제외하고,
                                 그 결과 감점이 0이 되면 Critic이 "결함 N건인데 감점 0점"으로 잡아
                                 여기로 보낸다. 이 맥락 없이 결함 목록과 점수만 보면 검수자는
@@ -1341,8 +1315,6 @@ export default function AdminHitlDashboard() {
                   // 모델 배정은 wms-secret-backend/.claude/rules/01-freeze-zones.md가 정본.
                   // Vision 박스는 Detector(YOLO, LLM 미사용)까지 시각적으로 묶어 보여준다 -
                   // 백엔드 그래프 노드는 그대로 분리돼 있고 여기 라벨만 축약한 것.
-                  // [정정 2026-08-12] "VLM 2차검증+4o-mini예비"는 증거 대조 검증이 2026-08-07
-                  // GPT-4o-mini→GPT-4o로 상향된 뒤 실제와 어긋나 있었다.
                   { step: 1, label: "Vision 👁️", desc: "YOLO탐지+GPT-4o 판독·증거검증" },
                   // Policy는 LLM을 쓰지 않는 UBCI v2.0 매트릭스 결정론적 산식이다.
                   { step: 2, label: "Policy ⚖️", desc: "UBCI 매트릭스(결정론적)" },

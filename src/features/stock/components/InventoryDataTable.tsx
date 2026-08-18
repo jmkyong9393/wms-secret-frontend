@@ -3,7 +3,7 @@
 /**
  * 재고 현황 통합 데이터 그리드 (Admin/Worker 공용 — B안 통합).
  *
- * [수정 이력 2026-08-04]
+ * 
  * - admin/inventory/page.tsx(1,329줄)와 worker/inventory/page.tsx(702줄)가 동일 API
  *   (inventoryAPI.getInventory)를 호출하면서 검색/필터/정렬/페이지네이션/내보내기를 각자
  *   중복 구현하고 있던 것을 이 컴포넌트 1벌로 통합. role prop이 관리자 전용 기능
@@ -103,7 +103,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
               // 백엔드가 실제 등급 확정 주체(AI 자동 판정 / HITL 결재자)를 내려주므로
               // 사번 리터럴로 덮어쓰지 않는다 (목록과 상세가 다른 담당자를 표시하던 원인).
               worker_id: item.worker_id || '미기록',
-              // [2026-08-10] 작업자(사람)와 확정 트랙을 분리 표기한다. 종전에는
+              // 작업자(사람)와 확정 트랙을 분리 표기한다. 종전에는
               // "Nexus Vision AI (LangGraph 4-Agent)" 한 줄이 작업자 칸을 차지해
               // 실제로 검수한 사람이 목록에 드러나지 않았다. 자세한 근거는 상세 화면이 맡는다.
               worker_label: item.worker_label || '작업자 미기록',
@@ -560,7 +560,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
         </div>
 
         {/*
-          [수정 이력 2026-08-10] 모바일 뷰포트 대응 카드 리스트 신설.
+          모바일 뷰포트 대응 카드 리스트 신설.
           이 데스크톱 <table>은 좁은 화면에서 가로 스크롤 없이는 열이 잘려 조회 자체가
           어려웠다(작업자가 실제로 쓰는 화면인데도). md 미만에서는 카드 리스트로, md 이상에서는
           기존 테이블로 전환한다 - 데스크톱 동작은 그대로 두고 좁은 화면에서만 레이아웃을 바꾼다.
