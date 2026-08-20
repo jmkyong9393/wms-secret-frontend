@@ -469,7 +469,10 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                 src={currentImageUrl}
                 alt={`defect-${effIdx}`}
                 onError={() => setImgError(true)}
-                className="max-w-full max-h-[72vh] w-auto h-auto object-contain rounded shadow-lg block select-none"
+                // 고정 vh 상한(80vh→72vh)은 화면 높이에 따라 여전히 모달 본문을 넘겨 하단이
+                // 잘렸고, 잘린 영역에는 BBox를 그릴 수 없었다(실측: 뒷표지·책등 하단).
+                // 헤더+경고띠+패딩+썸네일 스트립 고정 높이(약 240px)를 빼서 항상 본문 안에 들어오게 한다.
+                className="max-w-full max-h-[calc(100dvh-240px)] w-auto h-auto object-contain rounded shadow-lg block select-none"
                 draggable={false}
               />
 
