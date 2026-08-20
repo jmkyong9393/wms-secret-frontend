@@ -457,7 +457,11 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
           )}
           {!imgError && currentImageUrl ? (
             <div
-              className={`relative max-w-full max-h-full inline-block ${drawMode ? "cursor-crosshair" : ""}`}
+              // 래퍼에 max-h를 걸면 모달 본문이 80vh보다 낮을 때 래퍼만 잘리고 이미지는
+              // 삐져나와, 래퍼 % 기준인 BBox가 전부 위로 밀리고 하단부엔 그릴 수 없게 된다
+              // (실측: 세로 촬영 A011). 래퍼는 이미지에 정확히 밀착시키고 높이 상한은
+              // 이미지에만 건다 — 오버레이 좌표계 == 이미지 좌표계가 이 화면의 불변식이다.
+              className={`relative max-w-full inline-block ${drawMode ? "cursor-crosshair" : ""}`}
               onMouseDown={onImageMouseDown}
             >
               <img
@@ -465,7 +469,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                 src={currentImageUrl}
                 alt={`defect-${effIdx}`}
                 onError={() => setImgError(true)}
-                className="max-w-full max-h-[80vh] w-auto h-auto object-contain rounded shadow-lg block select-none"
+                className="max-w-full max-h-[72vh] w-auto h-auto object-contain rounded shadow-lg block select-none"
                 draggable={false}
               />
 
