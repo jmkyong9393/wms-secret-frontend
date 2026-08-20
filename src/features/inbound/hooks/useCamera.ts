@@ -51,11 +51,10 @@ async function applyCameraTuning(track: MediaStreamTrack | undefined, quality: C
     if (caps.focusMode?.includes('continuous')) {
       advanced.push({ focusMode: 'continuous' });
     }
-    if (caps.zoom) {
-      const target = quality === 'barcode'
-        ? Math.min(BARCODE_ZOOM, caps.zoom.max)
-        : caps.zoom.min;
-      advanced.push({ zoom: target });
+    if (caps.zoom && quality === 'barcode') {
+      // 검수 모드에는 줌을 아예 걸지 않는다. 종전의 zoom.min은 기기에 따라 0.5x
+      // 초광각을 강제해 초점·픽셀밀도를 망가뜨릴 수 있었다 - 기본 배율이 정답이다.
+      advanced.push({ zoom: Math.min(BARCODE_ZOOM, caps.zoom.max) });
     }
 
     if (advanced.length === 0) return;

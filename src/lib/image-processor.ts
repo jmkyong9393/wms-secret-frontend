@@ -152,7 +152,10 @@ export async function processImage(video: HTMLVideoElement, guideBox?: HTMLDivEl
   // 표지 중앙의 단색 여백이나 배경 벽이 그 창에 들어오면 **선명한 사진도 반려**됐다
   // (실제로 5장째부터 계속 반려되는 증상). 프레임 전체를 축소해 판정한다 -
   // 글자·모서리 등 엣지가 어디에 있든 점수에 반영되고, 연산량도 오히려 준다.
-  const SAMPLE_MAX = 480;
+  // [2026-08-20 상향 480→960] 480 축소는 블러를 "압축"해 엣지를 되살린다 - 사람도 못 읽는
+  // 컷(원본 기준 26~53)이 189~648로 튀어 어떤 임계로도 정상 컷과 갈라지지 않았다.
+  // 960에서는 정상 166~450 vs 흐림 44~111로 분리된다 (운영 실측, 임계 140).
+  const SAMPLE_MAX = 960;
   const sampleScale = Math.min(1, SAMPLE_MAX / Math.max(targetWidth, targetHeight));
   const sw = Math.max(3, Math.round(targetWidth * sampleScale));
   const sh = Math.max(3, Math.round(targetHeight * sampleScale));
@@ -166,12 +169,15 @@ export async function processImage(video: HTMLVideoElement, guideBox?: HTMLDivEl
 
   const { score: blurScore, contrast } = calculateBlurScore(sampleCtx.getImageData(0, 0, sw, sh));
 
-  // 대비가 바닥이면 라플라시안 분산은 "흔들렸다"가 아니라 "볼 엣지가 없다"는 뜻이다.
-  // 이 경우 판정을 포기한다 - 판정 불가를 흔들림으로 처리하면 사용자가 빠져나갈 수 없다.
+  // [2026-08-20 특례 폐지] 종전에는 대비<12면 판정을 포기하고 통과시켰다. 그 특례는
+  // 판정이 하드차단이던 시절 "빠져나갈 수 없음"을 막기 위한 것이었는데, 지금은 확인창이라
+  // 탈출이 항상 가능하다. 특례가 남긴 구멍: 떡이 된 블러는 엣지도 대비도 함께 낮아
+  // (실측 08-19: 점수 5·대비 7) 최악의 컷일수록 경고 없이 통과했다. 흰 벽과 뭉개진
+  // 페이지를 같은 취급한 것이다. 이제 저대비는 통과 사유가 아니라 문구 구분용이다.
   const MIN_CONTRAST = 12;
-  const BLUR_THRESHOLD = 25;
+  const BLUR_THRESHOLD = 140;
   const blurIndeterminate = contrast < MIN_CONTRAST;
-  const isBlurred = !blurIndeterminate && blurScore < BLUR_THRESHOLD;
+  const isBlurred = blurScore < BLUR_THRESHOLD;
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
