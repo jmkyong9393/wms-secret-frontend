@@ -93,6 +93,14 @@ const nextConfig: NextConfig = {
           { key: "Document-Policy", value: "js-profiling" },
         ],
       },
+      {
+        // public/ 정적 이미지(로고 등)는 기본 max-age=0이라 페이지를 옮길 때마다
+        // 재다운로드된다. 로고류는 사실상 불변이므로 하루 캐시 + 백그라운드 재검증.
+        source: "/:file*\\.(jpg|jpeg|png|svg|webp|ico)",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" },
+        ],
+      },
     ];
   },
 };
