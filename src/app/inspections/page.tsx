@@ -7,15 +7,16 @@
  * WORKER는 scope 미지정·scope=all 요청 시에도 강제 MINE (권한 하향 고정).
  */
 import { Suspense } from 'react';
+import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
 import { useSearchParams } from 'next/navigation';
-import { useAtomValue } from 'jotai';
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
+
 import { InspectionDataTable } from '@/features/stock/components/InspectionDataTable';
 
 function InspectionsShell() {
   const params = useSearchParams();
-  const user = useAtomValue(currentUserAtom);
-  const isWorker = user?.role?.toUpperCase() === 'WORKER';
+  const { user, hydrated } = useHydratedUser();
+  // 하이드레이션 전에는 최소 권한으로 판단한다 (관리자 뷰 선노출 방지)
+  const isWorker = !hydrated || user?.role?.toUpperCase() === 'WORKER';
   const scope = isWorker || params.get('scope') === 'mine' ? 'MINE' : 'ALL';
   return <InspectionDataTable role={isWorker ? 'WORKER' : 'ADMIN'} scope={scope} />;
 }

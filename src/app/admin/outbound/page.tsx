@@ -523,6 +523,12 @@ export default function OutboundDashboard() {
 
   const [showInvoiceLabel, setShowInvoiceLabel] = useState<boolean>(false);
   const [issuedWaybillNo, setIssuedWaybillNo] = useState<string | null>(null);
+  // 송장 발급 일시. 렌더 중 new Date()를 쓰면 리렌더마다 값이 바뀌고 서버·클라 시각이
+  // 달라 하이드레이션 불일치가 난다. 송장번호가 확정될 때 한 번만 기록한다.
+  const [issuedAt, setIssuedAt] = useState('');
+  useEffect(() => {
+    setIssuedAt(issuedWaybillNo ? new Date().toLocaleString('ko-KR') : '');
+  }, [issuedWaybillNo]);
 
   const handleConfirmPacking = async () => {
     // 적재 품목이 없으면 확정 불가 — 0권짜리 운송장은 유효한 출고 문서가 아니다
@@ -1095,7 +1101,7 @@ export default function OutboundDashboard() {
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-amber-800 dark:text-amber-300 font-bold px-1">
-                <span>발급 일시: {new Date().toLocaleString()}</span>
+                <span>발급 일시: {issuedAt || '—'}</span>
                 <span className="text-indigo-600 dark:text-indigo-400 underline cursor-pointer">
                   🖨️ 송장 출력 (Print Label)
                 </span>

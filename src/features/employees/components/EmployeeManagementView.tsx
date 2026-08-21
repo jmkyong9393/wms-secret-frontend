@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAtomValue } from "jotai";
+import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
+
 import { Plus, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as XLSX from "xlsx";
@@ -13,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { currentUserAtom } from "@/features/auth/store/authAtoms";
+
 import { VALID_ROLES, type Role, type UserStatus } from "@/features/auth/types/authTypes";
 import { canManageEmployees } from "@/features/employees/utils/permissions";
 import { ROLE_LABEL, STATUS_LABEL } from "@/features/employees/utils/badges";
@@ -29,7 +30,7 @@ const ROLE_FILTER_ALL = "ALL" as const;
 const STATUS_FILTER_ALL = "ALL" as const;
 
 export function EmployeeManagementView() {
-  const user = useAtomValue(currentUserAtom);
+  const { user } = useHydratedUser();
   const canManage = canManageEmployees(user);
 
   const [keyword, setKeyword] = useState("");

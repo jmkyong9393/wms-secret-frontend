@@ -14,7 +14,7 @@
  * - 페이지네이션은 관제 표준 MasterPagination으로 통일.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
@@ -123,7 +123,12 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // 검색어는 지연 값으로 필터링한다 - 키 입력마다 전체 목록을 재계산해 입력이
+  // 버벅이는 것을 막는다 (입력 반영은 즉시, 목록 갱신은 여유 프레임에).
+  const deferredQuery = useDeferredValue(searchQuery);
+
   const filteredItems = useMemo(() => {
+    const kstToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
     return items.filter((item) => {
       const isNew = isNewBookItem(item);
       if (bookTypeFilter === 'NEW' && !isNew) return false;
@@ -142,15 +147,14 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
         if (ubciScoreFilter === 'UNDER_60' && score >= 65) return false;
       }
 
-      const kstToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
       if (dateFilter === 'TODAY' && !item.date.includes(kstToday)) return false;
       if (dateFilter === 'WEEK') {
         const t = new Date(item.date.replace(' ', 'T')).getTime();
         if (isNaN(t) || t < Date.now() - 7 * 24 * 3600 * 1000) return false;
       }
 
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.trim().toLowerCase();
+      if (!deferredQuery.trim()) return true;
+      const q = deferredQuery.trim().toLowerCase();
       const b = item.book;
       switch (searchField) {
         case 'LPN': return item.lpn_barcode.toLowerCase().includes(q);
@@ -173,7 +177,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
           );
       }
     });
-  }, [items, searchQuery, searchField, gradeFilter, ubciScoreFilter, dateFilter, bookTypeFilter]);
+  }, [items, deferredQuery, searchField, gradeFilter, ubciScoreFilter, dateFilter, bookTypeFilter]);
 
   const sortedItems = useMemo(() => {
     const list = [...filteredItems];
