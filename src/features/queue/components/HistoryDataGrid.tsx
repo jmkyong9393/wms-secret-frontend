@@ -1,7 +1,7 @@
 'use client';
 import { API_BASE_URL } from '@/lib/api-client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, Download, Filter, FileText, Loader2, AlertTriangle, Trash2, Camera, Printer, RefreshCcw, Check, Edit2, X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { inboundService } from '@/features/inbound/api';
@@ -135,8 +135,8 @@ export default function HistoryDataGrid() {
     queryFn: inboundService.getHistoryLogs,
   });
 
-  // 검색 필터링
-  const filteredData = allMockData.filter(item => {
+  // 검색 필터링. 원본이 크면 렌더마다 전체를 훑게 되므로 입력·기간이 바뀔 때만 계산한다.
+  const filteredData = useMemo(() => allMockData.filter(item => {
     const matchesSearch = item.lpn.includes(searchTerm) || 
                           item.title.includes(searchTerm) || 
                           item.isbn.includes(searchTerm);
@@ -147,7 +147,7 @@ export default function HistoryDataGrid() {
     const matchesEndDate = endDate ? itemDateStr <= endDate : true;
 
     return matchesSearch && matchesStartDate && matchesEndDate;
-  });
+  }), [allMockData, searchTerm, startDate, endDate]);
 
   // 페이지네이션 계산
   const totalItems = filteredData.length;
@@ -155,7 +155,7 @@ export default function HistoryDataGrid() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
   
-  const currentData = filteredData.slice(startIndex, endIndex);
+  const currentData = useMemo(() => filteredData.slice(startIndex, endIndex), [filteredData, startIndex, endIndex]);
 
   // 페이지 변경 핸들러
   const handlePageChange = (page: number) => {

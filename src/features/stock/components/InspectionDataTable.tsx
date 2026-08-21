@@ -13,7 +13,7 @@ import { API_BASE_URL } from '@/lib/api-client';
  * - localhost:8000 하드코딩 대신 API_BASE_URL 환경변수 기반으로 교체.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import MasterPagination from '@/components/common/MasterPagination';
 import BookCover from '@/components/BookCover';
 import BookCoverModal from '@/components/BookCoverModal';
@@ -177,9 +177,18 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMine, workerId]);
 
+  // KST 기준 오늘(YYYY-MM-DD). Intl 객체 생성은 비싸므로 마운트 시 한 번만 만든다.
+  const kstToday = useMemo(
+    () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date()),
+    []
+  );
+
+  // 키 입력마다 전체 재필터링으로 입력이 버벅이지 않게 지연 값으로 계산한다.
+  const deferredTerm = useDeferredValue(searchTerm);
+
   const filteredInspections = useMemo(() => {
     return inspections.filter((i) => {
-      const term = searchTerm.trim().toLowerCase();
+      const term = deferredTerm.trim().toLowerCase();
       const matchSearch =
         !term ||
         i.book.title.toLowerCase().includes(term) ||
@@ -195,7 +204,6 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
 
       let matchDate = true;
       if (dateFilter === 'TODAY') {
-        const kstToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
         matchDate = i.inspected_at.includes(kstToday);
       } else if (dateFilter === 'WEEK') {
         const t = new Date(i.inspected_at.replace(' ', 'T'));
@@ -203,7 +211,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
       }
       return matchSearch && matchStatus && matchDate;
     });
-  }, [inspections, searchTerm, statusFilter, dateFilter, mineOnly, workerId]);
+  }, [inspections, deferredTerm, statusFilter, dateFilter, mineOnly, workerId, kstToday]);
 
   const totalPages = Math.ceil(filteredInspections.length / PAGE_SIZE) || 1;
   const paginatedInspections = useMemo(() => {
@@ -211,12 +219,17 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
     return filteredInspections.slice(start, start + PAGE_SIZE);
   }, [filteredInspections, currentPage]);
 
-  // Worker 개인 KPI
-  const kstToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
-  const todayCount = inspections.filter((i) => i.inspected_at.startsWith(kstToday)).length;
-  const autoApprovalCount = inspections.filter((i) => i.status === 'AUTO_APPROVED').length;
+  // Worker 개인 KPI. 지표마다 배열을 훑지 않고 한 번의 순회로 집계한다.
+  const { todayCount, autoApprovalCount, hitlCount } = useMemo(() => {
+    let today = 0, auto = 0, hitl = 0;
+    for (const i of inspections) {
+      if (i.inspected_at.startsWith(kstToday)) today++;
+      if (i.status === 'AUTO_APPROVED') auto++;
+      if (i.status === 'HITL_PENDING') hitl++;
+    }
+    return { todayCount: today, autoApprovalCount: auto, hitlCount: hitl };
+  }, [inspections, kstToday]);
   const autoApprovalRate = inspections.length ? ((autoApprovalCount / inspections.length) * 100).toFixed(1) : '0.0';
-  const hitlCount = inspections.filter((i) => i.status === 'HITL_PENDING').length;
 
   const handleExportCSV = () => {
     const rows = filteredInspections.map((i) => ({

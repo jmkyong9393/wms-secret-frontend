@@ -1,5 +1,6 @@
 'use client';
 import { API_BASE_URL } from '@/lib/api-client';
+import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
 
 /**
  * LPN 내부 조회 (직원 전용)
@@ -16,11 +17,10 @@ import { API_BASE_URL } from '@/lib/api-client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAtomValue } from 'jotai';
+
 import Link from 'next/link';
 import { ShieldCheck, BookOpen, MapPin, Package, UserCheck, Bot, Eye, AlertTriangle } from 'lucide-react';
 
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
 import {
   resolveInspectionImages,
   resolveDefectCoordinates,
@@ -34,7 +34,7 @@ export default function LpnInternalLookupPage() {
   const params = useParams();
   const router = useRouter();
   const lpn = params.lpn as string;
-  const user = useAtomValue(currentUserAtom);
+  const { user } = useHydratedUser();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
