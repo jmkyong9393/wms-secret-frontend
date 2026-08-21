@@ -70,19 +70,19 @@ export default function AdvancedDashboardPage() {
   const { data: kpi } = useQuery({
     queryKey: ['dashboard-kpi'],
     queryFn: async () => (await apiClient.get('/api/v1/dashboard/kpi')).data,
-    refetchInterval: 5000,
+    refetchInterval: 30000,
   });
 
   const { data: charts } = useQuery({
     queryKey: ['dashboard-charts'],
     queryFn: async () => (await apiClient.get('/api/v1/dashboard/charts')).data,
-    refetchInterval: 10000,
+    refetchInterval: 30000,
   });
 
   const { data: fdsSummary } = useQuery({
     queryKey: ['fds-summary'],
     queryFn: async () => (await apiClient.get('/api/v1/fds/summary')).data,
-    refetchInterval: 15000,
+    refetchInterval: 60000,
   });
 
   const { data: weekly } = useQuery({
@@ -149,7 +149,7 @@ export default function AdvancedDashboardPage() {
       if (logsClearedAt) params.since = logsClearedAt;
       return (await apiClient.get('/api/v1/dashboard/logs', { params })).data;
     },
-    refetchInterval: 10000,
+    refetchInterval: 30000,
   });
 
   const clearLogs = () => {
