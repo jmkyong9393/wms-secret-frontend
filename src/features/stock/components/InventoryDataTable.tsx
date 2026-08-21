@@ -23,6 +23,7 @@ import BookCoverModal from '@/components/BookCoverModal';
 import MasterPagination from '@/components/common/MasterPagination';
 import { exportToCSV } from '@/lib/exportCsv';
 import { inventoryAPI } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
 import {
   PackageSearch, Download, Search, Printer, Eye, MapPin, ArrowUpDown, Clock,
   Calendar, BookOpen, Sparkles, X, RotateCcw, Camera, Trash2, ShieldCheck,
@@ -54,7 +55,6 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
   const router = useRouter();
 
   const [items, setItems] = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
 
   // 검색/필터/정렬
   const [searchField, setSearchField] = useState<SearchField>('ALL');
@@ -78,12 +78,17 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
   const [activePrintData, setActivePrintData] = useState<LpnPrintData | null>(null);
   const [zoomBook, setZoomBook] = useState<any | null>(null);
 
-  useEffect(() => {
-    inventoryAPI
-      .getInventory()
-      .then((data: any[]) => {
-        if (data && Array.isArray(data) && data.length > 0) {
-          const enriched: InventoryItem[] = data.map((item: any, idx: number) => {
+  // 재고 전량 응답(수 MB)을 60초 캐시한다 - 재방문 시 스피너 없이 즉시 표시.
+  const { data: fetchedItems, isLoading: loading } = useQuery({
+    queryKey: ['inventory-items'],
+    staleTime: 60_000,
+    queryFn: async (): Promise<InventoryItem[]> => {
+      const data: any[] = await inventoryAPI.getInventory().catch((err: unknown) => {
+        console.error('Inventory API fetch failed:', err);
+        return [];
+      });
+      if (!data || !Array.isArray(data)) return [];
+      return data.map((item: any, idx: number) => {
             const safeScore = typeof item.ubci_score === 'number' ? item.ubci_score : null;
             return {
               id: item.id || `inv-real-${idx}`,
@@ -110,18 +115,14 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
               track: item.track || 'AI',
               date: item.date || '',
             };
-          });
-          setItems(enriched);
-        } else {
-          setItems([]);
-        }
-      })
-      .catch((err: unknown) => {
-        console.error('Inventory API fetch failed:', err);
-        setItems([]);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+      });
+    },
+  });
+
+  // 캐시 결과를 로컬 상태로 받아 일괄 구역 변경·삭제 같은 화면 내 변이를 지원한다.
+  useEffect(() => {
+    if (fetchedItems) setItems(fetchedItems);
+  }, [fetchedItems]);
 
   // 검색어는 지연 값으로 필터링한다 - 키 입력마다 전체 목록을 재계산해 입력이
   // 버벅이는 것을 막는다 (입력 반영은 즉시, 목록 갱신은 여유 프레임에).
