@@ -7,7 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import Link from 'next/link';
 import { ArrowLeft, Printer, ShieldCheck, MapPin, Tag, UserCheck, Package, ExternalLink, Bot, Image as ImageIcon, AlertTriangle, RotateCcw } from 'lucide-react';
 
-import BookCover from '@/components/BookCover';
+import BookCover from '@/entities/book/ui/BookCover';
 import { InspectionEvidenceViewer } from '@/features/stock/components/InspectionEvidenceViewer';
 import { PipelineTracePanel } from '@/features/stock/components/PipelineTracePanel';
 import { LpnPrintModal } from '@/features/stock/components/LpnPrintModal';

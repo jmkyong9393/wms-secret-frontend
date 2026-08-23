@@ -2,7 +2,7 @@
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useState, useEffect } from 'react';
-import BookCover from '@/components/BookCover';
+import BookCover from '@/entities/book/ui/BookCover';
 import Link from 'next/link';
 import BinPacking3DViewer from '@/features/outbound/components/BinPacking3DViewer';
 import { 
