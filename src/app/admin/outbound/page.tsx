@@ -5,6 +5,9 @@ import React, { useState, useEffect } from 'react';
 import BookCover from '@/entities/book/ui/BookCover';
 import Link from 'next/link';
 import BinPacking3DViewer from '@/features/outbound/components/BinPacking3DViewer';
+import { BOOK_SLIM_BOX_OPTIONS, STANDARD_COURIER_BOX_OPTIONS, BOX_OPTIONS, type BoxOption } from '@/features/outbound/constants/boxOptions';
+import { todayYYYYMMDD, randomB2bCustomerName } from '@/features/outbound/utils/simulation';
+import { computeBestBox, recommendCushionName as recommendCushion } from '@/features/outbound/lib/packingCalc';
 import { 
   Package, 
   Box, 
@@ -25,64 +28,6 @@ import {
   ArrowRightCircle,
   FileCheck
 } from 'lucide-react';
-
-interface BoxOption {
-  id: string;
-  name: string;
-  specs: string;
-  desc: string;
-  eff: number;
-  maxWeight_kg: number;
-}
-
-const BOOK_SLIM_BOX_OPTIONS: BoxOption[] = [
-  { id: "BOOK-S1", name: "도서슬림 소형 1호", specs: "250x150x50mm", desc: "단권 소형 슬림", eff: 98.2, maxWeight_kg: 2.0 },
-  { id: "BOOK-S2", name: "도서슬림 소형 2호", specs: "250x150x60mm", desc: "소형 도서 2권 밀착", eff: 94.5, maxWeight_kg: 3.0 },
-  { id: "BOOK-M1", name: "도서슬림 중형 1호", specs: "300x200x70mm", desc: "중형 일반서 묶음", eff: 81.0, maxWeight_kg: 4.0 },
-  { id: "BOOK-M2", name: "도서슬림 중형 2호", specs: "300x200x90mm", desc: "중형 전공서 묶음", eff: 63.0, maxWeight_kg: 5.0 },
-  { id: "BOOK-L1", name: "도서슬림 대형 1호", specs: "350x250x100mm", desc: "대형 수험서 묶음", eff: 78.5, maxWeight_kg: 7.0 },
-  { id: "BOOK-L2", name: "도서슬림 대형 2호", specs: "350x250x140mm", desc: "대형 3D 패킹 묶음", eff: 72.0, maxWeight_kg: 8.5 },
-  { id: "BOOK-XL1", name: "도서슬림 특대형 1호", specs: "400x300x160mm", desc: "B2B 교보 대량 묶음", eff: 68.4, maxWeight_kg: 10.0 },
-  { id: "BOOK-XL2", name: "도서슬림 특대형 2호", specs: "400x300x200mm", desc: "B2B 대량 직송 팩", eff: 61.2, maxWeight_kg: 12.0 },
-];
-
-const STANDARD_COURIER_BOX_OPTIONS: BoxOption[] = [
-  { id: "STD-01", name: "일반택배 1호 (소형)", specs: "220x190x90mm", desc: "표준 소형 팩", eff: 63.0, maxWeight_kg: 5.0 },
-  { id: "STD-02", name: "일반택배 2호 (중소형)", specs: "270x180x150mm", desc: "표준 중형 팩", eff: 48.0, maxWeight_kg: 7.0 },
-  { id: "STD-03", name: "일반택배 3호 (중형)", specs: "340x250x210mm", desc: "우체국 3호 규격", eff: 42.0, maxWeight_kg: 10.0 },
-  { id: "STD-04", name: "일반택배 4호 (대형)", specs: "410x310x280mm", desc: "우체국 4호 대형", eff: 38.5, maxWeight_kg: 15.0 },
-  { id: "STD-05", name: "일반택배 5호 (특대형 1호)", specs: "480x380x340mm", desc: "우체국 5호급 대용량", eff: 35.0, maxWeight_kg: 20.0 },
-  { id: "STD-06", name: "일반택배 6호 (특대형 2호)", specs: "530x410x400mm", desc: "지점 보급용 마스터", eff: 31.2, maxWeight_kg: 25.0 },
-  { id: "STD-07", name: "일반택배 7호 (초대형 점포용)", specs: "600x450x450mm", desc: "B2B 점포 직송 초대형", eff: 28.4, maxWeight_kg: 30.0 },
-  { id: "STD-08", name: "일반택배 8호 (마스터 카톤)", specs: "650x500x500mm", desc: "B2B 팔레트 마스터 카톤", eff: 25.0, maxWeight_kg: 35.0 },
-];
-
-const BOX_OPTIONS: BoxOption[] = [...BOOK_SLIM_BOX_OPTIONS, ...STANDARD_COURIER_BOX_OPTIONS];
-
-// 수동 선택 모드(지시서 미연동)에서 쓰는 표시용 주문 ID/거래처 — 실제 지시서 연동 시 activeInstruction 값으로 대체된다.
-const B2B_CUSTOMER_POOL = [
-  "교보문고 B2B 지점",
-  "영풍문고 종로점",
-  "YES24 강남물류센터",
-  "알라딘 중고매입센터",
-  "북센 도매유통",
-  "교보문고 B2B 물류센터 (인천)",
-];
-
-function todayYYYYMMDD(): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find(p => p.type === t)?.value || "";
-  return `${get("year")}${get("month")}${get("day")}`;
-}
-
-function randomB2bCustomerName(): string {
-  return B2B_CUSTOMER_POOL[Math.floor(Math.random() * B2B_CUSTOMER_POOL.length)];
-}
 
 export default function OutboundDashboard() {
   const [mockOrder, setMockOrder] = useState<any>(null);
@@ -266,78 +211,10 @@ export default function OutboundDashboard() {
   const handleDeselectAllBooks = () => {
     setSelectedBookIds([]);
   };
-  const bestRecommendedBox = React.useMemo(() => {
-    if (selectedBooks.length === 0) return BOOK_SLIM_BOX_OPTIONS[0];
-
-    let rawBooksTotalH = 0, totalQty = 0, totalWeightG = 0;
-    let maxBookLongest = 0;
-    let maxBookShortest = 0;
-
-    selectedBooks.forEach(b => {
-      const qty = getBookQty(b.id);
-      const w = b.width_mm || b.width || 185;
-      const d = b.depth_mm || b.depth || 257;
-      maxBookLongest = Math.max(maxBookLongest, Math.max(w, d));
-      maxBookShortest = Math.max(maxBookShortest, Math.min(w, d));
-      rawBooksTotalH += (b.thickness_mm || b.height || 20) * qty;
-      totalWeightG += (b.weight_g || 650) * qty;
-      totalQty += qty;
-    });
-
-    const totalWeightKg = totalWeightG / 1000.0;
-    const activeCushThick = (selectedCushion?.thick_mm !== undefined) ? selectedCushion.thick_mm : 9.0;
-    const activeCushMode = selectedCushion?.mode || 'top';
-    const zCushThick = (activeCushMode === 'top' || activeCushMode === 'both') ? activeCushThick : 0.0;
-    const sideCushThick = (activeCushMode === 'side' || activeCushMode === 'both') ? activeCushThick : 0.0;
-
-    const reqMaxW = maxBookLongest + (2 * sideCushThick);
-    const reqMaxD = maxBookShortest + (2 * sideCushThick);
-
-    const getGridHeightForBox = (bxW: number, bxD: number) => {
-      const inW = Math.max(10, bxW - 2 * sideCushThick);
-      const inD = Math.max(10, bxD - 2 * sideCushThick);
-      const cap0 = Math.max(1, Math.floor(inW / Math.max(1, maxBookShortest))) * Math.max(1, Math.floor(inD / Math.max(1, maxBookLongest)));
-      const cap90 = Math.max(1, Math.floor(inW / Math.max(1, maxBookLongest))) * Math.max(1, Math.floor(inD / Math.max(1, maxBookShortest)));
-      const maxPerLayer = Math.max(1, Math.max(cap0, cap90));
-      const layers = Math.ceil(totalQty / maxPerLayer);
-      const avgThick = totalQty > 0 ? rawBooksTotalH / totalQty : 20;
-      return layers * avgThick;
-    };
-
-    const allBoxesSortedByVolume = [...BOOK_SLIM_BOX_OPTIONS, ...STANDARD_COURIER_BOX_OPTIONS].sort((a, b) => {
-      const dA = a.specs.match(/(\d+)x(\d+)x(\d+)/);
-      const dB = b.specs.match(/(\d+)x(\d+)x(\d+)/);
-      const rawVolA = dA ? parseInt(dA[1]) * parseInt(dA[2]) * parseInt(dA[3]) : 0;
-      const rawVolB = dB ? parseInt(dB[1]) * parseInt(dB[2]) * parseInt(dB[3]) : 0;
-      const isSlimA = BOOK_SLIM_BOX_OPTIONS.some(bx => bx.id === a.id);
-      const isSlimB = BOOK_SLIM_BOX_OPTIONS.some(bx => bx.id === b.id);
-      const effVolA = isSlimA ? rawVolA * 0.85 : rawVolA;
-      const effVolB = isSlimB ? rawVolB * 0.85 : rawVolB;
-      return effVolA - effVolB;
-    });
-
-    for (const bx of allBoxesSortedByVolume) {
-      const d = bx.specs.match(/(\d+)x(\d+)x(\d+)/);
-      if (!d) continue;
-      const bw = parseInt(d[1]), bd = parseInt(d[2]), bh = parseInt(d[3]);
-
-      // Strict Footprint Fit Test for both 0° and 90° orientation
-      const isFootprintFit = (Math.max(bw, bd) >= reqMaxW) && (Math.min(bw, bd) >= reqMaxD);
-      if (!isFootprintFit) continue;
-
-      const reqH = getGridHeightForBox(bw, bd) + zCushThick;
-      const isHeightFit = bh >= reqH;
-      if (!isHeightFit) continue;
-
-      const isWeightFit = totalWeightKg <= bx.maxWeight_kg;
-      if (!isWeightFit) continue;
-
-      // Absolute smallest 3D volume box found among all 16 options!
-      return bx;
-    }
-
-    return BOOK_SLIM_BOX_OPTIONS[BOOK_SLIM_BOX_OPTIONS.length - 1];
-  }, [selectedBooks, selectedCushion]);
+  const bestRecommendedBox = React.useMemo(
+    () => computeBestBox(selectedBooks, getBookQty, selectedCushion),
+    [selectedBooks, selectedCushion],
+  );
 
   // Auto-selection Switching: Automatically switch selected box AND TAB to AI Best Recommended Box
   useEffect(() => {
@@ -353,49 +230,10 @@ export default function OutboundDashboard() {
   }, [bestRecommendedBox]);
 
   // Dynamic AI Cushion Material Name for 100% Dynamic KPI Card (Mode-aware & XY-Bounding Co-Optimization)
-  const recommendedCushionName = React.useMemo(() => {
-    let maxW = 0, maxD = 0, booksTotalH = 0;
-    selectedBooks.forEach(b => {
-      const qty = getBookQty(b.id);
-      const rawW = b.width_mm || b.width || 185;
-      const rawD = b.depth_mm || b.depth || 257;
-      maxW = Math.max(maxW, Math.max(rawW, rawD));
-      maxD = Math.max(maxD, Math.min(rawW, rawD));
-      booksTotalH += (b.thickness_mm || b.height || 20) * qty;
-    });
-
-    const boxDim = bestRecommendedBox.specs.match(/(\d+)x(\d+)x(\d+)/);
-    const boxW = boxDim ? parseInt(boxDim[1]) : 250;
-    const boxD = boxDim ? parseInt(boxDim[2]) : 150;
-    const boxH = boxDim ? parseInt(boxDim[3]) : 60;
-    const bMax = Math.max(boxW, boxD);
-    const bMin = Math.min(boxW, boxD);
-
-    // 8 Cushions with mode and sideThick & protection score
-    const cushions = [
-      { name: "3D 폼 블록 코너 캡 (30mm)", mode: "side", thick_mm: 30.0 },
-      { name: "에어튜브 3D범퍼 (20mm)", mode: "both", thick_mm: 20.0 },
-      { name: "코너 에어 범퍼 가드 (15mm)", mode: "side", thick_mm: 15.0 },
-      { name: "PE폼 4면가드 (측면둘기 25mm)", mode: "side", thick_mm: 25.0 },
-      { name: "벌집종이 (12mm)", mode: "both", thick_mm: 12.0 },
-      { name: "크라프트 종이 4면 패킹 (10mm)", mode: "side", thick_mm: 10.0 },
-      { name: "뽁뽁이 상단채움 (25mm)", mode: "top", thick_mm: 25.0 },
-      { name: "에어필로우 (9mm)", mode: "top", thick_mm: 9.0 }
-    ];
-    
-    const valid = cushions.filter(c => {
-      const zThick = (c.mode === 'top' || c.mode === 'both') ? c.thick_mm : 0.0;
-      const isZValid = booksTotalH + zThick <= boxH;
-
-      const sideThick = (c.mode === 'side' || c.mode === 'both') ? c.thick_mm : 0.0;
-      const isXYValid = (maxW + 2 * sideThick <= bMax) && (maxD + 2 * sideThick <= bMin);
-
-      return isZValid && isXYValid;
-    });
-
-    if (valid.length > 0) return valid[0].name;
-    return "에어필로우 (9mm)";
-  }, [bestRecommendedBox, selectedBooks]);
+  const recommendedCushionName = React.useMemo(
+    () => recommendCushion(bestRecommendedBox, selectedBooks, getBookQty),
+    [bestRecommendedBox, selectedBooks],
+  );
 
   // Real-time Auto-Sync selected box ID to bestRecommendedBox ID on book selection change
   useEffect(() => {
