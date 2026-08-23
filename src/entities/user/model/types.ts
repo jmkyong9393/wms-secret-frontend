@@ -16,3 +16,6 @@ export interface CurrentUser {
   role: Role;
   mustChangePassword: boolean;
 }
+
+// 재고·검수 그리드의 표시 모드 (역할 적응형 URL - C안). Role의 부분집합.
+export type StockRole = 'ADMIN' | 'WORKER';

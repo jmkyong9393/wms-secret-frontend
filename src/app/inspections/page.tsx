@@ -10,7 +10,7 @@ import { Suspense } from 'react';
 import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 import { useSearchParams } from 'next/navigation';
 
-import { InspectionDataTable } from '@/features/stock/components/InspectionDataTable';
+import { InspectionDataTable } from '@/widgets/inspection-table/ui/InspectionDataTable';
 
 function InspectionsShell() {
   const params = useSearchParams();

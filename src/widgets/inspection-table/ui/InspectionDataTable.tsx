@@ -24,9 +24,10 @@ import {
   FileCheck, Search, Printer, Eye, Clock, Calendar, CheckCircle2, AlertTriangle,
   XCircle, User, ShieldCheck, Sparkles, Download, BookOpen, X, Filter,
 } from 'lucide-react';
-import type { InspectionItem, StockRole } from '../types';
+import type { InspectionItem } from '@/entities/inspection/model/types';
+import type { StockRole } from '@/entities/user/model/types';
 import type { LpnPrintData } from '@/entities/label/model/types';
-import { gradeMeta, REASON_CODE_MAP, SCAN_ANGLE_LABELS } from '../utils';
+import { gradeMeta, REASON_CODE_MAP, SCAN_ANGLE_LABELS } from '@/entities/inspection/lib/meta';
 import { LpnPrintModal } from '@/entities/label/ui/LpnPrintModal';
 
 type StatusFilter = 'ALL' | 'AUTO_APPROVED' | 'HITL_PENDING' | 'REJECTED';

@@ -30,9 +30,12 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
-import type { InventoryItem, StockRole } from '../types';
+import type { InventoryItem } from '@/entities/inventory/model/types';
+import type { StockRole } from '@/entities/user/model/types';
 import type { LpnPrintData } from '@/entities/label/model/types';
-import { formatKSTDate, formatZone, gradeMeta, isNewBookItem } from '../utils';
+import { formatKSTDate, formatZone } from '@/shared/lib/format';
+import { gradeMeta } from '@/entities/inspection/lib/meta';
+import { isNewBookItem } from '@/entities/inventory/lib/isNewBookItem';
 import { LpnPrintModal } from '@/entities/label/ui/LpnPrintModal';
 
 /**

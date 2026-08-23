@@ -1,34 +1,4 @@
-/**
- * 재고/검수 통합 그리드 공용 유틸.
- * 4개 페이지에 흩어져 있던 동일 로직(신품 판별, 등급 배지, Zone 포맷, KST 날짜)의 단일 소스.
- */
-import type { InventoryItem } from './types';
-
-/** 신품 Fast-Track 여부 판별 (LPN 미발급/ISBN 바코드 사용 품목) */
-export function isNewBookItem(item: Pick<InventoryItem, 'lpn_barcode' | 'grade'>): boolean {
-  const lpn = item.lpn_barcode || '';
-  const grade = (item.grade || '').toUpperCase();
-  return (
-    !lpn ||
-    lpn.includes('미발급') ||
-    lpn.includes('신품') ||
-    lpn.startsWith('ISBN') ||
-    lpn.startsWith('NEW') ||
-    grade === 'NEW_FASTTRACK' ||
-    grade.includes('FASTTRACK')
-  );
-}
-
-/** "Zone A-Rack 01-Shelf 02" → "A-1-2" 압축 표기 */
-export function formatZone(zone?: string): string {
-  if (!zone) return 'A-1-1';
-  return zone
-    .replace(/^Zone\s*/gi, '')
-    .replace(/Rack\s*0*/gi, '')
-    .replace(/Shelf\s*0*/gi, '')
-    .replace(/\s+/g, '')
-    .replace(/--+/g, '-');
-}
+/** UBCI 등급·결함 사유·촬영 앵글 표시 메타 (검수 도메인 표기 SSOT). */
 
 const GRADE_BADGE: Record<string, string> = {
   MINT: 'bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800',
@@ -69,21 +39,6 @@ export function gradeMeta(
   const display =
     ubciScore >= 95 ? 'MINT' : ubciScore >= 85 ? 'GOOD' : ubciScore >= 65 ? 'NORMAL' : 'REJECT';
   return { display, badge: GRADE_BADGE[display] };
-}
-
-/** 'YYYY-MM-DD HH:mm:ss' 고정 표기 (이미 표준 포맷이면 그대로 반환해 JS 타임존 왜곡 방지) */
-export function formatKSTDate(dateStr: string): string {
-  if (!dateStr) return '-';
-  if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}$/.test(dateStr)) return dateStr;
-  try {
-    const raw = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
-    const d = new Date(raw);
-    if (isNaN(d.getTime())) return dateStr;
-    const p = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-  } catch {
-    return dateStr;
-  }
 }
 
 export const REASON_CODE_MAP: Record<string, { label: string; category: string; color: string }> = {
