@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { currentUserAtom } from '@/entities/user/model/authAtoms';
-import type { CurrentUser } from '@/features/auth/types/authTypes';
+import type { CurrentUser } from '@/entities/user/model/types';
 
 /**
  * 하이드레이션 안전 버전의 로그인 사용자 조회.

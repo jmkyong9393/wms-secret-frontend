@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createStore, Provider as JotaiProvider } from "jotai";
-import type { CurrentUser, Role } from "@/features/auth/types/authTypes";
+import type { CurrentUser, Role } from "@/entities/user/model/types";
 
 /**
  * 검증 범위: **권한이 실제로 등록 버튼에 연결되어 있는가**.

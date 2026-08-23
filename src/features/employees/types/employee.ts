@@ -1,4 +1,4 @@
-import type { Role, UserStatus } from "@/features/auth/types/authTypes";
+import type { Role, UserStatus } from "@/entities/user/model/types";
 
 // 직원 생성과 역할 변경 시 선택 가능한 역할
 // MASTER 역할은 현재 선택 불가

@@ -1,9 +1,10 @@
 import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
-import type { CurrentUser } from "@/features/auth/types/authTypes";
+import type { CurrentUser } from "@/entities/user/model/types";
 
 // 인증 정보 localStorage 키
-export const CURRENT_USER_STORAGE_KEY = "wms_current_user";
+import { CURRENT_USER_STORAGE_KEY } from "@/shared/lib/storageKeys";
+export { CURRENT_USER_STORAGE_KEY };
 
 // 로그인 사용자 정보 저장. JWT 원본은 HttpOnly 쿠키로만 존재해 JS에서 절대 읽을 수 없으므로,
 // 로그인 상태 판단은 이 atom(서버가 반환한 프로필)의 존재 여부만으로 이루어진다.

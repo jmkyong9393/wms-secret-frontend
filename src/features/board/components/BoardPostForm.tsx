@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/ui/select";
-import type { CurrentUser } from "@/features/auth/types/authTypes";
+import type { CurrentUser } from "@/entities/user/model/types";
 import type { BoardCategory } from "@/features/board/types/board";
 import { canWriteCategory } from "@/features/board/utils/permissions";
 import { CATEGORY_LABEL } from "@/features/board/components/categoryLabels";

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { canManageEmployees, getAssignableRoles } from "./permissions";
-import type { CurrentUser } from "@/features/auth/types/authTypes";
-import type { Role } from "@/features/auth/types/authTypes";
+import type { CurrentUser } from "@/entities/user/model/types";
+import type { Role } from "@/entities/user/model/types";
 
 function makeUser(role: Role): CurrentUser {
   return { employeeId: "T0001", name: "테스트", role, mustChangePassword: false };

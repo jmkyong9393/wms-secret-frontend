@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/shared/ui/select";
 
-import { VALID_ROLES, type Role, type UserStatus } from "@/features/auth/types/authTypes";
+import { VALID_ROLES, type Role, type UserStatus } from "@/entities/user/model/types";
 import { canManageEmployees } from "@/features/employees/utils/permissions";
 import { ROLE_LABEL, STATUS_LABEL } from "@/features/employees/utils/badges";
 import { useEmployeesQuery } from "@/features/employees/hooks/useEmployeesQuery";
