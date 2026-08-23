@@ -1,19 +1,32 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { isJwtUsable } from '@/shared/lib/jwt';
 
 // 수동 및 역할 기반 접근 제어 (RBAC) 라우트 설정
 const protectedRoutes = ['/admin', '/worker', '/inbound', '/inventory', '/inspections', '/returns', '/orders', '/mypage'];
 const authRoutes = ['/login', '/signup'];
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get('token')?.value;
+  // 만료·손상 토큰은 비로그인으로 취급한다. 쿠키 존재만 보면 만료 쿠키가 /login 접근을
+  // 홈으로 되튕겨 로그인 페이지에 도달할 수 없는 교착이 생긴다 (2026-08-24 실사고).
+  const rawToken = request.cookies.get('token')?.value;
+  const token = isJwtUsable(rawToken) ? rawToken : undefined;
   const role = request.cookies.get('role')?.value;
   const { pathname } = request.nextUrl;
+
+  // 무효 쿠키는 응답에서 지워 다음 요청부터 깨끗한 상태로 만든다 (HttpOnly라 서버만 지울 수 있다).
+  const withCleanup = (res: NextResponse) => {
+    if (rawToken && !token) {
+      res.cookies.delete('token');
+      res.cookies.delete('role');
+    }
+    return res;
+  };
 
   // 1. 루트 경로(/) 접근 시 로그인 상태 및 역할별 리다이렉트
   if (pathname === '/') {
     if (!token) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return withCleanup(NextResponse.redirect(new URL('/login', request.url)));
     }
     if (role === 'WORKER') {
       return NextResponse.redirect(new URL('/inspections?scope=mine', request.url));
@@ -28,7 +41,7 @@ export function middleware(request: NextRequest) {
   if (!token && isProtectedRoute) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
+    return withCleanup(NextResponse.redirect(loginUrl));
   }
 
   // 3. 역방향 가드: 이미 로그인된 사용자가 /login 페이지 접근 시 해당 홈으로 전송
@@ -44,7 +57,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/inspections?scope=mine', request.url));
   }
 
-  return NextResponse.next();
+  return withCleanup(NextResponse.next());
 }
 
 export const config = {
