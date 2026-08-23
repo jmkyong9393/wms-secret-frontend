@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/ui/select";
-import type { CurrentUser } from "@/features/auth/types/authTypes";
+import type { CurrentUser } from "@/entities/user/model/types";
 import type { AssignableRole } from "@/features/employees/types/employee";
 import { getAssignableRoles } from "@/features/employees/utils/permissions";
 import { ROLE_LABEL } from "@/features/employees/utils/badges";

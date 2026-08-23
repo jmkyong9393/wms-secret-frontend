@@ -1,4 +1,4 @@
-import type { Role, UserStatus } from "@/features/auth/types/authTypes";
+import type { Role, UserStatus } from "@/entities/user/model/types";
 
 // POST /api/v1/auth/login 요청 데이터
 export interface LoginRequest {

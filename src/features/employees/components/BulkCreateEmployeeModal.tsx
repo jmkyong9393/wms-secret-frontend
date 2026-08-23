@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { X, Download, Upload, CheckCircle2, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import * as XLSX from "xlsx";
-import type { CurrentUser } from "@/features/auth/types/authTypes";
+import type { CurrentUser } from "@/entities/user/model/types";
 import type { AssignableRole, BulkCreateEmployeeResult } from "@/features/employees/types/employee";
 import { getAssignableRoles } from "@/features/employees/utils/permissions";
 import { useBulkCreateEmployeesMutation } from "@/features/employees/hooks/useEmployeeMutations";

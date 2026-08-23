@@ -1,4 +1,4 @@
-import type { Role, UserStatus } from "@/features/auth/types/authTypes";
+import type { Role, UserStatus } from "@/entities/user/model/types";
 
 // 역할별 배지 색상 / 한글 라벨
 export const ROLE_BADGE_STYLE: Record<Role, string> = {

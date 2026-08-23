@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/ui/select";
-import type { CurrentUser, UserStatus } from "@/features/auth/types/authTypes";
+import type { CurrentUser, UserStatus } from "@/entities/user/model/types";
 import type { EmployeeListItem, AssignableRole } from "@/features/employees/types/employee";
 import { canManageEmployees, getAssignableRoles } from "@/features/employees/utils/permissions";
 import {

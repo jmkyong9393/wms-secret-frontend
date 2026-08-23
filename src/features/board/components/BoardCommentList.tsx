@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Textarea } from "@/shared/ui/textarea";
 import { Button } from "@/shared/ui/button";
-import type { CurrentUser } from "@/features/auth/types/authTypes";
+import type { CurrentUser } from "@/entities/user/model/types";
 import type { BoardComment } from "@/features/board/types/board";
 import { canDeleteComment, canEditComment } from "@/features/board/utils/permissions";
 import {

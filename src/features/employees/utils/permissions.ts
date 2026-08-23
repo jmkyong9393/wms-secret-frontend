@@ -1,4 +1,4 @@
-import type { CurrentUser } from "@/features/auth/types/authTypes";
+import type { CurrentUser } from "@/entities/user/model/types";
 import { ASSIGNABLE_ROLES, type AssignableRole } from "@/features/employees/types/employee";
 
 /**
