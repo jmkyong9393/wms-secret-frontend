@@ -4,7 +4,7 @@ import { API_BASE_URL } from '@/lib/api-client';
 import React, { useState, useEffect } from 'react';
 import BookCover from '@/components/BookCover';
 import Link from 'next/link';
-import BinPacking3DViewer from '@/components/outbound/BinPacking3DViewer';
+import BinPacking3DViewer from '@/features/outbound/components/BinPacking3DViewer';
 import { 
   Package, 
   Box, 
