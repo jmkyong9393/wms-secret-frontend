@@ -70,9 +70,3 @@ export interface InspectionItem {
   defects_found: InspectionDefect[];
   image_urls?: string[];
 }
-
-export interface LpnPrintData {
-  lpn_barcode: string;
-  book: { title: string; author: string; isbn: string };
-  worker_id: string;
-}
