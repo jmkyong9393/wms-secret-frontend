@@ -19,6 +19,11 @@ import { LpnPrintLabel } from '@/entities/label/ui/LpnPrintLabel';
 import { validateIsbn13, isLpnCode } from '@/features/inbound/isbnValidation';
 import { TRACK1_IMAGE_COUNT, TRACK1_SHOTS, shotAt, shotLabel } from '@/features/inbound/captureSequence';
 import { saveDraft, loadDraft, clearDraft } from '@/features/inbound/inspectionDraft';
+import { ScanBarcodePanel } from '@/features/inbound/components/ScanBarcodePanel';
+import { PrintStickerPanel } from '@/features/inbound/components/PrintStickerPanel';
+import { CaptureControlsPanel } from '@/features/inbound/components/CaptureControlsPanel';
+import { ResultPanel } from '@/features/inbound/components/ResultPanel';
+import { InboundQueuePanel } from '@/features/inbound/components/InboundQueuePanel';
 
 type Step = 'SELECT_TYPE' | 'SCAN_BARCODE' | 'PRINT_STICKER' | 'VISION_EVALUATION' | 'RESULT';
 type InboundType = 'NEW_FASTTRACK' | 'USED_RETURN_INSPECTION';
@@ -848,6 +853,162 @@ export default function InboundScannerPage() {
     setStep('SELECT_TYPE');
   };
 
+  // 수동 입력 조회 - LPN 재촬영/신품/중고 채번 분기 (스캐너 성공 경로와 동일 규약)
+  const handleManualLookup = async () => {
+                  const inputVal = isbn.trim();
+                  if (!inputVal || inputVal.length < 4) {
+                    alert('유효한 바코드를 입력해주세요.');
+                    return;
+                  }
+                  
+                  // LPN 재촬영 모드 전환
+                  if (inputVal.toUpperCase().startsWith('LPN-')) {
+                    const lpn = inputVal.toUpperCase();
+                    setCurrentLpn(lpn);
+                    setIsLoadingBook(true);
+
+                    // 스캐너 경로와 동일하게 원장(서버) 우선 조회 (lookupBookByLpn 주석 참조).
+                    const existingBook = await lookupBookByLpn(lpn);
+
+                    if (existingBook) {
+                      setIsbn(existingBook.isbn || '');
+                      setBookInfo(existingBook);
+                    } else {
+                      setIsbn('');
+                      setBookInfo({ title: '정보 없음 (재촬영 진행)', categoryName: 'LPN 재스캔', isRescan: true });
+                    }
+
+                    setIsLoadingBook(false);
+                    setLpnIssuedNow(false); // 기존 LPN이므로 뒤로가기로 회수하지 않는다
+                    setStep('PRINT_STICKER');
+                    return;
+                  }
+
+                  // 신규 입고 모드
+                  setIsbn(inputVal);
+                  if (inboundType === 'NEW_FASTTRACK') {
+                    setCurrentLpn('');
+                    setLpnIssuedNow(false);
+                    setBookInfo(null);
+                    setIsLoadingBook(true);
+                    setFasttrackQty(1);
+                    setStep('PRINT_STICKER');
+                    await resolveBookInfo(inputVal, null);
+                    return;
+                  }
+
+                  setBookInfo(null);
+                  setIsLoadingBook(true);
+                  setStep('PRINT_STICKER');
+                  let issued: IssuedLpn;
+                  try {
+                    issued = await issueLPN(inputVal);
+                    setCurrentLpn(issued.lpn);
+                    setLpnIssuedNow(true);
+                  } catch (e: any) {
+                    alert(e?.message || 'LPN 채번 실패');
+                    setCurrentLpn('');
+                    setLpnIssuedNow(false);
+                    setIsLoadingBook(false);
+                    setStep('SCAN_BARCODE');
+                    return;
+                  }
+
+                  await resolveBookInfo(inputVal, issued.book);
+  };
+
+  // 신품 Fast-track 즉시 입고 (사진 없이 수량 입고)
+  const handleFasttrackSubmit = async () => {
+                  try {
+                    setIsAnalyzing(true);
+                    const res = await fetch(`${API_BASE_URL}/api/v1/inbound/fasttrack`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        isbn: isbn,
+                        title: bookInfo?.title || '신품 도서',
+                        imageUrl: bookInfo?.imageUrl || '',
+                        qty: fasttrackQty,
+                        // 신품 입고 작업자. 이 값이 있어야 "나의 검수 내역"이 신품 입고분을
+                        // 걸러낼 수 있다 (중고 /evaluate의 worker_id와 같은 역할).
+                        worker_id: user?.employeeId || null
+                      })
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      alert(data.message || `⚡ [신품 패스트트랙] '${bookInfo?.title || '신품 도서'}' ${fasttrackQty}권이 재고로 즉시 입고되었습니다!`);
+                      // 결과 초기화 및 다음 스캔 준비
+                      setStep('SCAN_BARCODE');
+                      setIsbn('');
+                      setBookInfo(null);
+                      setFasttrackQty(1);
+                    } else {
+                      alert('패스트트랙 입고 처리 실패');
+                    }
+                  } catch (e) {
+                    alert('패스트트랙 서버 통신 에러');
+                  } finally {
+                    setIsAnalyzing(false);
+                  }
+  };
+
+  // 라벨 인쇄 후 촬영 단계 진입 (자동 인쇄 꺼짐 시 즉시 촬영). 재출력·신규 버튼 공통 경로.
+  const printLabelThenCapture = async () => {
+                    // 시스템 설정에서 자동 인쇄를 끈 경우 프린터 전송 없이 바로 촬영 단계로
+                    if (!getSystemSettings().autoPrintTrigger) {
+                      setStep('VISION_EVALUATION');
+                      return;
+                    }
+                    setIsPrinting(true);
+                    try {
+                      const result = await labelsAPI.printLpn(
+                        currentLpn,
+                        bookInfo?.title,
+                        isbn,
+                        user?.name ? `${user.employeeId} (${user.name})` : undefined
+                      );
+                      if (result.skipped) {
+                        alert("라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).");
+                      } else if (!result.sent && !result.queued) {
+                        alert("라벨 전송에 실패했습니다.");
+                      }
+                    } catch (e) {
+                      console.error(e);
+                      alert("라벨 프린터 통신 중 오류가 발생했습니다. 프린터 전원/LAN 연결을 확인해주세요.");
+                    } finally {
+                      setIsPrinting(false);
+                      setStep('VISION_EVALUATION');
+                    }
+  };
+
+  // 촬영 완료 - 필수 컷 검증 후 단일 mutation으로 전송 (큐 적재 포함)
+  const handleSubmitEvaluation = () => {
+                  if (capturedImages.length < TRACK1_IMAGE_COUNT) {
+                    const missing = TRACK1_SHOTS.slice(capturedImages.length).map((s) => s.short).join(', ');
+                    alert(`필수 ${TRACK1_IMAGE_COUNT}장이 필요합니다. 남은 촬영: ${missing}`);
+                    return;
+                  }
+                  
+                  // 전송 경로는 이 mutation 하나뿐이다. 큐 적재도 mutation이 담당한다.
+                  evaluateMutation.mutate({
+                    lpn: currentLpn,
+                    images: capturedImages.map(img => img.blob),
+                    previewUrl: capturedImages[0].url,
+                    book_metadata: bookInfo
+                  });
+  };
+
+  // 다음 도서 스캔 준비 - 로컬 상태·초안 정리
+  const resetForNextScan = () => {
+                setStep('SCAN_BARCODE');
+                setIsbn('');
+                setIsPrinting(false);
+                setIsAnalyzing(false);
+                setCapturedImages([]);
+                clearDraft();
+                setResumedDraft(null);
+  };
+
   const handleBack = () => {
     if (step === 'SCAN_BARCODE') {
       setStep('SELECT_TYPE');
@@ -1295,453 +1456,54 @@ export default function InboundScannerPage() {
           <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto absolute top-3 left-1/2 -translate-x-1/2"></div>
         
         {step === 'SCAN_BARCODE' && (
-          <div className="space-y-4 pt-4">
-            <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-2 text-center">도서 식별</h3>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="ISBN 또는 LPN (재촬영) 수동 입력"
-                value={isbn}
-                onChange={(e) => setIsbn(e.target.value)}
-                /* min-w-0: flex 자식의 기본 min-width는 auto라 내용 폭 아래로 줄지 않는다.
-                   이게 없으면 좁은 화면에서 입력창이 버튼을 밀어 버튼 글자가 세로로 접힌다. */
-                className="flex-1 min-w-0 border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
-              />
-              <button 
-                onClick={async () => {
-                  const inputVal = isbn.trim();
-                  if (!inputVal || inputVal.length < 4) {
-                    alert('유효한 바코드를 입력해주세요.');
-                    return;
-                  }
-                  
-                  // LPN 재촬영 모드 전환
-                  if (inputVal.toUpperCase().startsWith('LPN-')) {
-                    const lpn = inputVal.toUpperCase();
-                    setCurrentLpn(lpn);
-                    setIsLoadingBook(true);
-
-                    // 스캐너 경로와 동일하게 원장(서버) 우선 조회 (lookupBookByLpn 주석 참조).
-                    const existingBook = await lookupBookByLpn(lpn);
-
-                    if (existingBook) {
-                      setIsbn(existingBook.isbn || '');
-                      setBookInfo(existingBook);
-                    } else {
-                      setIsbn('');
-                      setBookInfo({ title: '정보 없음 (재촬영 진행)', categoryName: 'LPN 재스캔', isRescan: true });
-                    }
-
-                    setIsLoadingBook(false);
-                    setLpnIssuedNow(false); // 기존 LPN이므로 뒤로가기로 회수하지 않는다
-                    setStep('PRINT_STICKER');
-                    return;
-                  }
-
-                  // 신규 입고 모드
-                  setIsbn(inputVal);
-                  if (inboundType === 'NEW_FASTTRACK') {
-                    setCurrentLpn('');
-                    setLpnIssuedNow(false);
-                    setBookInfo(null);
-                    setIsLoadingBook(true);
-                    setFasttrackQty(1);
-                    setStep('PRINT_STICKER');
-                    await resolveBookInfo(inputVal, null);
-                    return;
-                  }
-
-                  setBookInfo(null);
-                  setIsLoadingBook(true);
-                  setStep('PRINT_STICKER');
-                  let issued: IssuedLpn;
-                  try {
-                    issued = await issueLPN(inputVal);
-                    setCurrentLpn(issued.lpn);
-                    setLpnIssuedNow(true);
-                  } catch (e: any) {
-                    alert(e?.message || 'LPN 채번 실패');
-                    setCurrentLpn('');
-                    setLpnIssuedNow(false);
-                    setIsLoadingBook(false);
-                    setStep('SCAN_BARCODE');
-                    return;
-                  }
-
-                  await resolveBookInfo(inputVal, issued.book);
-                }}
-                /* shrink-0 + whitespace-nowrap: 버튼이 글자 폭 아래로 눌리면 '조 회'로 접힌다 */
-                className="shrink-0 whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg shadow-emerald-200 dark:shadow-none flex items-center gap-1.5"
-              >
-                <ScanLine className="w-4 h-4" />
-                조회
-              </button>
-            </div>
-          </div>
+          <ScanBarcodePanel isbn={isbn} setIsbn={setIsbn} onLookup={handleManualLookup} />
         )}
 
         {step === 'PRINT_STICKER' && (
-          <div className="space-y-4 pt-4 animate-in slide-in-from-right-4">
-            <div className="bg-slate-50 dark:bg-slate-800/90 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 mb-2 shadow-inner transition-colors">
-              <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2.5 uppercase tracking-wider">인식된 도서 정보 (ISBN: {isbn})</p>
-              
-              {isLoadingBook ? (
-                <div className="flex items-center space-x-2 py-2">
-                  <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">알라딘 API 정보 불러오는 중...</span>
-                </div>
-              ) : bookInfo?.title ? (
-                <div className="flex gap-3 items-start">
-                  <BookCover
-                    src={bookInfo?.imageUrl}
-                    title={bookInfo?.title || '입고 도서'}
-                    author={bookInfo?.author || ''}
-                    isbn={isbn}
-                    className="w-16 h-24"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mb-0.5 truncate">{bookInfo.categoryName?.split('>').pop()}</p>
-                    <p className="font-bold text-slate-900 dark:text-white text-sm leading-tight mb-1 line-clamp-2">{bookInfo.title}</p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">{bookInfo.author} | {bookInfo.publisher}</p>
-                    {bookInfo.price && <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 mb-1">{bookInfo.price.toLocaleString()}원</p>}
-                    {bookInfo.description && (
-                      <p className="text-[10px] text-gray-400 line-clamp-2 leading-tight">
-                        {bookInfo.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <p className="font-bold text-gray-800 dark:text-gray-100">{bookInfo?.title || '미등록 도서'}</p>
-              )}
-
-              {inboundType === 'NEW_FASTTRACK' ? (
-                <div className="mt-3 flex items-center justify-between border-t border-gray-200 dark:border-slate-700 pt-3">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">⚡ 입고 수량 (수량 기입 가능)</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFasttrackQty(prev => Math.max(1, prev - 1))}
-                      className="w-8 h-8 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 font-bold text-slate-800 dark:text-slate-100 text-base flex items-center justify-center transition-colors"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      value={fasttrackQty}
-                      onChange={(e) => setFasttrackQty(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-16 h-8 border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg text-center font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setFasttrackQty(prev => prev + 1)}
-                      className="w-8 h-8 rounded-lg bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-950 dark:hover:bg-indigo-900 font-bold text-indigo-700 dark:text-indigo-300 text-base flex items-center justify-center transition-colors"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-3 flex items-center justify-between border-t border-gray-200 dark:border-slate-700 pt-2">
-                  <span className="text-xs text-blue-600 dark:text-blue-400 font-bold">발급 예정 LPN</span>
-                  <span className="text-xs font-mono font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded">{currentLpn}</span>
-                </div>
-              )}
-            </div>
-
-            {inboundType === 'NEW_FASTTRACK' ? (
-              <button 
-                onClick={async () => {
-                  try {
-                    setIsAnalyzing(true);
-                    const res = await fetch(`${API_BASE_URL}/api/v1/inbound/fasttrack`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        isbn: isbn,
-                        title: bookInfo?.title || '신품 도서',
-                        imageUrl: bookInfo?.imageUrl || '',
-                        qty: fasttrackQty,
-                        // 신품 입고 작업자. 이 값이 있어야 "나의 검수 내역"이 신품 입고분을
-                        // 걸러낼 수 있다 (중고 /evaluate의 worker_id와 같은 역할).
-                        worker_id: user?.employeeId || null
-                      })
-                    });
-                    if (res.ok) {
-                      const data = await res.json();
-                      alert(data.message || `⚡ [신품 패스트트랙] '${bookInfo?.title || '신품 도서'}' ${fasttrackQty}권이 재고로 즉시 입고되었습니다!`);
-                      // 결과 초기화 및 다음 스캔 준비
-                      setStep('SCAN_BARCODE');
-                      setIsbn('');
-                      setBookInfo(null);
-                      setFasttrackQty(1);
-                    } else {
-                      alert('패스트트랙 입고 처리 실패');
-                    }
-                  } catch (e) {
-                    alert('패스트트랙 서버 통신 에러');
-                  } finally {
-                    setIsAnalyzing(false);
-                  }
-                }}
-                className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-black py-4 px-6 rounded-2xl shadow-xl shadow-indigo-200 dark:shadow-none flex items-center justify-center gap-2 cursor-pointer transition-all text-base"
-              >
-                <Zap className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse" />
-                <span>⚡ 신품 도서 Fast-track 입고 완료 ({fasttrackQty}권)</span>
-              </button>
-            ) : bookInfo?.isRescan ? (
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={async () => {
-                    // 시스템 설정에서 자동 인쇄를 끈 경우 프린터 전송 없이 바로 촬영 단계로
-                    if (!getSystemSettings().autoPrintTrigger) {
-                      setStep('VISION_EVALUATION');
-                      return;
-                    }
-                    setIsPrinting(true);
-                    try {
-                      const result = await labelsAPI.printLpn(
-                        currentLpn,
-                        bookInfo?.title,
-                        isbn,
-                        user?.name ? `${user.employeeId} (${user.name})` : undefined
-                      );
-                      if (result.skipped) {
-                        alert("라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).");
-                      } else if (!result.sent && !result.queued) {
-                        alert("라벨 전송에 실패했습니다.");
-                      }
-                    } catch (e) {
-                      console.error(e);
-                      alert("라벨 프린터 통신 중 오류가 발생했습니다. 프린터 전원/LAN 연결을 확인해주세요.");
-                    } finally {
-                      setIsPrinting(false);
-                      setStep('VISION_EVALUATION');
-                    }
-                  }}
-                  disabled={isPrinting}
-                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-colors"
-                >
-                  <Printer className="w-5 h-5" />
-                  <span>스티커 재출력 & 촬영</span>
-                </button>
-                <button 
-                  onClick={() => setStep('VISION_EVALUATION')}
-                  className="flex-[2] bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-xl font-bold flex items-center justify-center transition-all shadow-lg shadow-purple-200 dark:shadow-none"
-                >
-                  <Camera className="w-5 h-5 mr-2" />
-                  기존 라벨지 유지 및 재촬영 진행
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={async () => {
-                  // 촬영 단계로 넘어가면 그 LPN은 사용 확정이다. 이후 뒤로가기로 회수하지 않는다.
-                  setLpnIssuedNow(false);
-                  // 시스템 설정에서 자동 인쇄를 끈 경우 프린터 전송 없이 바로 촬영 단계로
-                  if (!getSystemSettings().autoPrintTrigger) {
-                    setStep('VISION_EVALUATION');
-                    return;
-                  }
-                  setIsPrinting(true);
-                  try {
-                    const result = await labelsAPI.printLpn(
-                      currentLpn,
-                      bookInfo?.title,
-                      isbn,
-                      user?.name ? `${user.employeeId} (${user.name})` : undefined
-                    );
-                    if (result.skipped) {
-                      alert("라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).");
-                    } else if (!result.sent && !result.queued) {
-                      alert("라벨 전송에 실패했습니다.");
-                    }
-                  } catch (e) {
-                    console.error(e);
-                    alert("라벨 프린터 통신 중 오류가 발생했습니다. 프린터 전원/LAN 연결을 확인해주세요.");
-                  } finally {
-                    setIsPrinting(false);
-                    setStep('VISION_EVALUATION');
-                  }
-                }}
-                disabled={isPrinting}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-4 rounded-xl font-bold flex items-center justify-center transition-all shadow-lg shadow-blue-200 dark:shadow-none"
-              >
-                {isPrinting ? <RefreshCcw className="w-5 h-5 animate-spin mr-2" /> : <Printer className="w-5 h-5 mr-2" />}
-                {isPrinting ? '라벨 출력 중...' : '검열지 프린트 및 부착 완료'}
-              </button>
-            )}
-          </div>
+          <PrintStickerPanel
+            isbn={isbn}
+            bookInfo={bookInfo}
+            isLoadingBook={isLoadingBook}
+            inboundType={inboundType}
+            fasttrackQty={fasttrackQty}
+            setFasttrackQty={setFasttrackQty}
+            currentLpn={currentLpn}
+            isPrinting={isPrinting}
+            onFasttrack={handleFasttrackSubmit}
+            onPrintAndCapture={printLabelThenCapture}
+            onSkipPrintCapture={() => setStep('VISION_EVALUATION')}
+            onConfirmPrintAndCapture={() => {
+              // 촬영 단계로 넘어가면 그 LPN은 사용 확정이다. 이후 뒤로가기로 회수하지 않는다.
+              setLpnIssuedNow(false);
+              printLabelThenCapture();
+            }}
+          />
         )}
 
         {step === 'VISION_EVALUATION' && (
-          <div className="space-y-4 pt-2 animate-in slide-in-from-right-4">
-            <p className="text-center text-xs font-bold text-gray-600 dark:text-gray-300 mb-2">
-              {TRACK1_SHOTS.map((s) => s.short).join(' · ')} 필수 {TRACK1_IMAGE_COUNT}장 + 훼손 부위 N장
-            </p>
-            {/* 남은 필수 컷을 명시한다. 버튼만 비활성화해 두면 왜 못 넘어가는지 알 수 없다. */}
-            {capturedImages.length < TRACK1_IMAGE_COUNT && (
-              <p className="text-center text-[11px] font-semibold text-amber-600 dark:text-amber-400 -mt-1 mb-1">
-                남은 필수 촬영: {TRACK1_SHOTS.slice(capturedImages.length).map((s) => s.short).join(', ')}
-              </p>
-            )}
-            
-            <div className="flex gap-2">
-              <button 
-                onClick={takePhoto}
-                disabled={isAnalyzing}
-                className="flex-1 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-400 text-white py-4 rounded-xl font-bold flex flex-col items-center justify-center transition-all shadow-lg"
-              >
-                <Camera className="w-6 h-6 mb-1" />
-                <span>사진 촬영 ({capturedImages.length}장)</span>
-                <span className="text-[10px] font-medium opacity-70 mt-0.5">화면 셔터 · Space/Enter</span>
-              </button>
-
-              <button 
-                onClick={() => {
-                  if (capturedImages.length < TRACK1_IMAGE_COUNT) {
-                    const missing = TRACK1_SHOTS.slice(capturedImages.length).map((s) => s.short).join(', ');
-                    alert(`필수 ${TRACK1_IMAGE_COUNT}장이 필요합니다. 남은 촬영: ${missing}`);
-                    return;
-                  }
-                  
-                  // 전송 경로는 이 mutation 하나뿐이다. 큐 적재도 mutation이 담당한다.
-                  evaluateMutation.mutate({
-                    lpn: currentLpn,
-                    images: capturedImages.map(img => img.blob),
-                    previewUrl: capturedImages[0].url,
-                    book_metadata: bookInfo
-                  });
-                }}
-                disabled={evaluateMutation.isPending || capturedImages.length < TRACK1_IMAGE_COUNT}
-                className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white py-4 rounded-xl font-bold flex flex-col items-center justify-center transition-all shadow-lg shadow-purple-200"
-              >
-                <CheckCircle2 className="w-6 h-6 mb-1" />
-                <span>촬영 완료 (AI 전송)</span>
-              </button>
-            </div>
-          </div>
+          <CaptureControlsPanel
+            capturedCount={capturedImages.length}
+            isAnalyzing={isAnalyzing}
+            isSubmitting={evaluateMutation.isPending}
+            onTakePhoto={takePhoto}
+            onSubmit={handleSubmitEvaluation}
+          />
         )}
 
         {step === 'RESULT' && (
-          <div className="pt-4 animate-in fade-in">
-            <button 
-              onClick={() => {
-                setStep('SCAN_BARCODE');
-                setIsbn('');
-                setIsPrinting(false);
-                setIsAnalyzing(false);
-                setCapturedImages([]);
-                clearDraft();
-                setResumedDraft(null);
-              }}
-              className="w-full bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white py-4 rounded-xl font-bold flex items-center justify-center transition-all shadow-lg shadow-gray-300 dark:shadow-none"
-            >
-              <RefreshCcw className="w-5 h-5 mr-2" />
-              다음 도서 스캔하기
-            </button>
-          </div>
+          <ResultPanel onNextScan={resetForNextScan} />
         )}
       </div>
       )}
       
-      {/* 작업 진행 현황 패널 (비동기 큐 모니터링) */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-800 mx-2 sm:mx-0 transition-all">
-        <div className="flex items-center justify-between mb-4 gap-2">
-          <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm shrink-0">작업 진행 현황</h3>
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            {finishedCount > 0 && (
-              <button
-                onClick={clearFinishedTasks}
-                className="text-[11px] font-bold text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 border border-gray-200 dark:border-gray-700 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-              >
-                완료 기록 지우기 ({finishedCount})
-              </button>
-            )}
-            <span className="bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">
-              대기 {inFlightCount}건
-            </span>
-          </div>
-        </div>
-
-        {visibleQueue.length === 0 ? (
-          <div className="py-6 flex justify-center items-center">
-            <p className="text-gray-400 dark:text-gray-500 text-sm font-medium">아직 촬영된 도서가 없습니다.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {visibleQueue.map(item => {
-              const isInFlight = item.status === 'UPLOADING' || item.status === 'ANALYZING';
-              return (
-              <div
-                key={item.id}
-                className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-500 ${
-                  item.status === 'COMPLETED'
-                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-100 dark:border-emerald-900'
-                    : item.status === 'FAILED'
-                      ? 'bg-red-50 dark:bg-red-950/40 border-red-100 dark:border-red-900'
-                      : 'bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center space-x-3 w-1/2">
-                  {isInFlight ? (
-                    <RefreshCcw className="w-5 h-5 text-indigo-500 animate-spin flex-shrink-0" />
-                  ) : item.status === 'FAILED' ? (
-                    <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
-                  ) : (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-                  )}
-                  <div className="truncate">
-                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate">{item.title}</p>
-                    <p className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate">{item.lpn}</p>
-                  </div>
-                </div>
-                <div className="flex-1 flex flex-col items-end justify-center">
-                  {isInFlight ? (
-                    <div className="w-full max-w-[120px] text-right">
-                      <div className="flex justify-between text-[10px] text-indigo-600 dark:text-indigo-300 font-bold mb-1">
-                        <span className="truncate pr-1">{item.message || '대기 중...'}</span>
-                        <span>{item.progress}%</span>
-                      </div>
-                      <div className="w-full bg-indigo-100 dark:bg-indigo-950 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500 ease-out"
-                          style={{ width: `${item.progress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <div className="flex flex-col items-end">
-                        <span className={`text-xs font-bold px-2 py-1 rounded shadow-sm whitespace-nowrap ${
-                          item.status === 'FAILED'
-                            ? 'text-red-700 dark:text-red-300 bg-red-200 dark:bg-red-900'
-                            : 'text-emerald-700 dark:text-emerald-300 bg-emerald-200 dark:bg-emerald-900'
-                        }`}>
-                          {item.status === 'FAILED' ? '실패' : item.grade}
-                        </span>
-                        {item.message && <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 text-right max-w-[120px] truncate" title={item.message}>{item.message}</span>}
-                      </div>
-                      <button
-                        onClick={() => reprintLpnLabel(item.lpn, item.title)}
-                        disabled={reprintingLpn === item.lpn}
-                        title="LPN 라벨 재출력"
-                        className="shrink-0 p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 disabled:opacity-40 transition-colors cursor-pointer"
-                      >
-                        {reprintingLpn === item.lpn
-                          ? <RefreshCcw className="w-4 h-4 animate-spin" />
-                          : <Printer className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <InboundQueuePanel
+        visibleQueue={visibleQueue}
+        inFlightCount={inFlightCount}
+        finishedCount={finishedCount}
+        reprintingLpn={reprintingLpn}
+        onClearFinished={clearFinishedTasks}
+        onReprint={reprintLpnLabel}
+      />
     </div>
     </div>
   );
