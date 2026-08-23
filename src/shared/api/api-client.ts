@@ -1,5 +1,5 @@
 import axios from "axios";
-import { CURRENT_USER_STORAGE_KEY } from "@/features/auth/store/authAtoms";
+import { CURRENT_USER_STORAGE_KEY } from "@/entities/user/model/authAtoms";
 
 // 백엔드 API 기본 주소.
 //

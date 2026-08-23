@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
+import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 
 import { Plus, Download } from "lucide-react";
 import { Button } from "@/shared/ui/button";

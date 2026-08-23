@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { isAxiosError } from 'axios';
 import { Button } from '@/shared/ui/button';
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
+import { currentUserAtom } from '@/entities/user/model/authAtoms';
 import { useChangePasswordMutation } from '@/features/auth/hooks/useChangePasswordMutation';
 import { checkPasswordPolicy, getPolicyChecklist } from '@/features/auth/utils/passwordPolicy';
 import type { AuthMeResponse } from '@/features/auth/types/authApiTypes';

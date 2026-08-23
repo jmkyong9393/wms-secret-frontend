@@ -3,7 +3,7 @@ import { API_BASE_URL } from '@/shared/api/api-client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
+import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 import { 
   LayoutDashboard, 
   Camera, 

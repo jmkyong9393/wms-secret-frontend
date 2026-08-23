@@ -53,7 +53,7 @@ const PROFILES: Record<Role, { employeeId: string; name: string }> = {
 
 async function renderAs(role: Role) {
   const { EmployeeManagementView } = await import("./EmployeeManagementView");
-  const { currentUserAtom } = await import("@/features/auth/store/authAtoms");
+  const { currentUserAtom } = await import("@/entities/user/model/authAtoms");
 
   const currentUser: CurrentUser = { ...PROFILES[role], role, mustChangePassword: false };
 

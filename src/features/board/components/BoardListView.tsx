@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Input } from "@/shared/ui/input";
 import { Button } from "@/shared/ui/button";
-import { useHydratedUser } from "@/features/auth/hooks/useHydratedUser";
+import { useHydratedUser } from "@/entities/user/model/useHydratedUser";
 import { useBoardPostsQuery } from "@/features/board/hooks/useBoardPostsQuery";
 import { BoardPostList } from "@/features/board/components/BoardPostList";
 import { CATEGORY_FILTER_ALL } from "@/features/board/components/BoardCategoryFilter";
