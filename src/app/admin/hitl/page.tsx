@@ -34,187 +34,25 @@ import { UBCI_GRADE_POLICY, HITL_ROUTING_POLICY, gradeFromUbciScore, defaultDeci
 import { DECISION_OPTIONS, GRADE_OPTIONS, REASON_OPTIONS } from "@/features/hitl/constants/approvalOptions";
 import { REASON_CODE_MAP, HITL_ESCALATION_LABELS } from "@/features/hitl/constants/reasonLabels";
 import { formatQueuedAt, getPrimaryDefectReason } from "@/features/hitl/utils";
+import { useAiReinspection } from "@/features/hitl/hooks/useAiReinspection";
+import { PipelineLogPanel } from "@/features/hitl/components/PipelineLogPanel";
+import { ReinspectionLiveModal } from "@/features/hitl/components/ReinspectionLiveModal";
 
 export default function AdminHitlDashboard() {
-  const [reinspectingIds, setReinspectingIds] = useState<Set<string>>(new Set());
-  const [activeReinspectionTask, setActiveReinspectionTask] = useState<{
-    id: string;
-    lpn: string;
-    title: string;
-    step: number;
-    logs: string[];
-    isDone: boolean;
-    error?: string;
-  } | null>(null);
-
-  // 로그 패널은 실제 파이프라인 노드 명칭(Detector→Vision→Policy→Critic→Supervisor→Report)
-  // 기준. 구 명칭("Explainer Agent") 저장 키는 마운트 시 청소한다.
-  const [pipelineLogs, setPipelineLogs] = useState<Array<{ time: string; agent: string; text: string; type: string }>>([]);
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("hitl_explainer_logs");
-      const saved = localStorage.getItem("hitl_pipeline_logs");
-      if (saved) {
-        try {
-          setPipelineLogs(JSON.parse(saved));
-        } catch (e) {}
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isMounted && typeof window !== "undefined") {
-      localStorage.setItem("hitl_pipeline_logs", JSON.stringify(pipelineLogs));
-    }
-  }, [pipelineLogs, isMounted]);
-
-  const handleClearLogs = () => {
-    setPipelineLogs([]);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("hitl_pipeline_logs");
-    }
-  };
-
-  const handleTriggerAiReinspect = async (jobId: string) => {
-    const targetTask = tasks.find((t) => t.id === jobId) as any;
-    const lpnStr = targetTask?.agent_logs?.lpn_barcode || targetTask?.lpn_barcode || "LPN 미발급";
-    const titleStr = targetTask?.book_title || "수동 검수 요청 도서";
-
-    setReinspectingIds((prev) => new Set(prev).add(jobId));
-    setActiveReinspectionTask({
-      id: jobId,
-      lpn: lpnStr,
-      title: titleStr,
-      step: 1,
-      logs: [
-        // 이 시점에 확실한 사실은 "요청을 보냈다"뿐이다. 워커가 아직 작업을 집지도
-        // 않았는데 "Detector 추론 중"이라고 쓰면 화면이 없는 사실을 말하게 된다.
-        // 실제 단계별 서술은 파이프라인이 끝난 뒤 agent_logs에서 가져온다.
-        `[${new Date().toLocaleTimeString()}] 재검수 요청 전송...`,
-      ],
-      isDone: false,
-    });
-
-    try {
-      // 재검수는 Celery 비동기다. 큐 등록 응답에는 판독 결과가 없으므로(십수 초 뒤 완료),
-      // 등록 직후에는 "진행 중"만 보여주고 **실제 결과가 DB에 반영되면 그때 렌더**한다.
-      //
-      // 완료 판정은 트리거 전 스냅샷 대비 policy_text/report_text 두 필드의 변화로만 한다.
-      // agent_logs 전체 비교는 큐잉 직전 hitl_locked 기록만으로도 '완료'로 오판한다.
-      // (경위: 90_코드_변경이력_설계배경_아카이브)
-      const t = () => new Date().toLocaleTimeString();
-      const baseline = await adminAPI.getInspectionResult(jobId).catch(() => null);
-      const baselinePolicyText = baseline?.agent_logs?.policy_text;
-      const baselineReportText = baseline?.agent_logs?.report_text;
-      await adminAPI.triggerAiReinspection(jobId);
-
-      setActiveReinspectionTask((prev) =>
-        prev && prev.id === jobId
-          ? { ...prev, step: 2, logs: [...prev.logs, `[${t()}] ⏳ 큐 등록 완료 - 파이프라인 실행을 기다리는 중...`] }
-          : prev
-      );
-
-      // --- 결과 폴링 ---
-      const POLL_MS = 2000;
-      const MAX_WAIT_MS = 120000;
-      const startedAt = Date.now();
-      let result: Awaited<ReturnType<typeof adminAPI.getInspectionResult>> | null = null;
-
-      while (Date.now() - startedAt < MAX_WAIT_MS) {
-        await new Promise((r) => setTimeout(r, POLL_MS));
-        try {
-          const cur = await adminAPI.getInspectionResult(jobId);
-          const lg = (cur?.agent_logs || {}) as Record<string, string | undefined>;
-          // 재검수가 끝나면 Policy/Report 서술이 채워진다. 단, 그 값이 트리거 전 기준선과
-          // 완전히 같으면(=옛 시도의 잔여 텍스트) 새 실행이 아직 반영 안 된 것이므로 기다린다.
-          const changed = lg.policy_text !== baselinePolicyText || lg.report_text !== baselineReportText;
-          if ((lg.policy_text || lg.report_text) && changed) {
-            result = cur;
-            break;
-          }
-        } catch {
-          // 일시적 조회 실패는 무시하고 다음 주기에 재시도한다.
-        }
-      }
-
-      if (!result) {
-        setActiveReinspectionTask((prev) =>
-          prev && prev.id === jobId
-            ? {
-                ...prev,
-                isDone: true,
-                logs: [...prev.logs, `[${t()}] ⚠️ 제한 시간(2분) 내에 결과가 반영되지 않았습니다. 목록을 새로고침해 확인하세요.`],
-              }
-            : prev
-        );
-        return;
-      }
-
-      const logs = (result.agent_logs || {}) as Record<string, string | undefined>;
-      const score = result.ubci_score;
-      const scoreStr = typeof score === "number" ? `UBCI ${score}점` : "UBCI 점수 보류";
-      // 실제 서술만 싣는다. 없는 단계는 줄 자체를 만들지 않는다 - 문구를 지어내지 않기 위해서다.
-      const realLines: Array<[string, string | undefined]> = [
-        ["🔬 [Detector]", logs.detector_text],
-        ["👁️ [Vision Agent]", logs.vision_text],
-        ["⚖️ [Policy Agent]", logs.policy_text],
-        ["🛡️ [Critic Agent]", logs.critic_text],
-        ["🧭 [Supervisor]", logs.supervisor_rationale],
-        ["💬 [Report Agent]", logs.report_text],
-      ];
-      const summaryMsg = logs.report_text || logs.policy_text || scoreStr;
-
-      setActiveReinspectionTask((prev) =>
-        prev && prev.id === jobId
-          ? {
-              ...prev,
-              step: 5,
-              isDone: true,
-              logs: [
-                ...prev.logs,
-                `[${t()}] ✅ 파이프라인 완료 - ${scoreStr}`,
-                ...realLines.filter(([, v]) => v && v.trim()).map(([tag, v]) => `[${t()}] ${tag} ${v}`),
-              ],
-            }
-          : prev
-      );
-
-      const timeNow = t();
-      setPipelineLogs((prev) => [
-        {
-          time: timeNow,
-          agent: "Report Agent 💬",
-          text: `[${lpnStr}] DB 연산 결과: "${summaryMsg}" DB 반영 완료!`,
-          type: "success",
-        },
-        ...prev,
-      ]);
-
-      await fetchTasks();
-    } catch (err: any) {
-      console.error("AI Re-inspection failed:", err);
-      setActiveReinspectionTask((prev) =>
-        prev
-          ? {
-              ...prev,
-              isDone: true,
-              error: err?.message || "서버 통신 실패",
-              logs: [...prev.logs, `[${new Date().toLocaleTimeString()}] ❌ 재검수 오류: ${err?.message || "서버 오류"}`],
-            }
-          : null
-      );
-    } finally {
-      setReinspectingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(jobId);
-        return next;
-      });
-    }
-  };
   const [tasks, setTasks] = useState<HitlTask[]>([]);
+
+  const {
+    reinspectingIds,
+    appendPipelineLog,
+    activeReinspectionTask,
+    closeReinspection,
+    pipelineLogs,
+    handleClearLogs,
+    handleTriggerAiReinspect,
+  } = useAiReinspection({
+    getTask: (jobId) => tasks.find((t) => t.id === jobId),
+    onCompleted: () => fetchTasks(),
+  });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // 시스템 설정의 HITL 대기열 경보 임계값 (설정 페이지에서 변경 시 실시간 반영)
@@ -445,15 +283,12 @@ export default function AdminHitlDashboard() {
       const summaryInfo = `총 ${payloadList.length}건 데이터베이스 오버라이드 승인 완료 (처분: ${firstPayload?.decision || 'APPROVE'}, 목표등급: ${firstPayload?.targetGrade || 'B'}, 사유: ${firstPayload?.primaryReasonCode || 'CLEAN'})`;
 
       // 1. 하단 실시간 모니터링 로그에 누적 기록
-      setPipelineLogs((prev) => [
-        {
-          time: timeNow,
-          agent: "Human Node (HITL) 👤",
-          text: `🚀 [HITL 최종 결재 승인 성공] ${summaryInfo}`,
-          type: "success",
-        },
-        ...prev,
-      ]);
+      appendPipelineLog({
+        time: timeNow,
+        agent: "Human Node (HITL) 👤",
+        text: `🚀 [HITL 최종 결재 승인 성공] ${summaryInfo}`,
+        type: "success",
+      });
 
       // 2. 브라우저 alert 대신 고급 승인 완료 토스트 메시지 렌더링
       setApprovalToast(`🚀 [HITL 최종 결재 승인 완료] ${summaryInfo}`);
@@ -464,15 +299,12 @@ export default function AdminHitlDashboard() {
     } catch (err: any) {
       console.error("Batch submit failed:", err);
       const timeNow = new Date().toLocaleTimeString();
-      setPipelineLogs((prev) => [
-        {
-          time: timeNow,
-          agent: "Human Node (HITL) 👤",
-          text: `❌ [HITL 결재 처리 실패] ${err?.response?.data?.message || err?.message}`,
-          type: "error",
-        },
-        ...prev,
-      ]);
+      appendPipelineLog({
+        time: timeNow,
+        agent: "Human Node (HITL) 👤",
+        text: `❌ [HITL 결재 처리 실패] ${err?.response?.data?.message || err?.message}`,
+        type: "error",
+      });
       setApprovalToast(`❌ 처리에 실패했습니다. (${err?.response?.data?.message || err?.message})`);
       setTimeout(() => setApprovalToast(null), 4500);
     }
@@ -1127,47 +959,7 @@ export default function AdminHitlDashboard() {
         )}
       </div>
 
-      {/* Multi-Agent 파이프라인 실시간 처리 로그 (Bottom Panel) */}
-      <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-purple-50 dark:bg-purple-950 rounded-lg text-purple-600 dark:text-purple-400">
-              <Bot className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                Multi-Agent 파이프라인 실시간 처리 로그
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse" /> Live Stream
-                </span>
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Detector(YOLO) ➔ Vision(GPT-4o) ➔ Policy ➔ Critic ➔ Supervisor ➔ Report ➔ Human Node(HITL)
-              </p>
-            </div>
-          </div>
-          <Button size="xs" variant="ghost" className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={handleClearLogs}>
-            로그 초기화
-          </Button>
-        </div>
-
-        {/* 재고 상세의 파이프라인 진단 기록과 동일한 라이트/다크 겸용 로그 패널 스타일 */}
-        <div className="bg-gray-50/70 dark:bg-gray-800/60 text-gray-700 dark:text-gray-200 p-4 rounded-xl text-xs space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700">
-          {pipelineLogs.length === 0 ? (
-            <div className="text-gray-400 dark:text-gray-500 italic text-center py-4">대기 중인 Multi-Agent 로그가 없습니다. [AI 재검수] 실행 시 실시간 스트리밍됩니다.</div>
-          ) : (
-            pipelineLogs.map((log, idx) => (
-              <div key={idx} className="flex items-start gap-3 py-1 border-b border-gray-200/70 dark:border-gray-700/60 last:border-0">
-                <span className="text-gray-400 dark:text-gray-500 font-mono text-[11px] min-w-[65px]">[{log.time}]</span>
-                <span className="font-bold text-purple-700 dark:text-purple-400 min-w-[120px]">{log.agent}</span>
-                <span className={`flex-1 leading-relaxed ${log.type === "success" ? "text-emerald-700 dark:text-emerald-400" : log.type === "warning" ? "text-amber-700 dark:text-amber-300" : "text-gray-700 dark:text-gray-300"}`}>
-                  {log.text}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      <PipelineLogPanel logs={pipelineLogs} onClear={handleClearLogs} />
 
       {/* HITL Image BBox Modal */}
       {modalTask && (
@@ -1183,113 +975,7 @@ export default function AdminHitlDashboard() {
 
       {/* Multi-Agent AI Re-inspection Live Modal */}
       {activeReinspectionTask && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-md">
-                  <Sparkles className="w-6 h-6 text-purple-300 animate-spin-slow" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-extrabold flex items-center gap-2">
-                    Multi-Agent AI 비전 실시간 재검수 파이프라인
-                  </h3>
-                  <p className="text-xs text-purple-200 mt-0.5">
-                    대상 LPN: <span className="font-mono font-bold text-yellow-300">{activeReinspectionTask.lpn}</span> ({activeReinspectionTask.title})
-                  </p>
-                </div>
-              </div>
-              {activeReinspectionTask.isDone && (
-                <button
-                  onClick={() => setActiveReinspectionTask(null)}
-                  className="text-purple-200 hover:text-white text-xl font-bold p-1 hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-6">
-              {/* Stepper Progress */}
-              <div className="grid grid-cols-5 gap-2 text-center text-xs">
-                {[
-                  // 모델 배정은 wms-secret-backend/.claude/rules/01-freeze-zones.md가 정본.
-                  // Vision 박스는 Detector(YOLO, LLM 미사용)까지 시각적으로 묶어 보여준다 -
-                  // 백엔드 그래프 노드는 그대로 분리돼 있고 여기 라벨만 축약한 것.
-                  { step: 1, label: "Vision 👁️", desc: "YOLO탐지+GPT-4o 판독·증거검증" },
-                  // Policy는 LLM을 쓰지 않는 UBCI v2.0 매트릭스 결정론적 산식이다.
-                  { step: 2, label: "Policy ⚖️", desc: "UBCI 매트릭스(결정론적)" },
-                  // Stage A(정합성 게이트, LLM 미사용) 통과 + 결함 1건 이상일 때만 Stage B(GPT-4o-mini) 심사.
-                  { step: 3, label: "Critic 🛡️", desc: "정합성게이트+4o-mini 심사" },
-                  // HITL이 Report보다 앞이다. Supervisor가 HITL로 이관하면 그래프는
-                  // human_node에서 끝나고, 보증서(Report)는 관리자 결재가 확정된 뒤에야
-                  // 생성된다. 종전 순서(Report → HITL)는 실제 흐름과 반대였다.
-                  { step: 4, label: "HITL 👤", desc: "관리자결재(Supervisor 이관)" },
-                  { step: 5, label: "Report 📋", desc: "GPT-4o-mini 보증서생성" },
-                ].map((s) => {
-                  const isActive = activeReinspectionTask.step >= s.step;
-                  const isCurrent = activeReinspectionTask.step === s.step;
-
-                  return (
-                    <div
-                      key={s.step}
-                      className={`p-3 rounded-xl border transition-all ${
-                        isCurrent
-                          ? "bg-purple-50 dark:bg-purple-950 border-purple-500 text-purple-700 dark:text-purple-300 font-extrabold ring-2 ring-purple-500/20"
-                          : isActive
-                          ? "bg-emerald-50 dark:bg-emerald-950 border-emerald-300 text-emerald-700 dark:text-emerald-300"
-                          : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400"
-                      }`}
-                    >
-                      <div className="text-xs font-bold">{s.label}</div>
-                      <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{s.desc}</div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-gray-100 dark:bg-gray-800 h-2.5 rounded-full overflow-hidden">
-                <div
-                  className="bg-gradient-to-r from-purple-600 to-indigo-500 h-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, (activeReinspectionTask.step / 5) * 100)}%` }}
-                />
-              </div>
-
-              {/* Live Terminal Stream */}
-              <div className="bg-gray-950 text-gray-100 p-5 rounded-xl font-mono text-xs sm:text-sm space-y-3 h-64 overflow-y-auto border border-gray-800 shadow-inner">
-                {activeReinspectionTask.logs.map((log, i) => (
-                  <div key={i} className="leading-relaxed border-b border-gray-900/60 pb-1.5 last:border-none">
-                    {log}
-                  </div>
-                ))}
-                {!activeReinspectionTask.isDone && (
-                  <div className="text-purple-400 animate-pulse flex items-center gap-1.5 mt-2">
-                    <span className="w-2 h-2 rounded-full bg-purple-400" /> Multi-Agent 비전 텐서 및 룰 엔진 계산 중...
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="bg-gray-50 dark:bg-gray-800/80 px-6 py-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-800">
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {activeReinspectionTask.isDone
-                  ? "✅ Multi-Agent 비전 재검수 완료 (PostgreSQL DB 동기화 완료)"
-                  : "⏳ 비전 검수 파이프라인 가동 중..."}
-              </span>
-              <Button
-                disabled={!activeReinspectionTask.isDone}
-                onClick={() => setActiveReinspectionTask(null)}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-5 py-2 rounded-lg"
-              >
-                {activeReinspectionTask.isDone ? "완료 및 결과 반영" : "재검수 진행 중..."}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <ReinspectionLiveModal task={activeReinspectionTask} onClose={closeReinspection} />
       )}
       {/* Floating Approval Toast Notification */}
       {approvalToast && (
