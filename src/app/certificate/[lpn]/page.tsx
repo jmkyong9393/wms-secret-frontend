@@ -25,7 +25,7 @@ import {
   resolveDefectCoordinates,
   pickRepresentativeImageIndex,
   bboxToPercent,
-} from '@/features/inspection/utils/inspectionImageService';
+} from '@/entities/inspection/api/inspectionImageService';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || `${API_BASE_URL}`;
 

@@ -8,8 +8,8 @@ import Link from 'next/link';
 import { ArrowLeft, Printer, ShieldCheck, MapPin, Tag, UserCheck, Package, ExternalLink, Bot, Image as ImageIcon, AlertTriangle, RotateCcw } from 'lucide-react';
 
 import BookCover from '@/entities/book/ui/BookCover';
-import { InspectionEvidenceViewer } from '@/features/stock/components/InspectionEvidenceViewer';
-import { PipelineTracePanel } from '@/features/stock/components/PipelineTracePanel';
+import { InspectionEvidenceViewer } from '@/entities/inspection/ui/InspectionEvidenceViewer';
+import { PipelineTracePanel } from '@/entities/inspection/ui/PipelineTracePanel';
 import { LpnPrintModal } from '@/entities/label/ui/LpnPrintModal';
 import type { LpnPrintData } from '@/entities/label/model/types';
 import { adminAPI } from '@/shared/api/api';
@@ -18,7 +18,7 @@ import {
   resolveDefectCoordinates,
   resolveExcludedDefectCoordinates,
   type PerImageDefectCoordinate,
-} from '@/features/inspection/utils/inspectionImageService';
+} from '@/entities/inspection/api/inspectionImageService';
 
 interface InspectorInfo {
   inspection_source: string;
