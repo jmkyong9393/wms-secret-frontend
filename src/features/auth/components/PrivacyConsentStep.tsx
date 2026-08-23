@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { isAxiosError } from 'axios';
-import { Button } from '@/components/ui/button';
-import { apiClient } from '@/lib/api-client';
+import { Button } from '@/shared/ui/button';
+import { apiClient } from '@/shared/api/api-client';
 
 /**
  * 개인정보 수집·이용 동의 (개인정보 보호법 제15조 제2항).

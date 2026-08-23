@@ -2,8 +2,8 @@
 
 import React, { useEffect } from 'react';
 import { X, BookOpen, Barcode } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
 
 interface BookCoverModalProps {
   isOpen: boolean;

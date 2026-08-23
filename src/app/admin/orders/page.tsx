@@ -1,8 +1,8 @@
 "use client";
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import MasterPagination from '@/components/common/MasterPagination';
+import MasterPagination from '@/shared/ui/MasterPagination';
 import Link from 'next/link';
 import {
   ShoppingCart,

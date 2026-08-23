@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -12,7 +12,7 @@ import { InspectionEvidenceViewer } from '@/features/stock/components/Inspection
 import { PipelineTracePanel } from '@/features/stock/components/PipelineTracePanel';
 import { LpnPrintModal } from '@/features/stock/components/LpnPrintModal';
 import type { LpnPrintData } from '@/features/stock/types';
-import { adminAPI } from '@/lib/api';
+import { adminAPI } from '@/shared/api/api';
 import {
   resolveInspectionImages,
   resolveDefectCoordinates,

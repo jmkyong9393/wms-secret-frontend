@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiClient } from '@/lib/api-client';
+import { API_BASE_URL, apiClient } from '@/shared/api/api-client';
 import axios from 'axios';
 
 // 백엔드 API URL은 api-client에서 중앙 관리 (NEXT_PUBLIC_API_URL 환경변수 기반)

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useCamera } from '@/features/inbound/hooks/useCamera';
-import { processImage } from '@/lib/image-processor';
+import { useCamera } from '@/shared/lib/useCamera';
+import { processImage } from '@/shared/lib/image-processor';
 
 // 출고 피킹 촬영본을 받는 엔드포인트가 아직 없어 촬영 결과는 서버로 전송되지 않는다.
 // 입고 AI 검수 큐(uploadQueueAtom)에 적재하면 전송된 적 없는 건이 대기열 집계에 섞이므로

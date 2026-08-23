@@ -1,4 +1,4 @@
-import { apiClient } from '@/lib/api-client';
+import { apiClient } from '@/shared/api/api-client';
 import { PrintStickerRequest, HistoryLog } from '@/features/inbound/types';
 
 // AI 검수 요청(POST /api/v1/inbound/evaluate)은 app/inbound/page.tsx의 evaluateMutation이

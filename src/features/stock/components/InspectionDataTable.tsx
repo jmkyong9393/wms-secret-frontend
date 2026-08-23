@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL } from '@/shared/api/api-client';
 
 /**
  * 검수 처리 내역 통합 데이터 그리드 (Admin 전체 / Worker 개인 공용 — B안 통합).
@@ -14,10 +14,10 @@ import { API_BASE_URL } from '@/lib/api-client';
  */
 
 import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import MasterPagination from '@/components/common/MasterPagination';
+import MasterPagination from '@/shared/ui/MasterPagination';
 import BookCover from '@/components/BookCover';
 import BookCoverModal from '@/components/BookCoverModal';
-import { exportToCSV } from '@/lib/exportCsv';
+import { exportToCSV } from '@/shared/lib/exportCsv';
 import { useAtomValue } from 'jotai';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
 import {

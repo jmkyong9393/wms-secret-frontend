@@ -2,10 +2,10 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
 import { ShieldCheck, ArrowLeft, Lock, EyeOff, FileCheck, Server, KeyRound } from 'lucide-react';
-import { PRIVACY_OFFICER } from '@/lib/contact';
+import { PRIVACY_OFFICER } from '@/shared/lib/contact';
 
 export default function PrivacyPolicyPage() {
   return (

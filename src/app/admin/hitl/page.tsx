@@ -15,18 +15,18 @@ import {
   ShieldAlert,
   Clock
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/shared/ui/select";
 import BookCover from "@/components/BookCover";
-import { adminAPI } from "@/lib/api";
-import { getSystemSettings, SETTINGS_CHANGE_EVENT } from "@/lib/systemSettings";
+import { adminAPI } from "@/shared/api/api";
+import { getSystemSettings, SETTINGS_CHANGE_EVENT } from "@/shared/lib/systemSettings";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
 import { HitlImageModal, EMPTY_BBOX_EDITS, type BBoxEdits } from "@/features/hitl/components/HitlImageModal";
 // 관리자 설정의 읽기 전용 정책 뷰와 같은 정의를 쓴다 (features/hitl/policy.ts)

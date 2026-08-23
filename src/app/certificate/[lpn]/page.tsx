@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL } from '@/shared/api/api-client';
 
 /**
  * 고객 공개용 AI 품질 보증서

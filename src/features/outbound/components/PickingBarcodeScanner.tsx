@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Flashlight, FlashlightOff, Loader2 } from 'lucide-react';
-import { useCamera } from '@/features/inbound/hooks/useCamera';
-import { mapGuideToVideoRoi } from '@/lib/camera-roi';
+import { useCamera } from '@/shared/lib/useCamera';
+import { mapGuideToVideoRoi } from '@/shared/lib/camera-roi';
 
 /**
  * 출고 피킹 전용 바코드 스캐너 (LPN QR / ISBN EAN-13).

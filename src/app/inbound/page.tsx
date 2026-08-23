@@ -1,17 +1,17 @@
 'use client';
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL } from '@/shared/api/api-client';
 
 import { useState, useEffect, useRef } from 'react';
 import BookCover from '@/components/BookCover';
 import { useMutation } from '@tanstack/react-query';
 import { Camera, Flashlight, RefreshCcw, Keyboard, Package, CheckCircle2, AlertTriangle, ScanLine, Printer, ArrowRight, BookOpen, ChevronLeft, User, Zap } from 'lucide-react';
-import { labelsAPI } from '@/lib/api';
-import { useCamera } from '@/features/inbound/hooks/useCamera';
-import { processImage } from '@/lib/image-processor';
+import { labelsAPI } from '@/shared/api/api';
+import { useCamera } from '@/shared/lib/useCamera';
+import { processImage } from '@/shared/lib/image-processor';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { uploadQueueAtom } from '@/features/inbound/store/uploadQueueAtoms';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
-import { getSystemSettings } from '@/lib/systemSettings';
+import { getSystemSettings } from '@/shared/lib/systemSettings';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { BrowserMultiFormatReader as ZXingBrowserReader } from '@zxing/browser';
 import { QRCodeSVG } from 'qrcode.react';

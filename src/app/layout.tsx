@@ -3,11 +3,11 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/providers";
 import MainLayout from "@/components/layout/MainLayout";
-import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
-import { A2HSBanner } from "@/components/a2hs-banner";
-import { GlobalErrorBoundary } from "@/components/error/GlobalErrorBoundary";
+import { ServiceWorkerRegistration } from "@/shared/pwa/ServiceWorkerRegistration";
+import { A2HSBanner } from "@/shared/pwa/a2hs-banner";
+import { GlobalErrorBoundary } from "@/shared/ui/GlobalErrorBoundary";
 import { SessionAutoLogout } from "@/features/auth/components/SessionAutoLogout";
-import ReactQueryProvider from "@/lib/react-query-provider";
+import ReactQueryProvider from "@/shared/api/react-query-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

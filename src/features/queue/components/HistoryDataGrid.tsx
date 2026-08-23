@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL } from '@/shared/api/api-client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { Search, Download, Filter, FileText, Loader2, AlertTriangle, Trash2, Camera, Printer, RefreshCcw, Check, Edit2, X } from 'lucide-react';
@@ -7,9 +7,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { inboundService } from '@/features/inbound/api';
 import { HistoryLog } from '@/features/inbound/types';
 import * as xlsx from 'xlsx';
-import { BBoxImageRenderer } from '@/components/ui/BBoxImageRenderer';
+import { BBoxImageRenderer } from '@/shared/ui/BBoxImageRenderer';
 import { QRCodeSVG } from 'qrcode.react';
-import { labelsAPI } from '@/lib/api';
+import { labelsAPI } from '@/shared/api/api';
 
 export default function HistoryDataGrid() {
   const [searchTerm, setSearchTerm] = useState('');

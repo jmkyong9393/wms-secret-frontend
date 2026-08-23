@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL } from '@/shared/api/api-client';
 /**
  * WMS 검수 이미지 / BBox 좌표 단일 소스(Single Source of Truth) 서비스
  *
