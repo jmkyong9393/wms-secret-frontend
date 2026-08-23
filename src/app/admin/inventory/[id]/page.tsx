@@ -10,8 +10,9 @@ import { ArrowLeft, Printer, ShieldCheck, MapPin, Tag, UserCheck, Package, Exter
 import BookCover from '@/components/BookCover';
 import { InspectionEvidenceViewer } from '@/features/stock/components/InspectionEvidenceViewer';
 import { PipelineTracePanel } from '@/features/stock/components/PipelineTracePanel';
-import { LpnPrintLabel, LpnLabelData } from '@/features/inbound/components/LpnPrintLabel';
-import { labelsAPI, adminAPI } from '@/lib/api';
+import { LpnPrintModal } from '@/features/stock/components/LpnPrintModal';
+import type { LpnPrintData } from '@/features/stock/types';
+import { adminAPI } from '@/lib/api';
 import {
   resolveInspectionImages,
   resolveDefectCoordinates,
@@ -77,8 +78,7 @@ export default function InventoryDetailPage() {
   const [data, setData] = useState<InventoryDetailData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activePrintData, setActivePrintData] = useState<LpnLabelData | null>(null);
-  const [isPrinting, setIsPrinting] = useState<boolean>(false);
+  const [activePrintData, setActivePrintData] = useState<LpnPrintData | null>(null);
   const [isReinspecting, setIsReinspecting] = useState<boolean>(false);
   // HITL 회수. 되돌리기는 판매 가능 재고에서 빼는 동작이라 확인 절차를 거친다.
   const [recallOpen, setRecallOpen] = useState<boolean>(false);
@@ -537,51 +537,8 @@ export default function InventoryDetailPage() {
         )}
       </div>
 
-      {/* LPN Print Label Modal — 실제 인쇄는 백엔드 /labels/print를 거쳐 LAN 라벨 프린터로 직접 전송된다 */}
-      {activePrintData && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-xl space-y-4 border border-transparent dark:border-gray-800">
-            <LpnPrintLabel data={activePrintData} />
-            <div className="flex items-center gap-2">
-              <button
-                onClick={async () => {
-                  if (!activePrintData) return;
-                  setIsPrinting(true);
-                  try {
-                    const result = await labelsAPI.printLpn(
-                      activePrintData.lpn_barcode,
-                      activePrintData.book.title,
-                      activePrintData.book.isbn,
-                      activePrintData.worker_id
-                    );
-                    if (result.skipped) {
-                      alert('라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).');
-                    } else if (!result.sent && !result.queued) {
-                      alert('라벨 전송에 실패했습니다.');
-                    }
-                  } catch (e) {
-                    console.error(e);
-                    alert('라벨 프린터 통신 중 오류가 발생했습니다. 프린터 전원/LAN 연결을 확인해주세요.');
-                  } finally {
-                    setIsPrinting(false);
-                  }
-                }}
-                disabled={isPrinting}
-                className="flex-1 flex items-center justify-center py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold rounded-xl text-xs cursor-pointer"
-              >
-                <Printer className="w-4 h-4 mr-1.5" />
-                {isPrinting ? '전송 중...' : '라벨 프린터로 인쇄'}
-              </button>
-              <button
-                onClick={() => setActivePrintData(null)}
-                className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold rounded-xl text-xs cursor-pointer"
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* LPN 라벨 인쇄 - 목록 화면들과 동일한 공용 모달 재사용 */}
+      <LpnPrintModal data={activePrintData} onClose={() => setActivePrintData(null)} />
 
       {/* HITL 회수 확인. 판매 가능 재고에서 빠지는 동작이라 한 번 더 묻는다. */}
       {recallOpen && (
