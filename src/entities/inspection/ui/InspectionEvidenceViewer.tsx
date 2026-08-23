@@ -7,7 +7,7 @@ import { Eye, EyeOff, ScanSearch } from 'lucide-react';
 import {
   bboxToPercent,
   type PerImageDefectCoordinate,
-} from '@/features/inspection/utils/inspectionImageService';
+} from '@/entities/inspection/api/inspectionImageService';
 
 interface InspectionEvidenceViewerProps {
   images: string[];
