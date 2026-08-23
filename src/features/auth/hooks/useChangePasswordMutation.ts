@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
 import { changePassword } from "@/features/auth/api/authService";
-import { currentUserAtom } from "@/features/auth/store/authAtoms";
+import { currentUserAtom } from "@/entities/user/model/authAtoms";
 import type { ChangePasswordRequest } from "@/features/auth/types/authApiTypes";
 
 // PATCH /api/v1/auth/password 단일 엔드포인트를 호출하는 유일한 프론트엔드 진입점.

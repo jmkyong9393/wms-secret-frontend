@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
+import { currentUserAtom } from '@/entities/user/model/authAtoms';
 import type { CurrentUser } from '@/features/auth/types/authTypes';
 
 /**

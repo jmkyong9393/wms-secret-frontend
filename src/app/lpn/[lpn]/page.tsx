@@ -1,6 +1,6 @@
 'use client';
 import { API_BASE_URL } from '@/shared/api/api-client';
-import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
+import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 
 /**
  * LPN 내부 조회 (직원 전용)

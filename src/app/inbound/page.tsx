@@ -10,7 +10,7 @@ import { useCamera } from '@/shared/lib/useCamera';
 import { processImage } from '@/shared/lib/image-processor';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { uploadQueueAtom } from '@/features/inbound/store/uploadQueueAtoms';
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
+import { currentUserAtom } from '@/entities/user/model/authAtoms';
 import { getSystemSettings } from '@/shared/lib/systemSettings';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { BrowserMultiFormatReader as ZXingBrowserReader } from '@zxing/browser';

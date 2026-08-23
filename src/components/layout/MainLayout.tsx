@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAtomValue } from 'jotai';
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
+import { currentUserAtom } from '@/entities/user/model/authAtoms';
 import Cookies from 'js-cookie';
 import Sidebar from './Sidebar';
 import Header from './Header';

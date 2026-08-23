@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
 import { Button } from "@/shared/ui/button";
-import { useHydratedUser } from "@/features/auth/hooks/useHydratedUser";
+import { useHydratedUser } from "@/entities/user/model/useHydratedUser";
 import { useBoardPostQuery } from "@/features/board/hooks/useBoardPostQuery";
 import { useDeleteBoardPostMutation } from "@/features/board/hooks/useBoardPostMutations";
 import { canDeletePost, canEditPost } from "@/features/board/utils/permissions";

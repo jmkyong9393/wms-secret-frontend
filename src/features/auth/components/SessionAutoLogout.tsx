@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useAtomValue } from 'jotai';
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
+import { currentUserAtom } from '@/entities/user/model/authAtoms';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 
 const SESSION_ALIVE_KEY = 'nexus_session_alive';

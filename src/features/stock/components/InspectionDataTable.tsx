@@ -19,7 +19,7 @@ import BookCover from '@/entities/book/ui/BookCover';
 import BookCoverModal from '@/entities/book/ui/BookCoverModal';
 import { exportToCSV } from '@/shared/lib/exportCsv';
 import { useAtomValue } from 'jotai';
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
+import { currentUserAtom } from '@/entities/user/model/authAtoms';
 import {
   FileCheck, Search, Printer, Eye, Clock, Calendar, CheckCircle2, AlertTriangle,
   XCircle, User, ShieldCheck, Sparkles, Download, BookOpen, X, Filter,

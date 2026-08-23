@@ -20,7 +20,7 @@ import {
 import PickingBarcodeScanner from '@/features/outbound/components/PickingBarcodeScanner';
 import { validateIsbn13, isLpnCode } from '@/features/inbound/isbnValidation';
 import { useAtomValue } from 'jotai';
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
+import { currentUserAtom } from '@/entities/user/model/authAtoms';
 
 const API_BASE = `${API_BASE_URL}/api/v1`;
 

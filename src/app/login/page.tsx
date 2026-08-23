@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSetAtom } from 'jotai';
 import { Button } from '@/shared/ui/button';
-import { CURRENT_USER_STORAGE_KEY, currentUserAtom } from '@/features/auth/store/authAtoms';
+import { CURRENT_USER_STORAGE_KEY, currentUserAtom } from '@/entities/user/model/authAtoms';
 import { login } from '@/features/auth/api/authService';
 import LoginFailureAlert from '@/features/auth/components/LoginFailureAlert';
 import PasswordResetGuideModal from '@/features/auth/components/PasswordResetGuideModal';

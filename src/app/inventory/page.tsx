@@ -7,7 +7,7 @@
  */
 
 import { InventoryDataTable } from '@/features/stock/components/InventoryDataTable';
-import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
+import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 
 export default function InventoryPage() {
   const { user, hydrated } = useHydratedUser();

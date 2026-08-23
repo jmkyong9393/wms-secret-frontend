@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
+import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 import dynamic from 'next/dynamic';
 
 import { 
