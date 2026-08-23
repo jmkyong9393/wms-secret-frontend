@@ -37,6 +37,9 @@ import { formatQueuedAt, getPrimaryDefectReason } from "@/features/hitl/utils";
 import { useAiReinspection } from "@/features/hitl/hooks/useAiReinspection";
 import { PipelineLogPanel } from "@/features/hitl/components/PipelineLogPanel";
 import { ReinspectionLiveModal } from "@/features/hitl/components/ReinspectionLiveModal";
+import { HitlSummaryCards } from "@/features/hitl/components/HitlSummaryCards";
+import { HitlPolicyGuide } from "@/features/hitl/components/HitlPolicyGuide";
+import { MasterBulkToolbar, type MasterBulkValues } from "@/features/hitl/components/MasterBulkToolbar";
 
 export default function AdminHitlDashboard() {
   const [tasks, setTasks] = useState<HitlTask[]>([]);
@@ -70,8 +73,6 @@ export default function AdminHitlDashboard() {
   }, []);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
-  // 결재 규칙 패널. 매번 펼쳐 두면 목록이 밀려나므로 기본은 접어 둔다.
-  const [showPolicy, setShowPolicy] = useState(false);
   const [modalTask, setModalTask] = useState<HitlTask | null>(null);
   // 결재 건별 BBox 채택/제외. 모달을 닫아도 유지되어야 제출까지 이어진다.
   const [bboxEdits, setBboxEdits] = useState<Record<string, BBoxEdits>>({});
@@ -185,30 +186,8 @@ export default function AdminHitlDashboard() {
     }
   };
 
-  const [masterDecision, setMasterDecision] = useState<string>("APPROVE_DOWNGRADE");
-  const [masterGrade, setMasterGrade] = useState<string>("GOOD");
-  const [masterReasons, setMasterReasons] = useState<string[]>(["DMG_INT_DOODLE", "DMG_EXT_CRUSH"]);
-
-  const handleMasterDecisionChange = (val: string | null) => {
-    if (val) setMasterDecision(val);
-  };
-
-  const handleMasterGradeChange = (val: string | null) => {
-    if (val) setMasterGrade(val);
-  };
-
-  const toggleMasterReason = (code: string) => {
-    if (masterReasons.includes(code)) {
-      if (masterReasons.length > 1) {
-        setMasterReasons(masterReasons.filter((c) => c !== code));
-      }
-    } else {
-      setMasterReasons([...masterReasons, code]);
-    }
-  };
-
   // 마스터 설정값을 선택된 항목들에 [폼에 세팅] 버튼 클릭 시 수동 반영
-  const handleApplyMasterSettings = () => {
+  const handleApplyMasterSettings = (values: MasterBulkValues) => {
     if (selectedIds.size === 0) {
       alert("일괄 세팅할 항목의 체크박스를 먼저 선택해 주세요.");
       return;
@@ -218,9 +197,9 @@ export default function AdminHitlDashboard() {
     const nextReasons = { ...reasons } as Record<string, any>;
 
     selectedIds.forEach((id) => {
-      nextDecisions[id] = masterDecision;
-      nextGrades[id] = masterGrade;
-      nextReasons[id] = masterReasons.length > 0 ? masterReasons.join(", ") : "";
+      nextDecisions[id] = values.decision;
+      nextGrades[id] = values.grade;
+      nextReasons[id] = values.reasons.length > 0 ? values.reasons.join(", ") : "";
     });
 
     setDecisions(nextDecisions);
@@ -360,117 +339,9 @@ export default function AdminHitlDashboard() {
         </div>
       )}
 
-      {/* Summary Cards (검수 처리 내역 KPI 카드와 동일 패턴) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className={`bg-white dark:bg-gray-900 p-5 rounded-2xl border shadow-xs space-y-1 transition-colors ${
-          tasks.length >= alertThreshold
-            ? 'border-rose-300 dark:border-rose-800 ring-2 ring-rose-500/20'
-            : 'border-gray-200 dark:border-gray-800'
-        }`}>
-          <div className="flex items-center justify-between text-xs font-extrabold text-gray-500 dark:text-gray-400">
-            <span>검수 대기 총계</span>
-            <AlertTriangle className={`w-4 h-4 ${tasks.length >= alertThreshold ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} />
-          </div>
-          <p className={`text-3xl font-black font-mono ${tasks.length >= alertThreshold ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>
-            {tasks.length}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-            Supervisor 이관 - 관리자 결재 대기 (경보 기준 {alertThreshold}건)
-          </p>
-        </div>
+      <HitlSummaryCards total={tasks.length} selected={selectedIds.size} filtered={filteredTasks.length} alertThreshold={alertThreshold} />
 
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-xs font-extrabold text-gray-500 dark:text-gray-400">
-            <span>선택된 처리 건</span>
-            <FileCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-          </div>
-          <p className="text-3xl font-black text-blue-600 dark:text-blue-400 font-mono">
-            {selectedIds.size}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">체크박스 선택 시 결재 폼 활성화</p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-xs font-extrabold text-gray-500 dark:text-gray-400">
-            <span>검색 필터 적용 건</span>
-            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-          </div>
-          <p className="text-3xl font-black text-purple-600 dark:text-purple-400 font-mono">
-            {filteredTasks.length}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">도서명 / ISBN / LPN / Task ID 키워드 필터</p>
-        </div>
-      </div>
-
-      {/* 결재 규칙 안내 — 이 대기열에 왜 올라왔는지와 무엇을 먼저 볼지 */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
-        <button
-          type="button"
-          onClick={() => setShowPolicy((v) => !v)}
-          className="w-full flex items-center justify-between gap-2 p-5 cursor-pointer"
-        >
-          <span className="flex items-center gap-2 text-sm font-extrabold text-gray-800 dark:text-gray-100">
-            <ShieldAlert className="w-4 h-4 text-amber-500" />
-            HITL 결재 규칙 · UBCI 등급 기준
-          </span>
-          <span className="text-xs font-bold text-gray-400 dark:text-gray-500">
-            {showPolicy ? '접기 ▲' : '펼치기 ▼'}
-          </span>
-        </button>
-
-        {showPolicy && (
-          <div className="px-5 pb-5 space-y-4">
-            <div>
-              <p className="text-[11px] font-black text-gray-600 dark:text-gray-300 mb-2">
-                자동 이관 규칙 (Supervisor / Critic)
-              </p>
-              <ul className="space-y-2">
-                {HITL_ROUTING_POLICY.map((rule, i) => (
-                  <li
-                    key={rule.code}
-                    className="flex items-start gap-2 text-[11px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2.5 border border-gray-100 dark:border-gray-800"
-                  >
-                    <span className="text-amber-500 font-black shrink-0">{i + 1}.</span>
-                    <span className="min-w-0">
-                      <span className="font-bold text-gray-700 dark:text-gray-200">{rule.title}</span>
-                      <span className="ml-1.5 font-mono text-[10px] px-1 py-0.5 rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-                        {rule.code}
-                      </span>
-                      <span className="block mt-1 leading-snug">{rule.detail}</span>
-                      <span className="block mt-1 leading-snug text-blue-600 dark:text-blue-400 font-medium">
-                        → {rule.reviewHint}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-black text-gray-600 dark:text-gray-300 mb-2">
-                UBCI 등급 기준 (확정 등급 선택 시 참고)
-              </p>
-              <div className="space-y-1.5">
-                {UBCI_GRADE_POLICY.map((p) => (
-                  <div
-                    key={p.grade}
-                    className="grid grid-cols-[7rem_5.5rem_1fr] items-start gap-2 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-800 text-xs"
-                  >
-                    <span className={`font-black ${p.color}`}>{p.grade}</span>
-                    <span className="font-mono font-bold text-gray-700 dark:text-gray-300 tabular-nums">{p.range}</span>
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-snug">{p.quality}</p>
-                      <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold ${p.badge}`}>
-                        {p.action}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <HitlPolicyGuide />
 
       {/* Control & Toolbar */}
       <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
@@ -486,100 +357,7 @@ export default function AdminHitlDashboard() {
             />
           </div>
 
-          {/* Master Bulk Setting Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 bg-blue-50/70 dark:bg-blue-950/50 p-2 rounded-xl border border-blue-100 dark:border-blue-800 w-full md:w-auto">
-            <div className="flex items-center text-xs font-extrabold text-blue-900 dark:text-blue-300 mr-1">
-              <Sliders className="w-3.5 h-3.5 mr-1" />
-              선택항목 일괄 설정:
-            </div>
-            <Select value={masterDecision} onValueChange={handleMasterDecisionChange}>
-              <SelectTrigger className="h-9 text-xs font-bold rounded-xl bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white w-36">
-                <SelectValue>
-                  {DECISION_OPTIONS.find((o) => o.value === masterDecision)?.label || masterDecision}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                {DECISION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={masterGrade} onValueChange={handleMasterGradeChange}>
-              <SelectTrigger className="h-9 text-xs font-bold rounded-xl bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white w-28">
-                <SelectValue>
-                  {GRADE_OPTIONS.find((o) => o.value === masterGrade)?.label || masterGrade}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                {GRADE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800/80 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
-              {masterReasons.map((code) => {
-                const meta = REASON_CODE_MAP[code] || { label: code, color: "bg-gray-100 text-gray-700 border-gray-200" };
-                return (
-                  <span
-                    key={code}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border transition-all ${meta.color}`}
-                  >
-                    {meta.label}
-                    {masterReasons.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => toggleMasterReason(code)}
-                        className="hover:text-red-500 font-bold ml-0.5 text-xs leading-none"
-                        title="사유 제거"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </span>
-                );
-              })}
-              <Select
-                onValueChange={(val: string | null) => {
-                  if (val && !masterReasons.includes(val)) {
-                    setMasterReasons([...masterReasons, val]);
-                  }
-                }}
-              >
-                <SelectTrigger className="h-6 w-24 text-[10px] font-bold px-2 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-dashed border-purple-300 dark:border-purple-800">
-                  <span>+ 사유 선택</span>
-                </SelectTrigger>
-                <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                  {REASON_OPTIONS.map((grp) => (
-                    <React.Fragment key={grp.group}>
-                      <div className="px-2 py-1 text-[10px] font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800">{grp.group}</div>
-                      {grp.items.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          <span className="flex items-center gap-1.5">
-                            {masterReasons.includes(opt.value) ? "✓ " : ""}
-                            {opt.label}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <button
-              onClick={handleApplyMasterSettings}
-              disabled={selectedIds.size === 0}
-              className="h-9 px-4 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-50 transition-all cursor-pointer shadow-xs"
-            >
-              ⚡ {selectedIds.size > 0 ? `선택 ${selectedIds.size}건 폼에 세팅` : '선택 항목 폼에 세팅'}
-            </button>
-          </div>
+          <MasterBulkToolbar selectedCount={selectedIds.size} onApply={handleApplyMasterSettings} />
         </div>
       </div>
 
