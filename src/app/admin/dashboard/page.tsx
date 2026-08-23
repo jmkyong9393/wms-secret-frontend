@@ -40,7 +40,7 @@ function ChartsSkeleton() {
   );
 }
 
-const DashboardCharts = dynamic(() => import('./DashboardCharts'), {
+const DashboardCharts = dynamic(() => import('@/features/dashboard/components/DashboardCharts'), {
   ssr: false,
   loading: () => <ChartsSkeleton />,
 });
