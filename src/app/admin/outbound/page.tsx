@@ -1,5 +1,5 @@
 "use client";
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useState, useEffect } from 'react';
 import BookCover from '@/components/BookCover';

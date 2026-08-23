@@ -8,9 +8,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import axios from 'axios';
-import { exportToCSV } from '@/lib/exportCsv';
-import { poAPI, OrderProposalCard, ProposalStatus } from '@/lib/api';
-import { apiClient } from '@/lib/api-client';
+import { exportToCSV } from '@/shared/lib/exportCsv';
+import { poAPI, OrderProposalCard, ProposalStatus } from '@/shared/api/api';
+import { apiClient } from '@/shared/api/api-client';
 
 const URGENCY_STYLE: Record<string, string> = {
   CRITICAL: 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',

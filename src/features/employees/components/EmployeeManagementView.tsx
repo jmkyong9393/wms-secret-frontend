@@ -4,16 +4,16 @@ import { useState } from "react";
 import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
 
 import { Plus, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/shared/ui/button";
 import * as XLSX from "xlsx";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/shared/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/shared/ui/select";
 
 import { VALID_ROLES, type Role, type UserStatus } from "@/features/auth/types/authTypes";
 import { canManageEmployees } from "@/features/employees/utils/permissions";

@@ -13,7 +13,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ShieldAlert, RefreshCw, Radar, AlertTriangle, UserX, Moon, Undo2, Bot, Sparkles,
 } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
+import { apiClient } from '@/shared/api/api-client';
 
 interface FdsReportItem {
   id: string;

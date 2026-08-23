@@ -2,16 +2,16 @@
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { maskName } from "@/lib/privacy-mask";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
+import { maskName } from "@/shared/lib/privacy-mask";
+import { Switch } from "@/shared/ui/switch";
+import { Button } from "@/shared/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/shared/ui/select";
 import type { CurrentUser, UserStatus } from "@/features/auth/types/authTypes";
 import type { EmployeeListItem, AssignableRole } from "@/features/employees/types/employee";
 import { canManageEmployees, getAssignableRoles } from "@/features/employees/utils/permissions";

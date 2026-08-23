@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/shared/ui/button";
 import { useHydratedUser } from "@/features/auth/hooks/useHydratedUser";
 import { useBoardPostQuery } from "@/features/board/hooks/useBoardPostQuery";
 import { useDeleteBoardPostMutation } from "@/features/board/hooks/useBoardPostMutations";
@@ -15,7 +15,7 @@ import { BoardCommentList } from "@/features/board/components/BoardCommentList";
 import { BoardCommentForm } from "@/features/board/components/BoardCommentForm";
 import { ConfirmDialog } from "@/features/board/components/ConfirmDialog";
 import { canWriteComment } from "@/features/board/utils/permissions";
-import { maskName } from "@/lib/privacy-mask";
+import { maskName } from "@/shared/lib/privacy-mask";
 
 interface BoardDetailViewProps {
   postId: string;

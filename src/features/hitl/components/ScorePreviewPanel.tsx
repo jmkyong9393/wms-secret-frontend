@@ -6,7 +6,7 @@
  */
 
 import { AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
-import type { HitlScorePreview } from '@/lib/api';
+import type { HitlScorePreview } from '@/shared/api/api';
 
 const GRADE_STYLE: Record<string, string> = {
   MINT: 'bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800',

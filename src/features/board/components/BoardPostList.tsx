@@ -4,7 +4,7 @@ import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import type { BoardPostListItem } from "@/features/board/types/board";
 import { CATEGORY_BADGE_CLASS, CATEGORY_LABEL } from "@/features/board/components/categoryLabels";
-import { maskName } from "@/lib/privacy-mask";
+import { maskName } from "@/shared/lib/privacy-mask";
 
 interface BoardPostListProps {
   items: BoardPostListItem[];

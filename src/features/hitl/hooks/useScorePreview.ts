@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { adminAPI, type HitlScorePreview } from '@/lib/api';
+import { adminAPI, type HitlScorePreview } from '@/shared/api/api';
 import type { BBoxEdits } from '../components/HitlImageModal';
 
 const DEBOUNCE_MS = 350;

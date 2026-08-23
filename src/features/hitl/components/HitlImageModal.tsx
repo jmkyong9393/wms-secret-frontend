@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { X, ChevronLeft, ChevronRight, Eye, BookOpen, AlertCircle, Bot, ScanSearch, PenSquare, Trash2, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/shared/ui/button";
 import { bboxToPercent } from "@/features/inspection/utils/inspectionImageService";
 import type { HitlTask } from "@/features/hitl/types/hitl";
 import { DEFECT_TYPE_OPTIONS } from "@/features/hitl/policy";

@@ -1,6 +1,6 @@
 'use client';
-import { API_BASE_URL } from '@/lib/api-client';
-import { maskName } from '@/lib/privacy-mask';
+import { API_BASE_URL } from '@/shared/api/api-client';
+import { maskName } from '@/shared/lib/privacy-mask';
 
 import Link from 'next/link';
 import React, { useState } from 'react';
@@ -297,7 +297,7 @@ export default function Header() {
   };
   const pageTitle = getPageTitle(pathname);
 
-  // ISMS-P 2.6.3 개인정보 표시제한 규칙은 @/lib/privacy-mask 한 곳에서만 정의한다.
+  // ISMS-P 2.6.3 개인정보 표시제한 규칙은 @/shared/lib/privacy-mask 한 곳에서만 정의한다.
   // (종전에는 이 컴포넌트에 인라인 구현이 박혀 있어, 다른 화면은 마스킹 없이 원본을 노출했다.)
 
   return (

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { CONTACT_EMAIL } from '@/lib/contact';
+import { CONTACT_EMAIL } from '@/shared/lib/contact';
 
 export default function Footer() {
   return (

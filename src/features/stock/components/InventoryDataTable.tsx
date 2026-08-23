@@ -20,16 +20,16 @@ import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import BookCover from '@/components/BookCover';
 import BookCoverModal from '@/components/BookCoverModal';
-import MasterPagination from '@/components/common/MasterPagination';
-import { exportToCSV } from '@/lib/exportCsv';
-import { inventoryAPI } from '@/lib/api';
+import MasterPagination from '@/shared/ui/MasterPagination';
+import { exportToCSV } from '@/shared/lib/exportCsv';
+import { inventoryAPI } from '@/shared/api/api';
 import { useQuery } from '@tanstack/react-query';
 import {
   PackageSearch, Download, Search, Printer, Eye, MapPin, ArrowUpDown, Clock,
   Calendar, BookOpen, Sparkles, X, RotateCcw, Camera, Trash2, ShieldCheck,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
 import type { InventoryItem, LpnPrintData, StockRole } from '../types';
 import { formatKSTDate, formatZone, gradeMeta, isNewBookItem } from '../utils';
 import { LpnPrintModal } from './LpnPrintModal';

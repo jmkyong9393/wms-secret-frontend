@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 
-import { apiClient } from "@/lib/api-client";
+import { apiClient } from "@/shared/api/api-client";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
 
 /** Sentry Application Metrics 카운터. 계측 실패가 업무 동작을 막으면 안 되므로 삼킨다. */

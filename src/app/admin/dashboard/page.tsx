@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { apiClient } from '@/shared/api/api-client';
 import { ShieldAlert, Lightbulb, ScrollText, ChevronDown, ChevronUp } from 'lucide-react';
 
 // 차트 데이터는 전량 백엔드 실집계다. 조회에 실패하면 빈 배열로 두어 화면이

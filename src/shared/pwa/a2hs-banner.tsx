@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useA2HS } from '@/hooks/use-a2hs';
-import { Button } from '@/components/ui/button';
+import { useA2HS } from '@/shared/pwa/use-a2hs';
+import { Button } from '@/shared/ui/button';
 import { Download, X } from 'lucide-react';
 
 export function A2HSBanner() {

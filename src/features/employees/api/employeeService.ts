@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api-client";
+import { apiClient } from "@/shared/api/api-client";
 import {
   EMPLOYEE_LIST_ENDPOINT,
   EMPLOYEE_BULK_CREATE_ENDPOINT,

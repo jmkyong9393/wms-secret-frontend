@@ -2,16 +2,16 @@
 
 import { useRef, useState } from "react";
 import { X, Paperclip, FileText } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Textarea } from "@/shared/ui/textarea";
+import { Button } from "@/shared/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/shared/ui/select";
 import type { CurrentUser } from "@/features/auth/types/authTypes";
 import type { BoardCategory } from "@/features/board/types/board";
 import { canWriteCategory } from "@/features/board/utils/permissions";
@@ -24,7 +24,7 @@ import {
   MAX_ATTACHMENT_SIZE_BYTES,
   validateAttachmentFile,
 } from "@/features/board/utils/attachmentValidation";
-import { boardUploadErrorMessage, uploadBoardAttachment } from "@/lib/s3_helper";
+import { boardUploadErrorMessage, uploadBoardAttachment } from "@/shared/api/s3_helper";
 
 export interface BoardPostFormValues {
   category: BoardCategory;

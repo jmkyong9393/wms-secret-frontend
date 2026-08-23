@@ -2,8 +2,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
 import { FileText, ArrowLeft, ShieldCheck, Lock, EyeOff, Server, AlertOctagon, CheckCircle2, ShieldAlert, KeyRound } from 'lucide-react';
 
 export default function TermsOfServicePage() {

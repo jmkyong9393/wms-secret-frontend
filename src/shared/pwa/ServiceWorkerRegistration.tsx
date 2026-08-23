@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { OfflineQueue } from "@/lib/offlineQueue";
+import { OfflineQueue } from "@/shared/api/offlineQueue";
 
 export function ServiceWorkerRegistration() {
   useEffect(() => {
@@ -20,11 +20,11 @@ export function ServiceWorkerRegistration() {
       const queue = new OfflineQueue();
       await queue.syncPendingTasks(
         async (blob, filename) => {
-          const { uploadImageToCloudFront } = await import('@/lib/s3_helper');
+          const { uploadImageToCloudFront } = await import('@/shared/api/s3_helper');
           return await uploadImageToCloudFront(blob, filename);
         },
         async (isbn, lpn, url) => {
-          const { apiClient } = await import('@/lib/api-client');
+          const { apiClient } = await import('@/shared/api/api-client');
           const response = await apiClient.post('/api/v1/inspections', {
             book_id: isbn,
             location_id: lpn,

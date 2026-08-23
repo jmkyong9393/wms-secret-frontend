@@ -14,14 +14,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
 import {
   Settings, Cpu, Printer, Sun, Moon, BellRing, Save, CheckCircle2, Zap, ShieldAlert, Lock, Package,
 } from 'lucide-react';
-import { getSystemSettings, saveSystemSettings } from '@/lib/systemSettings';
-import { apiClient } from '@/lib/api-client';
+import { getSystemSettings, saveSystemSettings } from '@/shared/lib/systemSettings';
+import { apiClient } from '@/shared/api/api-client';
 // 정책 상수는 HITL 화면과 공유한다 (features/hitl/policy.ts 단일 정의)
 import { UBCI_GRADE_POLICY, HITL_ROUTING_POLICY } from '@/features/hitl/policy';
 

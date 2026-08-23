@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
+import { Textarea } from "@/shared/ui/textarea";
+import { Button } from "@/shared/ui/button";
 import type { CurrentUser } from "@/features/auth/types/authTypes";
 import type { BoardComment } from "@/features/board/types/board";
 import { canDeleteComment, canEditComment } from "@/features/board/utils/permissions";
@@ -11,7 +11,7 @@ import {
   useUpdateBoardCommentMutation,
 } from "@/features/board/hooks/useBoardCommentMutations";
 import { ConfirmDialog } from "@/features/board/components/ConfirmDialog";
-import { maskName } from "@/lib/privacy-mask";
+import { maskName } from "@/shared/lib/privacy-mask";
 
 interface BoardCommentListProps {
   postId: string;

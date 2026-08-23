@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 import { X, Copy, CheckCircle2, Download } from "lucide-react";
 import * as XLSX from "xlsx";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/shared/ui/select";
 import type { CurrentUser } from "@/features/auth/types/authTypes";
 import type { AssignableRole } from "@/features/employees/types/employee";
 import { getAssignableRoles } from "@/features/employees/utils/permissions";

@@ -6,7 +6,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/shared/ui/select";
 import type { BoardCategory } from "@/features/board/types/board";
 import { CATEGORY_LABEL } from "@/features/board/components/categoryLabels";
 

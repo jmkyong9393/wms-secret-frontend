@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api-client";
+import { apiClient } from "@/shared/api/api-client";
 import {
   BOARD_POSTS_ENDPOINT,
   boardCommentDetailEndpoint,

@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { Printer, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import { LpnPrintLabel } from '@/features/inbound/components/LpnPrintLabel';
-import { labelsAPI } from '@/lib/api';
+import { labelsAPI } from '@/shared/api/api';
 import type { LpnPrintData } from '../types';
 
 /**

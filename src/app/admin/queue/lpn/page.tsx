@@ -1,9 +1,9 @@
 'use client';
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL } from '@/shared/api/api-client';
 
 import { useState, useEffect } from 'react';
 import { Printer, RefreshCcw, Search, Barcode, CheckCircle } from 'lucide-react';
-import { labelsAPI } from '@/lib/api';
+import { labelsAPI } from '@/shared/api/api';
 
 type LpnRecord = {
   lpn_barcode: string;
