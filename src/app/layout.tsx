@@ -6,7 +6,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { A2HSBanner } from "@/components/a2hs-banner";
 import { GlobalErrorBoundary } from "@/components/error/GlobalErrorBoundary";
-import { SessionAutoLogout } from "@/components/auth/SessionAutoLogout";
+import { SessionAutoLogout } from "@/features/auth/components/SessionAutoLogout";
 import ReactQueryProvider from "@/lib/react-query-provider";
 
 const geistSans = Geist({
