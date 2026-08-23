@@ -2,7 +2,7 @@
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import { useState, useEffect, useRef } from 'react';
-import BookCover from '@/components/BookCover';
+import BookCover from '@/entities/book/ui/BookCover';
 import { useMutation } from '@tanstack/react-query';
 import { Camera, Flashlight, RefreshCcw, Keyboard, Package, CheckCircle2, AlertTriangle, ScanLine, Printer, ArrowRight, BookOpen, ChevronLeft, User, Zap } from 'lucide-react';
 import { labelsAPI } from '@/shared/api/api';

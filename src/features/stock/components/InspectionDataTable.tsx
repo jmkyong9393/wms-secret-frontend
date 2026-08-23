@@ -15,8 +15,8 @@ import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import MasterPagination from '@/shared/ui/MasterPagination';
-import BookCover from '@/components/BookCover';
-import BookCoverModal from '@/components/BookCoverModal';
+import BookCover from '@/entities/book/ui/BookCover';
+import BookCoverModal from '@/entities/book/ui/BookCoverModal';
 import { exportToCSV } from '@/shared/lib/exportCsv';
 import { useAtomValue } from 'jotai';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';

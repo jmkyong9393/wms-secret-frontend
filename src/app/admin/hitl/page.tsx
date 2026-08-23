@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/ui/select";
-import BookCover from "@/components/BookCover";
+import BookCover from "@/entities/book/ui/BookCover";
 import { adminAPI } from "@/shared/api/api";
 import { getSystemSettings, SETTINGS_CHANGE_EVENT } from "@/shared/lib/systemSettings";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
