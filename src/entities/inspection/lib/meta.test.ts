@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gradeMeta } from './utils';
+import { gradeMeta } from './meta';
 
 describe('gradeMeta', () => {
   it("NORMAL을 GOOD으로 표시하지 않는다 ('NORMAL'에 'A'가 들어 있어 생겼던 오분류)", () => {
