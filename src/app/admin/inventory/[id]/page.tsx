@@ -10,8 +10,8 @@ import { ArrowLeft, Printer, ShieldCheck, MapPin, Tag, UserCheck, Package, Exter
 import BookCover from '@/entities/book/ui/BookCover';
 import { InspectionEvidenceViewer } from '@/features/stock/components/InspectionEvidenceViewer';
 import { PipelineTracePanel } from '@/features/stock/components/PipelineTracePanel';
-import { LpnPrintModal } from '@/features/stock/components/LpnPrintModal';
-import type { LpnPrintData } from '@/features/stock/types';
+import { LpnPrintModal } from '@/entities/label/ui/LpnPrintModal';
+import type { LpnPrintData } from '@/entities/label/model/types';
 import { adminAPI } from '@/shared/api/api';
 import {
   resolveInspectionImages,

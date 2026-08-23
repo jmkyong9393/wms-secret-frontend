@@ -15,7 +15,7 @@ import { getSystemSettings } from '@/shared/lib/systemSettings';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { BrowserMultiFormatReader as ZXingBrowserReader } from '@zxing/browser';
 import { QRCodeSVG } from 'qrcode.react';
-import { LpnPrintLabel } from '@/features/inbound/components/LpnPrintLabel';
+import { LpnPrintLabel } from '@/entities/label/ui/LpnPrintLabel';
 import { validateIsbn13, isLpnCode } from '@/features/inbound/isbnValidation';
 import { TRACK1_IMAGE_COUNT, TRACK1_SHOTS, shotAt, shotLabel } from '@/features/inbound/captureSequence';
 import { saveDraft, loadDraft, clearDraft } from '@/features/inbound/inspectionDraft';

@@ -30,9 +30,10 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
-import type { InventoryItem, LpnPrintData, StockRole } from '../types';
+import type { InventoryItem, StockRole } from '../types';
+import type { LpnPrintData } from '@/entities/label/model/types';
 import { formatKSTDate, formatZone, gradeMeta, isNewBookItem } from '../utils';
-import { LpnPrintModal } from './LpnPrintModal';
+import { LpnPrintModal } from '@/entities/label/ui/LpnPrintModal';
 
 /**
  * 확정 트랙 색상. 사람이 개입한 경로(HITL)와 자동 확정(AI)을 한눈에 가른다.

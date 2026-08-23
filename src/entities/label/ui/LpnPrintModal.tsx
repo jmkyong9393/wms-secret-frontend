@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { Printer, X } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
-import { LpnPrintLabel } from '@/features/inbound/components/LpnPrintLabel';
+import { LpnPrintLabel } from '@/entities/label/ui/LpnPrintLabel';
 import { labelsAPI } from '@/shared/api/api';
-import type { LpnPrintData } from '../types';
+import type { LpnPrintData } from '../model/types';
 
 /**
  * LPN 50x31mm 열전사 라벨 인쇄 모달 (공용).
