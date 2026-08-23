@@ -3,7 +3,7 @@
 
 import { useMemo } from 'react';
 import { useAtomValue } from 'jotai';
-import { uploadQueueAtom } from '@/stores/atoms';
+import { uploadQueueAtom } from '@/features/inbound/store/uploadQueueAtoms';
 import { Camera } from 'lucide-react';
 
 export default function RecentInspectionsClient() {

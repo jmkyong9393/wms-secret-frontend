@@ -3,7 +3,7 @@
 
 import { useMemo } from 'react';
 import { useAtomValue } from 'jotai';
-import { uploadQueueAtom } from '@/stores/atoms';
+import { uploadQueueAtom } from '@/features/inbound/store/uploadQueueAtoms';
 import { CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 import StatCard from './StatCard';
 
