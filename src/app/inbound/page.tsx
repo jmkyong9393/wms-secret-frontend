@@ -2,9 +2,8 @@
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import { useState, useEffect, useRef } from 'react';
-import BookCover from '@/entities/book/ui/BookCover';
 import { useMutation } from '@tanstack/react-query';
-import { Camera, Flashlight, RefreshCcw, Keyboard, Package, CheckCircle2, AlertTriangle, ScanLine, Printer, ArrowRight, BookOpen, ChevronLeft, User, Zap } from 'lucide-react';
+import { Camera, RefreshCcw, Package, CheckCircle2, ScanLine, Printer, ChevronLeft } from 'lucide-react';
 import { labelsAPI } from '@/shared/api/api';
 import { useCamera } from '@/shared/lib/useCamera';
 import { processImage } from '@/shared/lib/image-processor';
@@ -12,18 +11,22 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { uploadQueueAtom } from '@/entities/upload-task/model/uploadQueueAtoms';
 import { currentUserAtom } from '@/entities/user/model/authAtoms';
 import { getSystemSettings } from '@/shared/lib/systemSettings';
-import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
+import { DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { BrowserMultiFormatReader as ZXingBrowserReader } from '@zxing/browser';
-import { QRCodeSVG } from 'qrcode.react';
-import { LpnPrintLabel } from '@/entities/label/ui/LpnPrintLabel';
 import { validateIsbn13, isLpnCode } from '@/features/inbound/isbnValidation';
-import { TRACK1_IMAGE_COUNT, TRACK1_SHOTS, shotAt, shotLabel } from '@/features/inbound/captureSequence';
+import { TRACK1_IMAGE_COUNT, TRACK1_SHOTS, shotAt } from '@/features/inbound/captureSequence';
 import { saveDraft, loadDraft, clearDraft } from '@/features/inbound/inspectionDraft';
 import { ScanBarcodePanel } from '@/features/inbound/components/ScanBarcodePanel';
 import { PrintStickerPanel } from '@/features/inbound/components/PrintStickerPanel';
 import { CaptureControlsPanel } from '@/features/inbound/components/CaptureControlsPanel';
 import { ResultPanel } from '@/features/inbound/components/ResultPanel';
 import { InboundQueuePanel } from '@/features/inbound/components/InboundQueuePanel';
+import { InboundIntroBanner } from '@/features/inbound/components/InboundIntroBanner';
+import { TypeSelectCards } from '@/features/inbound/components/TypeSelectCards';
+import { ScanViewfinder } from '@/features/inbound/components/ScanViewfinder';
+import { LabelPreviewStage } from '@/features/inbound/components/LabelPreviewStage';
+import { CaptureStage } from '@/features/inbound/components/CaptureStage';
+import { ResultStage } from '@/features/inbound/components/ResultStage';
 
 type Step = 'SELECT_TYPE' | 'SCAN_BARCODE' | 'PRINT_STICKER' | 'VISION_EVALUATION' | 'RESULT';
 type InboundType = 'NEW_FASTTRACK' | 'USED_RETURN_INSPECTION';
@@ -1111,58 +1114,11 @@ export default function InboundScannerPage() {
       컨테이너는 셸에 위임하고 여기서는 콘텐츠만 렌더한다 (헤더 이중 렌더 방지).
     */
     <div className="space-y-6 pb-10 px-4 sm:px-0 pt-4 max-w-5xl mx-auto font-sans">
-      {/*
-        1. Top Banner Header (관제 표준 패턴)
-        다크 그라데이션 고정 배너가 라이트 모드에서 겉돌아
-        admin/inventory 등과 동일한 화이트 카드 + dark: 변형 패턴으로 교체.
-      */}
-      <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4 transition-colors">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-full text-xs font-bold font-mono flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              INBOUND CONTROL CENTER v2.15.0.1
-            </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">Real-time Vision AI & Fast-track Pipeline</span>
-          </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white flex items-center gap-2">
-            <Camera className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-            현장 입고 & AI 훼손 정밀 검수 관제
-          </h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400 max-w-4xl leading-relaxed">
-            신품 도서는 사진 촬영 없이 <strong className="text-indigo-600 dark:text-indigo-300 font-black">ISBN 바코드 스캔만으로 0초 만에 재고 입고</strong>되며, 중고/반품 도서는 <strong className="text-amber-600 dark:text-amber-300 font-black">4-Agent AI 비전 파이프라인</strong>을 통해 훼손 등급과 매입가를 정밀 평가합니다.
-          </p>
-        </div>
-
-        {/* 파이프라인 설명 텍스트 종료 후 하단 컨트롤 배치 구역 */}
-        <div className="pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 dark:text-gray-200">
-            <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              📍 배정 라인:
-            </span>
-            <select
-              value={activeStation}
-              onChange={(e) => handleStationChange(e.target.value)}
-              className="bg-transparent text-emerald-700 dark:text-emerald-300 font-black px-1.5 py-1 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-400 text-xs"
-            >
-              <option value="A" className="dark:bg-gray-800">Line A (Workstation A - 메인 입고 라인)</option>
-              <option value="B" className="dark:bg-gray-800">Line B (Workstation B)</option>
-              <option value="C" className="dark:bg-gray-800">Line C (Workstation C)</option>
-              <option value="D" className="dark:bg-gray-800">Line D (Workstation D)</option>
-              <option value="E" className="dark:bg-gray-800">Line E (Workstation E)</option>
-            </select>
-          </div>
-
-          <button
-            onClick={resetToTypeSelect}
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-2 cursor-pointer shrink-0"
-          >
-            <RefreshCcw className="w-4 h-4" />
-            검수 유형 재선택
-          </button>
-        </div>
-      </div>
+      <InboundIntroBanner
+        activeStation={activeStation}
+        onStationChange={handleStationChange}
+        onResetType={resetToTypeSelect}
+      />
 
       {/* 2. Main Scanner App Container (Expanded PC/Mobile Responsive Viewport) */}
       <div className="max-w-2xl mx-auto">
@@ -1244,58 +1200,12 @@ export default function InboundScannerPage() {
           <div className="absolute inset-0 opacity-0 dark:opacity-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-400 via-slate-700 to-black z-0"></div>
 
           {step === 'SELECT_TYPE' && (
-            <div className="z-10 p-6 space-y-6 w-full max-w-lg animate-in fade-in zoom-in-95 duration-200">
-              <div className="text-center space-y-1">
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">📋 입고 검수 유형 선택</h2>
-                <p className="text-xs text-gray-500 dark:text-slate-400">현장 상황 및 도서 상태에 맞는 입고 프로세스를 선택해 주세요.</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                {/* Card 1: Fast-track New Book Inbound (Skip Photo 100%) */}
-                <button
-                  onClick={() => {
-                    setInboundType('NEW_FASTTRACK');
-                    setStep('SCAN_BARCODE');
-                  }}
-                  className="p-6 rounded-2xl bg-white dark:bg-gradient-to-br dark:from-indigo-950/90 dark:via-slate-900 dark:to-slate-950 border-2 border-indigo-200 dark:border-indigo-500/60 hover:border-indigo-500 dark:hover:border-indigo-400 text-left transition-all hover:scale-[1.02] shadow-lg dark:shadow-2xl group cursor-pointer"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="p-3.5 rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300 group-hover:bg-indigo-500 group-hover:text-white transition-all shadow-inner">
-                      <BookOpen className="w-8 h-8" />
-                    </div>
-                    <span className="text-[11px] font-black bg-indigo-500 text-white px-3 py-1 rounded-full animate-pulse shadow-md">0초 고속 입고</span>
-                  </div>
-                  <h3 className="font-extrabold text-lg text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">
-                    ⚡ 신품 도서 (ISBN 바코드 고속 입고)
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-300 mt-1.5 leading-relaxed">
-                    사진 촬영 과정을 <strong>100% 스킵</strong>하고, 바코드 스캔 즉시 알라딘 도서 정보를 연동하여 <strong>0초 만에 바로 재고 입고 확정</strong>합니다.
-                  </p>
-                </button>
-
-                {/* Card 2: Used / Returned Book AI Inspection */}
-                <button
-                  onClick={() => {
-                    setInboundType('USED_RETURN_INSPECTION');
-                    setStep('SCAN_BARCODE');
-                  }}
-                  className="p-6 rounded-2xl bg-white dark:bg-gradient-to-br dark:from-amber-950/90 dark:via-slate-900 dark:to-slate-950 border-2 border-amber-200 dark:border-amber-500/60 hover:border-amber-500 dark:hover:border-amber-400 text-left transition-all hover:scale-[1.02] shadow-lg dark:shadow-2xl group cursor-pointer"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="p-3.5 rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-all shadow-inner">
-                      <Camera className="w-8 h-8" />
-                    </div>
-                    <span className="text-[11px] font-black bg-amber-500 text-slate-950 px-3 py-1 rounded-full shadow-md">AI 훼손 정밀 검수</span>
-                  </div>
-                  <h3 className="font-extrabold text-lg text-gray-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-300 transition-colors">
-                    🔍 중고 / 반품 도서 (AI 정밀 검수)
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-300 mt-1.5 leading-relaxed">
-                    표지 및 속지 카메라 촬영 후 <strong>4-Agent AI 비전 파이프라인(YOLOv8)</strong>으로 훼손 등급 및 매입/반품가를 정밀 평가합니다.
-                  </p>
-                </button>
-              </div>
-            </div>
+            <TypeSelectCards
+              onSelect={(t) => {
+                setInboundType(t);
+                setStep('SCAN_BARCODE');
+              }}
+            />
           )}
         <div className="absolute inset-0 opacity-0 dark:opacity-20 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-600 to-black z-0"></div>
         
@@ -1310,142 +1220,31 @@ export default function InboundScannerPage() {
         )}
         
         {step === 'SCAN_BARCODE' && (
-          <div className="relative w-64 h-64 sm:w-72 sm:h-72 z-10">
-            <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-emerald-500 rounded-tl-xl"></div>
-            <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-emerald-500 rounded-tr-xl"></div>
-            <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-emerald-500 rounded-bl-xl"></div>
-            <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-emerald-500 rounded-br-xl"></div>
-            <div className="absolute left-0 right-0 h-0.5 bg-emerald-500 shadow-[0_0_15px_3px_rgba(16,185,129,0.7)] animate-scan-laser z-10 w-full"></div>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-gray-400 dark:text-white/40 text-sm font-semibold tracking-wider text-center">도서 뒷면의 ISBN<br/>또는 재촬영 LPN QR 스캔</span>
-            </div>
-            {/* 오독 거절 안내. 아무 반응이 없으면 작업자는 원인을 모른 채 스캔만 반복한다. */}
-            {scanWarning && (
-              <div className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-[19rem] max-w-[88vw] px-4 py-3 rounded-xl bg-amber-500/95 text-white text-xs font-bold text-center leading-relaxed shadow-lg z-20">
-                {scanWarning}
-              </div>
-            )}
-          </div>
+          <ScanViewfinder scanWarning={scanWarning} />
         )}
 
         {step === 'PRINT_STICKER' && (
-          <div className="relative z-10 flex flex-col items-center">
-            {inboundType === 'NEW_FASTTRACK' ? (
-              <div className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl border border-indigo-200 dark:border-indigo-500/30 p-8 rounded-3xl text-center space-y-4 shadow-xl dark:shadow-2xl max-w-md animate-in zoom-in-95 duration-200">
-                <div className="w-16 h-16 bg-gradient-to-tr from-indigo-600 to-purple-500 text-white rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/30 transform hover:scale-105 transition-transform">
-                  <Zap className="w-9 h-9 text-yellow-300 fill-yellow-300 animate-pulse" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">⚡ 신품 도서 Fast-track 입고</h3>
-                  <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed font-medium">
-                    사진 촬영 및 개별 LPN 발급을 <strong className="text-emerald-600 dark:text-emerald-400">100% 생략</strong>하고<br/>수량 확인 후 즉시 재고로 편입됩니다.
-                  </p>
-                </div>
-                <div className="inline-flex items-center gap-2 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-500/40 px-4 py-1.5 rounded-full text-xs font-mono font-bold text-indigo-700 dark:text-indigo-200 shadow-inner">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                  <span>ISBN: {isbn}</span>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="w-48 h-12 bg-slate-200 dark:bg-slate-800 border-b-4 border-slate-300 dark:border-slate-700 rounded-t-xl z-20 flex items-center justify-center mb-1">
-                  <span className="text-slate-600 dark:text-slate-400 text-xs font-bold">라벨 프린터 (연동됨)</span>
-                </div>
-                {/* 50x31mm(가로형) 라벨 렌더링 */}
-                <div className="relative z-10 animate-print shadow-2xl bg-white border border-gray-300 transform scale-[1.7] origin-top mb-20 mt-4 rounded-sm">
-                  <LpnPrintLabel data={{
-                    lpn_barcode: currentLpn,
-                    book: {
-                      title: bookInfo?.title || '미등록 도서',
-                      author: bookInfo?.author || '-',
-                      isbn: isbn || '-'
-                    },
-                    worker_id: user?.name ? `${user.employeeId} (${user.name})` : 'WM2608001 (최초관리자)'
-                  }} />
-                </div>
-              </>
-            )}
-          </div>
+          <LabelPreviewStage
+            inboundType={inboundType}
+            isbn={isbn}
+            currentLpn={currentLpn}
+            bookInfo={bookInfo}
+            workerLabel={user?.name ? `${user.employeeId} (${user.name})` : 'WM2608001 (최초관리자)'}
+          />
         )}
 
         {step === 'VISION_EVALUATION' && (
-          <div className="absolute inset-0 w-full h-full z-10">
-            {/* 오버레이 및 뷰파인더 가이드 */}
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none pb-2 pt-12">
-              {/* 바깥 영역을 어둡게 처리하기 위한 그림자 꼼수 */}
-              {/* 가이드박스 크기는 촬영 단계마다 다르다. processImage()가 이 박스 영역만
-                  도려내므로, 책등처럼 좁고 긴 피사체를 표지용 박스로 찍으면 배경이 대부분을
-                  차지해 결함이 상대적으로 작아진다. */}
-              <div
-                ref={guideBoxRef}
-                className={`relative ${currentShot.guideClass} max-h-[90%] border-4 border-dashed border-white/60 rounded-3xl flex items-center justify-center shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]`}
-              >
-                
-                {/* 십자선 */}
-                <div className="absolute w-8 h-1 bg-white/40 rounded-full"></div>
-                <div className="absolute w-1 h-8 bg-white/40 rounded-full"></div>
-
-                {/* 툴팁 버블 */}
-                <div className="absolute -top-12 bg-gray-800/80 backdrop-blur-sm text-white text-sm font-bold px-5 py-2 rounded-full shadow-lg text-center whitespace-nowrap">
-                  {currentShot.tip}
-                </div>
-
-                {isAnalyzing && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm rounded-2xl z-20">
-                    <RefreshCcw className="w-12 h-12 text-emerald-400 animate-spin mb-4" />
-                    <span className="text-emerald-400 font-bold animate-pulse text-xl drop-shadow-lg shadow-black">AI 렌즈 판독 중...</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 화면 안 셔터.
-                카드 하단의 촬영 버튼은 한 손으로 폰을 들고 책을 잡은 자세에서 엄지가
-                닿지 않는다. 프리뷰 위에 큰 원형 셔터를 겹쳐 두어 손을 옮기지 않고 찍는다.
-                (썸네일 갤러리보다 위에 배치해 서로 가리지 않게 한다.) */}
-            <button
-              type="button"
-              onClick={takePhoto}
-              disabled={isAnalyzing}
-              aria-label="사진 촬영"
-              className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 w-20 h-20 rounded-full bg-white/95 disabled:bg-white/40 shadow-2xl ring-4 ring-white/40 active:scale-90 transition-transform flex flex-col items-center justify-center cursor-pointer"
-            >
-              <Camera className="w-7 h-7 text-slate-900" />
-              <span className="text-[10px] font-black text-slate-900 mt-0.5">{capturedImages.length}장</span>
-            </button>
-
-            {/* 썸네일 갤러리 */}
-            <div className="absolute bottom-4 left-4 right-4 z-20 flex space-x-2 overflow-x-auto pb-2">
-              {capturedImages.map((img, idx) => (
-                <div key={idx} className="w-14 h-20 bg-slate-800 rounded-lg border-2 border-emerald-500 flex-shrink-0 flex items-center justify-center relative overflow-hidden">
-                  <span className="absolute top-1 text-[10px] font-bold text-white z-10 drop-shadow-md bg-black/40 px-1 rounded">{shotLabel(idx)}</span>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt="capture" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-white/10 pointer-events-none"></div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <CaptureStage
+            guideBoxRef={guideBoxRef}
+            currentShot={currentShot}
+            isAnalyzing={isAnalyzing}
+            capturedImages={capturedImages}
+            onTakePhoto={takePhoto}
+          />
         )}
 
         {step === 'RESULT' && (
-          <div className="relative z-10 bg-white p-8 rounded-2xl flex flex-col items-center animate-in zoom-in-95 shadow-xl w-72 text-center">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-3">
-              <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-            </div>
-            <div className="bg-gray-100 px-3 py-1 rounded mb-2 border border-gray-200">
-              <span className="text-xs font-mono font-bold text-gray-600 tracking-wider">{currentLpn}</span>
-            </div>
-            <h2 className="text-xl font-bold text-gray-800 mb-3">
-              {bookInfo?.title || '미등록 도서'}
-            </h2>
-            <div className="px-4 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full mb-5 shadow-sm">
-              <span className="text-emerald-700 font-extrabold">AI 검수 큐 등록 완료</span>
-            </div>
-            <p className="text-sm text-gray-500 font-medium">
-              AI 판독 에이전트가 검수를 시작했습니다.<br/>다음 도서 스캔을 진행하세요.
-            </p>
-          </div>
+          <ResultStage currentLpn={currentLpn} title={bookInfo?.title || '미등록 도서'} />
         )}
       </div>
       </div>
