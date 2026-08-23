@@ -9,7 +9,7 @@ import { labelsAPI } from '@/lib/api';
 import { useCamera } from '@/features/inbound/hooks/useCamera';
 import { processImage } from '@/lib/image-processor';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { uploadQueueAtom } from '@/stores/atoms';
+import { uploadQueueAtom } from '@/features/inbound/store/uploadQueueAtoms';
 import { currentUserAtom } from '@/features/auth/store/authAtoms';
 import { getSystemSettings } from '@/lib/systemSettings';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';

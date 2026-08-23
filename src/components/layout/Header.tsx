@@ -5,7 +5,7 @@ import { maskName } from '@/lib/privacy-mask';
 import Link from 'next/link';
 import React, { useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { inFlightUploadCountAtom } from '@/stores/atoms';
+import { inFlightUploadCountAtom } from '@/features/inbound/store/uploadQueueAtoms';
 import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { Bell, BellOff, User, CloudUpload, CloudOff, Sun, Moon, VolumeX } from 'lucide-react';
