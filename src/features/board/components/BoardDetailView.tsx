@@ -126,6 +126,7 @@ export function BoardDetailView({ postId }: BoardDetailViewProps) {
             {post.attachment_paths.map((path, idx) =>
               isImageAttachment(path) ? (
                 <a key={path} href={attachmentUrl(path)} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                   <img
                     src={attachmentUrl(path)}
                     alt={`첨부 ${idx + 1}`}

@@ -1,4 +1,5 @@
 "use client";
+import type { PickingInstruction, OutboundBook, CushionOption, PricingResult, DemoOrder } from '@/features/outbound/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useState, useEffect } from 'react';
@@ -15,16 +16,16 @@ import { BoxSelectionPanel } from '@/features/outbound/components/BoxSelectionPa
 import { Camera, TrendingUp, Sparkles, RefreshCcw } from 'lucide-react';
 
 export default function OutboundDashboard() {
-  const [mockOrder, setMockOrder] = useState<any>(null);
+  const [mockOrder, setMockOrder] = useState<DemoOrder | null>(null);
   const [boxCategoryTab, setBoxCategoryTab] = useState<'slim' | 'standard'>('slim');
 
   // 100% Real PostgreSQL DB REST API Data Binding (No Mock Objects)
 
-  const [inventoryBooks, setInventoryBooks] = useState<any[]>([]);
+  const [inventoryBooks, setInventoryBooks] = useState<OutboundBook[]>([]);
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
-  const [selectedCushion, setSelectedCushion] = useState<any>({ thick_mm: 9.0, mode: 'top' });
+  const [selectedCushion] = useState<CushionOption>({ thick_mm: 9.0, mode: 'top' });
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [isBooksLoading, setIsBooksLoading] = useState<boolean>(true);
+  const [, setIsBooksLoading] = useState<boolean>(true);
   const [outboundSummary, setOutboundSummary] = useState<{
     shippedTodayCount: number;
     onTimeRatePercent: number;
@@ -32,13 +33,13 @@ export default function OutboundDashboard() {
   const [isSummaryLoading, setIsSummaryLoading] = useState<boolean>(true);
 
   // AI 피킹 지시서 연동 상태 (주문 → 지시서 → 출고 파이프라인)
-  const [pickingInstructions, setPickingInstructions] = useState<any[]>([]);
+  const [pickingInstructions, setPickingInstructions] = useState<PickingInstruction[]>([]);
   const [selectedInstructionId, setSelectedInstructionId] = useState<string | null>(null);
   const activeInstruction = pickingInstructions.find(pi => pi.id === selectedInstructionId) || null;
   // 백엔드 Two-Track 가격 응답 전문 (라인별 신품/중고 x 수량 확정가)
-  const [pricingResult, setPricingResult] = useState<any>(null);
+  const [pricingResult, setPricingResult] = useState<PricingResult | null>(null);
 
-  const fetchPickingInstructions = async (): Promise<any[]> => {
+  const fetchPickingInstructions = async (): Promise<PickingInstruction[]> => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/orders/picking-instructions?active_only=true&limit=20`, { cache: 'no-store' });
       if (res.ok) {
@@ -58,7 +59,7 @@ export default function OutboundDashboard() {
       // /admin/outbound?instruction=<id> 딥링크 진입 시 해당 지시서 자동 선택
       const params = new URLSearchParams(window.location.search);
       const target = params.get('instruction');
-      if (target && list.some((pi: any) => pi.id === target)) {
+      if (target && list.some((pi) => pi.id === target)) {
         setSelectedInstructionId(target);
       }
     })();
@@ -69,7 +70,7 @@ export default function OutboundDashboard() {
     if (!activeInstruction || inventoryBooks.length === 0) return;
     const ids: string[] = [];
     const quantities: Record<string, number> = {};
-    activeInstruction.items.forEach((it: any) => {
+    activeInstruction.items.forEach((it) => {
       const frontId = it.is_new ? `NEW-BOOK-${it.book_id}` : it.used_item_id;
       if (frontId && inventoryBooks.some(b => b.id === frontId)) {
         ids.push(frontId);
@@ -241,7 +242,7 @@ export default function OutboundDashboard() {
 
   // Fetch real algorithmic price from backend API based on selected N books metadata
   // Two-Track: 라인별 quantity(수량) + is_new(신품/중고) + ubci null-safe 전달
-  const fetchRealDynamicPrice = async (books: any[]) => {
+  const fetchRealDynamicPrice = async (books: OutboundBook[]) => {
     if (!books || books.length === 0) {
       setPricingResult(null);
       return;
@@ -273,7 +274,7 @@ export default function OutboundDashboard() {
           customer_name: activeInstruction?.customer_name || books[0].customer || randomB2bCustomerName(),
           title: books.length === 1 ? books[0].title : `${books[0].title} 외 ${books.length - 1}권 (묶음 출고)`,
           isbn: books.length === 1 ? books[0].isbn : `${books[0].isbn} 등 N권`,
-          list_price: data.total_list_price || books.reduce((s, b) => s + b.listPrice, 0),
+          list_price: data.total_list_price || books.reduce((s, b) => s + (b.listPrice || 0), 0),
           ubci_score: usedBooks.length > 0
             ? Math.round(usedBooks.reduce((s, b) => s + (b.ubciScore || 85), 0) / usedBooks.length)
             : null,
@@ -301,7 +302,7 @@ export default function OutboundDashboard() {
   const [selectedBoxId, setSelectedBoxId] = useState<string>("BOOK-S2");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [confirmed, setConfirmed] = useState<boolean>(false);
-  const [aiReasoningLog, setAiReasoningLog] = useState<string>('');
+  const [aiReasoningLog] = useState<string>('');
 
   const activeBox = BOX_OPTIONS.find(b => b.id === selectedBoxId) || BOX_OPTIONS[1];
 
@@ -332,7 +333,7 @@ export default function OutboundDashboard() {
         `${data.pricing.pricing_label}\n` +
         `총 ${data.pricing.total_quantity}권 / ${Number(data.pricing.final_price).toLocaleString()}원`
       );
-    } catch (e) {
+    } catch {
       alert('백엔드 연결 실패 - B2B 주문 시뮬레이션을 실행하지 못했습니다.');
     } finally {
       setIsLoading(false);
@@ -395,7 +396,7 @@ export default function OutboundDashboard() {
         alert(`[3D Bin Packing 확정 & CJ 송장 발급]\n${data.message}\n박스: ${activeBox.name} (${activeBox.specs})\n\n→ worker가 스캐너 화면의 적재 가이드에 따라 포장 완료하면 최종 출고됩니다.`);
         await fetchPickingInstructions();
         return;
-      } catch (e) {
+      } catch {
         alert('백엔드 연결 실패 - 출고 확정을 처리하지 못했습니다.');
         return;
       }

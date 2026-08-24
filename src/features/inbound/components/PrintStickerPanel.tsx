@@ -1,5 +1,6 @@
 'use client';
 
+import type { BookMeta } from '../types';
 import { Camera, Printer, RefreshCcw, Zap } from 'lucide-react';
 import BookCover from '@/entities/book/ui/BookCover';
 
@@ -19,7 +20,7 @@ export function PrintStickerPanel({
   onConfirmPrintAndCapture,
 }: {
   isbn: string;
-  bookInfo: any;
+  bookInfo: BookMeta | null;
   isLoadingBook: boolean;
   inboundType: 'NEW_FASTTRACK' | 'USED_RETURN_INSPECTION';
   fasttrackQty: number;

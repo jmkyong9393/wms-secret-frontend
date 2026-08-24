@@ -1,4 +1,5 @@
 'use client';
+import type { RawBBox } from '@/entities/inspection/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -21,7 +22,7 @@ export default function HistoryDataGrid() {
   const queryClient = useQueryClient();
   
   // AI Detail Result Fetching
-  const [detailData, setDetailData] = useState<any>(null);
+  const [detailData, setDetailData] = useState<{ images?: string[]; result?: { defect_coordinates?: RawBBox[]; grade?: string; ubci_score?: number; defect_description?: string } } | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
@@ -61,7 +62,7 @@ export default function HistoryDataGrid() {
       }
 
       const localData = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
-      const updated = localData.map((item: any) => 
+      const updated = localData.map((item: Record<string, unknown> & { lpn?: string }) =>
         item.lpn === lpn 
           ? { 
               ...item, 
@@ -106,7 +107,7 @@ export default function HistoryDataGrid() {
       if (selectedBook.id.startsWith('local_')) {
         // 실제 스캔한 데이터 삭제
         const localData = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
-        const updated = localData.filter((item: any) => item.job_id !== selectedBook.job_id);
+        const updated = localData.filter((item: { job_id?: string }) => item.job_id !== selectedBook.job_id);
         localStorage.setItem('local_evaluations', JSON.stringify(updated));
       } else {
         // Mock 데이터 삭제 (숨김 처리)
@@ -358,7 +359,7 @@ export default function HistoryDataGrid() {
                     </span>
                   </td>
                   <td className="px-4 py-4 text-right whitespace-nowrap">
-                    <button onClick={() => setSelectedBook(row as any)} className="text-indigo-600 hover:text-indigo-800 font-medium bg-indigo-50 px-3 py-1 rounded-lg">상세</button>
+                    <button onClick={() => setSelectedBook(row)} className="text-indigo-600 hover:text-indigo-800 font-medium bg-indigo-50 px-3 py-1 rounded-lg">상세</button>
                   </td>
                 </tr>
               ))
@@ -458,10 +459,10 @@ export default function HistoryDataGrid() {
                       <Loader2 className="w-8 h-8 animate-spin mb-2 text-indigo-500" />
                       <p>AI 판독 데이터 불러오는 중...</p>
                     </div>
-                  ) : detailData?.images?.length > 0 ? (
+                  ) : (detailData?.images?.length ?? 0) > 0 ? (
                     <BBoxImageRenderer 
-                      src={detailData.images[selectedImageIndex]} 
-                      bboxes={(detailData.result?.defect_coordinates || []).filter((box: any) => (box.image_index || 0) === selectedImageIndex)}
+                      src={detailData!.images![selectedImageIndex]} 
+                      bboxes={(detailData!.result?.defect_coordinates || []).filter((box) => (box.image_index || 0) === selectedImageIndex)}
                       alt="선택된 이미지"
                     />
                   ) : (
@@ -472,9 +473,9 @@ export default function HistoryDataGrid() {
                 </div>
                 
                 {/* Thumbnails (Carousel) */}
-                {detailData?.images?.length > 1 && (
+                {(detailData?.images?.length ?? 0) > 1 && (
                   <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-                    {detailData.images.map((img: string, idx: number) => (
+                    {detailData!.images!.map((img: string, idx: number) => (
                       <div 
                         key={idx} 
                         onClick={() => setSelectedImageIndex(idx)}
@@ -482,6 +483,7 @@ export default function HistoryDataGrid() {
                           selectedImageIndex === idx ? 'border-indigo-500 opacity-100' : 'border-transparent hover:border-gray-300 opacity-60 hover:opacity-100'
                         }`}
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                         <img src={img} alt={`thumb-${idx}`} className="w-full h-full object-cover rounded" />
                       </div>
                     ))}
@@ -572,7 +574,7 @@ export default function HistoryDataGrid() {
                         
                         // Update local_evaluations
                         const localData = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
-                        const updated = localData.map((item: any) => 
+                        const updated = localData.map((item: Record<string, unknown> & { job_id?: string }) =>
                           item.job_id === selectedBook.job_id 
                             ? { ...item, grade: data.grade, score: data.ubci_score, reasonCode: data.defect_description, timestamp: new Date().toISOString() } 
                             : item
@@ -582,7 +584,7 @@ export default function HistoryDataGrid() {
                         alert(`AI 재평가 완료! 최종 등급: ${data.grade}`);
                         // 쿼리 클라이언트 무효화 생략 가능 (페이지 리로드 유도 또는 상위 컴포넌트에서 훅 사용 필요)
                         if (typeof window !== 'undefined') window.location.reload();
-                      } catch(e) {
+                      } catch {
                         alert('재평가 중 오류가 발생했습니다.');
                       }
                     }}

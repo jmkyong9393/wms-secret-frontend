@@ -1,4 +1,5 @@
 "use client";
+import type { PickingInstruction, PickScanResult } from '@/features/outbound/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -71,13 +72,13 @@ export default function WorkerOutboundPage() {
   const [showScanner, setShowScanner] = useState<boolean>(false);
 
   // 피킹 지시서 실시간 연동 상태
-  const [instructions, setInstructions] = useState<any[]>([]);
+  const [instructions, setInstructions] = useState<PickingInstruction[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const activeInstruction = instructions.find(i => i.id === selectedId) || null;
 
   const [manualLpn, setManualLpn] = useState<string>('');
-  const [scanResult, setScanResult] = useState<any | null>(null);
+  const [scanResult, setScanResult] = useState<PickScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [isAccepting, setIsAccepting] = useState<boolean>(false);
@@ -92,10 +93,10 @@ export default function WorkerOutboundPage() {
       if (res.ok) {
         const data = await res.json();
         // worker 작업 대상: 수락 대기 ~ 포장 대기(PACKED)까지 (SHIPPED/CANCELLED 제외)
-        const workable = data.filter((i: any) => ['PENDING', 'ACCEPTED', 'IN_PROGRESS', 'PICKED', 'PACKED'].includes(i.status));
+        const workable: PickingInstruction[] = data.filter((i: PickingInstruction) => ['PENDING', 'ACCEPTED', 'IN_PROGRESS', 'PICKED', 'PACKED'].includes(i.status));
         setInstructions(workable);
         setSelectedId(prev => {
-          if (prev && workable.some((i: any) => i.id === prev)) return prev;
+          if (prev && workable.some((i) => i.id === prev)) return prev;
           return workable.length > 0 ? workable[0].id : null;
         });
       }
@@ -151,7 +152,7 @@ export default function WorkerOutboundPage() {
         return;
       }
       await fetchInstructions();
-    } catch (e) {
+    } catch {
       alert('백엔드 연결 실패');
     } finally {
       setIsAccepting(false);
@@ -174,7 +175,7 @@ export default function WorkerOutboundPage() {
       }
       alert(`✅ ${data.message}`);
       await fetchInstructions();
-    } catch (e) {
+    } catch {
       alert('백엔드 연결 실패');
     } finally {
       setIsCompleting(false);
@@ -218,7 +219,7 @@ export default function WorkerOutboundPage() {
       if (data.all_picked) {
         alert(`✅ [피킹 전량 완료] 지시서 ${data.instruction_no}의 모든 품목 피킹이 완료되었습니다.\n관리자 출고 화면에서 패킹 박스 확정 후 송장이 발급됩니다.`);
       }
-    } catch (e) {
+    } catch {
       setScanError('백엔드 연결 실패');
     } finally {
       setIsScanning(false);
@@ -361,7 +362,7 @@ export default function WorkerOutboundPage() {
 
                 {/* 피킹 대상 체크리스트 */}
                 <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-                  {activeInstruction.items.map((it: any) => {
+                  {activeInstruction.items.map((it) => {
                     const done = it.status === 'PICKED';
                     return (
                       <div key={it.id} className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs ${
@@ -444,7 +445,7 @@ export default function WorkerOutboundPage() {
             <Barcode className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             LPN(중고) / ISBN(신품) 피킹 검증
           </label>
-          <span className="text-[10px] font-mono text-gray-400">'-' 자동 생성</span>
+          <span className="text-[10px] font-mono text-gray-400">&apos;-&apos; 자동 생성</span>
         </div>
 
         <div className="space-y-2">
@@ -472,10 +473,10 @@ export default function WorkerOutboundPage() {
             <span className="text-[11px] text-gray-400 font-bold shrink-0">빠른 스캔:</span>
             <div className="flex items-center gap-1.5 overflow-x-auto">
               {activeInstruction.items
-                .filter((it: any) => it.status !== 'PICKED')
+                .filter((it) => it.status !== 'PICKED')
                 .slice(0, 3)
-                .map((it: any) => {
-                  const code = it.lpn_barcode || it.isbn;
+                .map((it) => {
+                  const code = it.lpn_barcode || it.isbn || '';
                   return (
                     <button
                       key={it.id}
@@ -588,7 +589,7 @@ export default function WorkerOutboundPage() {
               <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
               적재 가이드 - 아래 순서대로 하단부터 적재 (Bottom-Heavy Stack)
             </p>
-            {activeInstruction.items.map((it: any, idx: number) => (
+            {activeInstruction.items.map((it, idx: number) => (
               <div key={it.id} className="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-2 text-[11px]">
                 <span className="w-5 h-5 rounded bg-indigo-600 text-white font-black font-mono flex items-center justify-center shrink-0 text-[10px]">
                   {idx + 1}

@@ -1,10 +1,11 @@
 'use client';
 
+import type { UploadTask } from '@/entities/upload-task/model/uploadQueueAtoms';
 import { AlertTriangle, CheckCircle2, Printer, RefreshCcw } from 'lucide-react';
 
 /** 비동기 검수 큐 진행 현황 패널 (진행바·판정 배지·라벨 재출력). */
 export function InboundQueuePanel({ visibleQueue, inFlightCount, finishedCount, reprintingLpn, onClearFinished, onReprint }: {
-  visibleQueue: any[];
+  visibleQueue: UploadTask[];
   inFlightCount: number;
   finishedCount: number;
   reprintingLpn: string | null;

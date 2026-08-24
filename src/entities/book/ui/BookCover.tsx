@@ -52,6 +52,7 @@ export default function BookCover({
         className={`relative overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs shrink-0 flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-105 group ${className}`}
         title={`${title} - 클릭하여 크게 보기`}
       >
+        {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
         <img
           src={finalSrc}
           alt={title}

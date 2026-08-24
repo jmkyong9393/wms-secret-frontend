@@ -22,18 +22,19 @@ import {
 } from 'recharts';
 
 // Custom Recharts Tooltip Component for Pixel-Perfect Dark / Light Mode Support
-const CustomTooltip = ({ active, payload, label }: any) => {
+interface TooltipEntry { name?: string; value?: number | string; color?: string; fill?: string }
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: TooltipEntry[]; label?: string | number }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border border-gray-200 dark:border-gray-800 p-3 rounded-xl shadow-xl text-xs font-sans space-y-1 z-50">
         <p className="font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-800 pb-1 font-mono">{label}</p>
-        {payload.map((item: any, idx: number) => (
+        {payload.map((item: TooltipEntry, idx: number) => (
           <div key={idx} className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color || item.fill }} />
               {item.name}:
             </span>
-            <span className="font-mono font-bold text-gray-900 dark:text-white">{item.value.toLocaleString()}</span>
+            <span className="font-mono font-bold text-gray-900 dark:text-white">{(item.value ?? '').toLocaleString()}</span>
           </div>
         ))}
       </div>
@@ -42,7 +43,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-function DashboardCharts({ charts }: { charts: any }) {
+type ChartRow = Record<string, string | number>;
+interface GradeDatum { name: string; value: number; pct?: number; color: string }
+interface ChartsPayload {
+  ubci_grade_data?: GradeDatum[];
+  ubci_mint_good_pct?: number;
+  volume_data?: ChartRow[];
+  category_data?: ChartRow[];
+}
+function DashboardCharts({ charts }: { charts: ChartsPayload | null | undefined }) {
     const ubciGradeData = charts?.ubci_grade_data ?? [];
     // 등급 비율(pct)·MINT+GOOD 합계는 백엔드가 계산해 pct 필드로 내려준다(charts/router.py).
     const ubciMintGoodPct = charts?.ubci_mint_good_pct;
@@ -139,7 +148,7 @@ function DashboardCharts({ charts }: { charts: any }) {
                   {item.name}
                 </span>
                 <span className="font-bold font-mono text-gray-900 dark:text-white">
-                  {item.value.toLocaleString()}건 ({item.pct ?? 0}%)
+                  {(item.value ?? '').toLocaleString()}건 ({item.pct ?? 0}%)
                 </span>
               </div>
             ))}

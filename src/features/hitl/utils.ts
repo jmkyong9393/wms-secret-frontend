@@ -1,3 +1,4 @@
+import type { RawBBox } from "@/entities/inspection/model/types";
 import type { HitlTask } from './types/hitl';
 
 /**
@@ -24,7 +25,7 @@ export function formatQueuedAt(iso?: string): string | null {
  * 컴포넌트 바깥으로 뺐다 - 두 군데서 각자 계산하면 로직이 갈라져 서로 다른 값을 보여줄 수 있다.
  */
 export function getPrimaryDefectReason(t: HitlTask): string | null {
-  const defects: any[] = Array.isArray(t.agent_logs?.defects) ? t.agent_logs.defects : [];
+  const defects: RawBBox[] = Array.isArray(t.agent_logs?.defects) ? t.agent_logs.defects : [];
   const candidates = defects.filter(
     (d) => d && typeof d.type === "string" && d.type && !d.hitl_excluded && !d.evidence_suspect
   );
@@ -34,5 +35,5 @@ export function getPrimaryDefectReason(t: HitlTask): string | null {
       Number(b.applied_deduction ?? b.preliminary_deduction ?? 0) -
       Number(a.applied_deduction ?? a.preliminary_deduction ?? 0)
   );
-  return candidates[0].type;
+  return candidates[0].type ?? null;
 }

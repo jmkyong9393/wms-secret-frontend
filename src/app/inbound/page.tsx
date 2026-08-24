@@ -1,4 +1,5 @@
 'use client';
+import type { BookMeta } from '@/features/inbound/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -29,7 +30,7 @@ import { ResultStage } from '@/features/inbound/components/ResultStage';
 type Step = 'SELECT_TYPE' | 'SCAN_BARCODE' | 'PRINT_STICKER' | 'VISION_EVALUATION' | 'RESULT';
 type InboundType = 'NEW_FASTTRACK' | 'USED_RETURN_INSPECTION';
 // 채번 응답: LPN 문자열 + 원장에 있는 도서 메타(없으면 null)
-type IssuedLpn = { lpn: string; book: any | null };
+type IssuedLpn = { lpn: string; book: BookMeta | null };
 
 // 서버가 조회 실패 시 Book.title에 넣는 자리표시자. 이 값이면 도서 조회를 다시 시도한다.
 const UNKNOWN_BOOK_TITLE = '미확인 도서';
@@ -46,8 +47,7 @@ export default function InboundScannerPage() {
   const [lpnIssuedNow, setLpnIssuedNow] = useState(false);
   // 재출력 진행 중인 LPN (해당 행 버튼만 스피너로 잠근다)
   const [reprintingLpn, setReprintingLpn] = useState<string | null>(null);
-  const [bookInfo, setBookInfo] = useState<any | null>(null);
-  const [selectedBook, setSelectedBook] = useState<any | null>(null);
+  const [bookInfo, setBookInfo] = useState<BookMeta | null>(null);
   const [isLoadingBook, setIsLoadingBook] = useState(false);
   const [fasttrackQty, setFasttrackQty] = useState<number>(1);
   const [activeStation, setActiveStation] = useState<string>('A');
@@ -146,7 +146,7 @@ export default function InboundScannerPage() {
    * 원장(서버)에는 최초 입고 때 연결된 book이 그대로 있으므로 그것을 정본으로 쓴다.
    * 오프라인이거나 조회에 실패하면 종전 localStorage 경로로 폴백한다.
    */
-  const lookupBookByLpn = async (lpn: string): Promise<any | null> => {
+  const lookupBookByLpn = async (lpn: string): Promise<BookMeta | null> => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/inventory/${encodeURIComponent(lpn)}`);
       if (res.ok) {
@@ -168,8 +168,8 @@ export default function InboundScannerPage() {
       // 네트워크 단절 - 아래 로컬 기록으로 폴백한다.
     }
 
-    const localEvals = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
-    const hit = [...localEvals].reverse().find((e: any) => e.lpn === lpn);
+    const localEvals: (BookMeta & { lpn?: string })[] = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
+    const hit = [...localEvals].reverse().find((e) => e.lpn === lpn);
     if (!hit) return null;
     return {
       isbn: hit.isbn || '',
@@ -204,7 +204,7 @@ export default function InboundScannerPage() {
    * 도서 정보 확정. 채번 응답에 실려 온 원장 메타를 1순위로 쓰고, 쓸 수 없을 때만
    * 도서 조회 API를 호출한다. 이미 입고된 적 있는 도서는 외부 API 없이 화면이 채워진다.
    */
-  const resolveBookInfo = async (isbnValue: string, seed: any | null) => {
+  const resolveBookInfo = async (isbnValue: string, seed: BookMeta | null) => {
     if (seed?.title && seed.title !== UNKNOWN_BOOK_TITLE) {
       setBookInfo(seed);
       setIsLoadingBook(false);
@@ -217,7 +217,7 @@ export default function InboundScannerPage() {
       } else {
         // isbn을 반드시 함께 넘긴다 - 없으면 이후 evaluate 요청의 book_metadata에서
         // isbn이 빠져 서버가 Book row를 만들지 못하고 500(book_id NOT NULL)을 낸다.
-        const body = await res.json().catch(() => ({} as any));
+        const body = await res.json().catch(() => ({} as { detail?: string; message?: string }));
         setBookInfo({
           title: body?.detail || body?.message ||
             (res.status === 503 ? '도서 정보 서버 연결 실패 (다시 스캔해주세요)' : '등록되지 않은 ISBN'),
@@ -383,8 +383,8 @@ export default function InboundScannerPage() {
                     issued = await issueLPN(code);
                     setCurrentLpn(issued.lpn);
                     setLpnIssuedNow(true);
-                  } catch (e: any) {
-                    alert(e?.message || 'LPN 채번 실패');
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'LPN 채번 실패');
                     setCurrentLpn('');
                     setLpnIssuedNow(false);
                     setIsLoadingBook(false);
@@ -455,7 +455,7 @@ export default function InboundScannerPage() {
                     } else {
                       alert('패스트트랙 입고 처리 실패');
                     }
-                  } catch (e) {
+                  } catch {
                     alert('패스트트랙 서버 통신 에러');
                   } finally {
                     setIsAnalyzing(false);
@@ -504,7 +504,7 @@ export default function InboundScannerPage() {
                     lpn: currentLpn,
                     images: capturedImages.map(img => img.blob),
                     previewUrl: capturedImages[0].url,
-                    book_metadata: bookInfo
+                    book_metadata: bookInfo ?? undefined
                   });
   };
 

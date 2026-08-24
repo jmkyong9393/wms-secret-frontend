@@ -1,3 +1,4 @@
+import type { OutboundBook } from '@/features/outbound/model/types';
 import { BOOK_SLIM_BOX_OPTIONS, STANDARD_COURIER_BOX_OPTIONS, type BoxOption } from '../constants/boxOptions';
 
 type GetQty = (id: string) => number;
@@ -6,7 +7,7 @@ type GetQty = (id: string) => number;
  * 선택 도서 조합에 맞는 최소 부피 박스 탐색 (0°/90° 풋프린트 + 레이어 높이 + 중량 적합성).
  * 산식은 admin/outbound 페이지 useMemo 원본 그대로 - 페이지 분해 시 순수 함수로만 이동.
  */
-export function computeBestBox(selectedBooks: any[], getQty: GetQty, cushion: { thick_mm?: number; mode?: string } | null): BoxOption {
+export function computeBestBox(selectedBooks: OutboundBook[], getQty: GetQty, cushion: { thick_mm?: number; mode?: string } | null): BoxOption {
     if (selectedBooks.length === 0) return BOOK_SLIM_BOX_OPTIONS[0];
 
     let rawBooksTotalH = 0, totalQty = 0, totalWeightG = 0;
@@ -80,7 +81,7 @@ export function computeBestBox(selectedBooks: any[], getQty: GetQty, cushion: { 
   }
 
 /** 박스·도서 조합에서 Z/XY 여유를 만족하는 완충재 이름 추천. */
-export function recommendCushionName(bestBox: BoxOption, selectedBooks: any[], getQty: GetQty): string {
+export function recommendCushionName(bestBox: BoxOption, selectedBooks: OutboundBook[], getQty: GetQty): string {
     let maxW = 0, maxD = 0, booksTotalH = 0;
     selectedBooks.forEach(b => {
       const qty = getQty(b.id);

@@ -34,7 +34,7 @@ export default function MasterPagination({
   const pageNumbers = [];
   const maxPagesToShow = 5;
   let startPage = Math.max(1, safeCurrentPage - 2);
-  let endPage = Math.min(safeTotalPages, startPage + maxPagesToShow - 1);
+  const endPage = Math.min(safeTotalPages, startPage + maxPagesToShow - 1);
 
   if (endPage - startPage + 1 < maxPagesToShow) {
     startPage = Math.max(1, endPage - maxPagesToShow + 1);

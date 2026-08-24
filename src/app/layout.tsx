@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
-import MainLayout from "@/widgets/layout/MainLayout";
 import { ServiceWorkerRegistration } from "@/shared/pwa/ServiceWorkerRegistration";
 import { A2HSBanner } from "@/shared/pwa/a2hs-banner";
 import { GlobalErrorBoundary } from "@/shared/ui/GlobalErrorBoundary";

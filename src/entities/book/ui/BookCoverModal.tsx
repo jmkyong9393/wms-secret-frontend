@@ -61,6 +61,7 @@ export default function BookCoverModal({ isOpen, onClose, book }: BookCoverModal
         {/* Large Cover Image Preview */}
         <div className="relative w-full md:w-56 h-72 md:h-80 bg-slate-100 dark:bg-slate-800 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-lg shrink-0 flex items-center justify-center group">
           {highResCover ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다
             <img
               src={highResCover}
               alt={book.title}

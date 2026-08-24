@@ -1,4 +1,5 @@
 'use client';
+import type { PickingInstruction, DemoOrder, OutboundBook, PricingResult } from '@/features/outbound/model/types';
 
 /** 동적 가격 산정 결과 요약 (Two-Track 확정가·수량 합산·라벨). */
 export function PricingSummaryPanel({
@@ -13,11 +14,11 @@ export function PricingSummaryPanel({
   perUnitAvgPrice,
   displayTotalPrice,
 }: {
-  activeInstruction: any;
-  mockOrder: any;
-  selectedBooks: any[];
-  selectedBook: any;
-  pricingResult: any;
+  activeInstruction: PickingInstruction | null;
+  mockOrder: DemoOrder | null;
+  selectedBooks: OutboundBook[];
+  selectedBook: OutboundBook | null;
+  pricingResult: PricingResult | null;
   newQtyTotal: number;
   usedQtyTotal: number;
   totalBooksCount: number;

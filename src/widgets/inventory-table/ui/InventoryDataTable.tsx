@@ -16,7 +16,6 @@
 
 import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import BookCover from '@/entities/book/ui/BookCover';
 import BookCoverModal from '@/entities/book/ui/BookCoverModal';
@@ -56,7 +55,6 @@ type BookType = 'ALL' | 'NEW' | 'USED';
 
 export function InventoryDataTable({ role }: { role: StockRole }) {
   const isAdmin = role === 'ADMIN';
-  const router = useRouter();
 
   const [items, setItems] = useState<InventoryItem[]>([]);
 
@@ -64,7 +62,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
   const [searchField, setSearchField] = useState<SearchField>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [bookTypeFilter, setBookTypeFilter] = useState<BookType>('ALL');
-  const [gradeFilter, setGradeFilter] = useState('ALL');
+  const [gradeFilter] = useState('ALL');
   const [ubciScoreFilter, setUbciScoreFilter] = useState('ALL');
   const [dateFilter, setDateFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState<SortKey>('LATEST');
@@ -80,21 +78,35 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
 
   // 모달
   const [activePrintData, setActivePrintData] = useState<LpnPrintData | null>(null);
-  const [zoomBook, setZoomBook] = useState<any | null>(null);
+  const [zoomBook, setZoomBook] = useState<React.ComponentProps<typeof BookCoverModal>['book']>(null);
 
   // 재고 전량 응답(수 MB)을 60초 캐시한다 - 재방문 시 스피너 없이 즉시 표시.
   const { data: fetchedItems, isLoading: loading } = useQuery({
     queryKey: ['inventory-items'],
     staleTime: 60_000,
     queryFn: async (): Promise<InventoryItem[]> => {
-      const data: any[] = await inventoryAPI.getInventory().catch((err: unknown) => {
+      interface InventoryApiRow {
+        id: string;
+        lpn_barcode?: string;
+        quantity?: number;
+        ubci_score?: number | null;
+        grade?: string | null;
+        zone?: string;
+        date?: string;
+        worker_id?: string;
+        worker_label?: string;
+        track?: string;
+        cover_image_url?: string;
+        book?: InventoryItem['book'];
+      }
+      const data: InventoryApiRow[] = await inventoryAPI.getInventory().catch((err: unknown) => {
         console.error('Inventory API fetch failed:', err);
         return [];
       });
       if (!data || !Array.isArray(data)) return [];
       // 출고로 수량이 0이 된 행은 재고가 아니므로 표기하지 않는다 (다권 보유 도서는 실수량 그대로).
       // 백엔드 목록 API가 0수량 신품 행을 필터 없이 내려보내는 것은 평가 종료 후 백엔드 패치 대상.
-      return data.filter((item: any) => (item.quantity ?? 1) > 0).map((item: any, idx: number) => {
+      return data.filter((item) => (item.quantity ?? 1) > 0).map((item, idx: number) => {
             const safeScore = typeof item.ubci_score === 'number' ? item.ubci_score : null;
             return {
               id: item.id || `inv-real-${idx}`,

@@ -1,4 +1,5 @@
 'use client';
+import type { AgentLogs, CertificateDoc, CertificateFinding } from '@/entities/inspection/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 /**
@@ -64,7 +65,18 @@ export default function CertificatePage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [item, setItem] = useState<any>(null);
+  interface CertificateItem {
+    lpn_barcode?: string;
+    date?: string;
+    grade?: string | null;
+    ubci_score?: number | null;
+    book?: { title?: string; author?: string; publisher?: string; cover_image_url?: string; base_price?: number };
+    certificate?: CertificateDoc | null;
+    pricing?: { list_price?: number; used_retail_price?: number; buyback_price?: number; discount_rate_vs_list?: number } | null;
+    agent_logs?: AgentLogs | null;
+    image_urls?: string[];
+  }
+  const [item, setItem] = useState<CertificateItem | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,8 +87,8 @@ export default function CertificatePage() {
         if (!res.ok) throw new Error('품질 보증서를 불러오지 못했습니다.');
         const json = await res.json();
         if (!cancelled) setItem(json);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || '알 수 없는 오류가 발생했습니다.');
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : '알 수 없는 오류가 발생했습니다.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -122,7 +134,7 @@ export default function CertificatePage() {
 
   // Report Agent가 생성한 보증서 문서. 프론트는 문장을 만들지 않고 그대로 렌더한다.
   const cert = item.certificate || null;
-  const findings: any[] = cert?.findings || [];
+  const findings: CertificateFinding[] = cert?.findings || [];
 
   const images = resolveInspectionImages(item);
   const defectCoords = resolveDefectCoordinates(item);
@@ -179,6 +191,7 @@ export default function CertificatePage() {
             <div className="flex items-start gap-4 mb-6 print:mb-2">
               <div className="w-20 h-28 bg-gray-200 rounded shadow-sm shrink-0 flex items-center justify-center overflow-hidden">
                 {item.book?.cover_image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다
                   <img src={item.book.cover_image_url} alt={item.book.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
                   <BookOpen className="text-gray-400" size={32} />
@@ -296,6 +309,7 @@ export default function CertificatePage() {
                         {/* 세로로 긴 실물 촬영본이 PDF 한 장을 다 먹는 걸 막기 위해 인쇄본만
                             높이를 제한한다 (object-contain이라 비율은 유지되고 잘리지 않는다). */}
                         <div className="relative inline-block w-full rounded overflow-hidden bg-gray-100 border border-gray-200 print:max-h-[220px]">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                           <img src={repImage} alt="실물 검수 사진" className="w-full h-auto object-contain block print:max-h-[220px] print:mx-auto" />
                           {repBBoxes.map((box, i) => {
                             const { left, top, width, height } = bboxToPercent(box);
@@ -311,7 +325,7 @@ export default function CertificatePage() {
 
                         {findings.length > 0 ? (
                           <div className="space-y-2">
-                            {findings.map((f: any, idx: number) => (
+                            {findings.map((f, idx: number) => (
                               <div key={idx} className="border-t border-gray-100 pt-2 first:border-0 first:pt-0">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="min-w-0">

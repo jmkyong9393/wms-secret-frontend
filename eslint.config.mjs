@@ -39,10 +39,27 @@ const fsdBoundaries = {
   },
 };
 
+// 의도된 미사용(시그니처 유지용 _접두 인자, 전송 제외용 rest 분해)은 위반으로 치지 않는다.
+const unusedVarsPolicy = {
+  files: ["src/**/*.{ts,tsx}"],
+  rules: {
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+        ignoreRestSiblings: true,
+      },
+    ],
+  },
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   fsdBoundaries,
+  unusedVarsPolicy,
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

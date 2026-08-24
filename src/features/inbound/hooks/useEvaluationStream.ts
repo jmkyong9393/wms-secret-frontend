@@ -1,3 +1,4 @@
+import type { BookMeta } from '../types';
 import { useMutation } from '@tanstack/react-query';
 import { useSetAtom } from 'jotai';
 import { API_BASE_URL } from '@/shared/api/api-client';
@@ -29,7 +30,7 @@ export function useEvaluationStream(opts: {
   // 큐(uploadQueueAtom) 갱신도 전부 이 mutation이 담당한다. 화면 전환만 낙관적으로
   // 앞당기고, 큐에 찍히는 상태는 요청·SSE의 실제 결과를 따른다.
   const evaluateMutation = useMutation({
-    mutationFn: async (data: { lpn: string, images: Blob[], previewUrl: string, book_metadata?: any }) => {
+    mutationFn: async (data: { lpn: string, images: Blob[], previewUrl: string, book_metadata?: BookMeta }) => {
       const getBase64 = (blob: Blob): Promise<string> => new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -124,7 +125,7 @@ export function useEvaluationStream(opts: {
           category: variables.book_metadata?.categoryName?.split('>').pop() || '일반'
         };
 
-        const existingIndex = localEvals.findIndex((item: any) => item.lpn === lpn);
+        const existingIndex = localEvals.findIndex((item: { lpn?: string }) => item.lpn === lpn);
         if (existingIndex >= 0) {
           // 이전에 저장된 동일 LPN이 있다면 덮어쓰기 (재검수 시 중복 방지)
           localEvals[existingIndex] = newEval;

@@ -1,7 +1,7 @@
 /**
  * Export data to UTF-8 BOM CSV Excel format
  */
-export function exportToCSV<T extends Record<string, any>>(
+export function exportToCSV<T extends object>(
   filename: string,
   rows: T[],
   headers?: { key: keyof T; label: string }[]
@@ -14,7 +14,7 @@ export function exportToCSV<T extends Record<string, any>>(
   const csvRows = rows.map(row => {
     return keys
       .map(k => {
-        let val: any = row[k];
+        let val: unknown = row[k];
         if (val === null || val === undefined) val = '';
         const escaped = String(val).replace(/"/g, '""');
         return `"${escaped}"`;

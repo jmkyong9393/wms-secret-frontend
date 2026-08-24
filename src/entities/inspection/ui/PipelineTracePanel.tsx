@@ -2,6 +2,7 @@
 
 // LangGraph 파이프라인 진단 기록 패널 - 노드별 실행 여부·서술·시각과
 // HITL 재검증(BBox 편집 후 2차) 타임라인을 렌더한다.
+import type { AgentLogs } from '../model/types';
 import React from 'react';
 import { Bot } from 'lucide-react';
 
@@ -23,7 +24,7 @@ const PIPELINE_STEPS = [
 
 interface PipelineTracePanelProps {
   /** return_jobs.agent_logs - 노드 서술·실행 목록·재검증 기록이 담긴다 */
-  logs: any;
+  logs: AgentLogs;
   /** 검수 일시 문자열 ("YYYY-MM-DD HH:MM:SS") - 타임라인 기본 시각 */
   inspectionDate?: string;
 }

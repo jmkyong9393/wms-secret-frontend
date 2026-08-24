@@ -42,7 +42,7 @@ export class OfflineQueue {
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
       try {
         const registration = await navigator.serviceWorker.ready;
-        await (registration as any).sync.register('sync-offline-queue');
+        await (registration as ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } }).sync.register('sync-offline-queue');
       } catch (err) {
         console.error('Background Sync registration failed:', err);
       }
@@ -64,7 +64,7 @@ export class OfflineQueue {
   // 네트워크 복구 시 동기화 (Background Sync) - 호출부에서 구현하도록 콜백 주입
   async syncPendingTasks(
     uploadFn: (blob: Blob, filename: string) => Promise<string>,
-    evaluateFn: (isbn: string, lpn: string, url: string) => Promise<any>
+    evaluateFn: (isbn: string, lpn: string, url: string) => Promise<unknown>
   ): Promise<void> {
     if (!navigator.onLine) return;
 
@@ -83,10 +83,11 @@ export class OfflineQueue {
         
         console.log(`[OfflineQueue] Task ${task.id} synced successfully.`);
         await this.removeTask(task.id);
-      } catch (error: any) {
+      } catch (error) {
         console.error(`[OfflineQueue] Sync failed for task ${task.id}`, error);
-        
-        if (error.response?.status === 401 || error.response?.status === 400) {
+
+        const status = (error as { response?: { status?: number } }).response?.status;
+        if (status === 401 || status === 400) {
           console.warn(`[OfflineQueue] Discarding task ${task.id} due to non-retriable error.`);
           await this.removeTask(task.id);
         }

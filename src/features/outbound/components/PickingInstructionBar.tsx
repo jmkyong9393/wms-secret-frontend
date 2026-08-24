@@ -1,14 +1,15 @@
 'use client';
 
+import type { PickingInstruction } from '@/features/outbound/model/types';
 import Link from 'next/link';
 import { FileCheck } from 'lucide-react';
 
 /** AI 피킹 지시서 연동 선택 바 - 지시서 선택 시 도서 자동 선택은 페이지 이펙트가 담당. */
 export function PickingInstructionBar({ pickingInstructions, selectedInstructionId, onSelect, activeInstruction }: {
-  pickingInstructions: any[];
+  pickingInstructions: PickingInstruction[];
   selectedInstructionId: string | null;
   onSelect: (id: string | null) => void;
-  activeInstruction: any;
+  activeInstruction: PickingInstruction | null;
 }) {
   return (
           <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800 space-y-2">

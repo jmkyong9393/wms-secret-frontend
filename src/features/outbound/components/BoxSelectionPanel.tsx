@@ -1,5 +1,6 @@
 'use client';
 
+import type { OutboundBook, CushionOption, PickingInstruction } from '@/features/outbound/model/types';
 import { Box, CheckCircle2 } from 'lucide-react';
 import BinPacking3DViewer from './BinPacking3DViewer';
 import { BOOK_SLIM_BOX_OPTIONS, STANDARD_COURIER_BOX_OPTIONS, type BoxOption } from '../constants/boxOptions';
@@ -24,17 +25,17 @@ export function BoxSelectionPanel({
 }: {
   boxCategoryTab: 'slim' | 'standard';
   setBoxCategoryTab: (t: 'slim' | 'standard') => void;
-  selectedBooks: any[];
+  selectedBooks: OutboundBook[];
   getBookQty: (id: string) => number;
-  selectedCushion: any;
+  selectedCushion: CushionOption | null;
   bestRecommendedBox: BoxOption;
   selectedBoxId: string;
   handleSelectBox: (box: BoxOption) => void;
   activeBox: BoxOption;
-  selectedBook: any;
+  selectedBook: OutboundBook | null;
   aiReasoningLog: string;
   confirmed: boolean;
-  activeInstruction: any;
+  activeInstruction: PickingInstruction | null;
   totalBooksCount: number;
   handleConfirmPacking: () => void;
 }) {

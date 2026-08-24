@@ -18,7 +18,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/sha
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import {
-  Settings, Cpu, Printer, Sun, Moon, BellRing, Save, CheckCircle2, Zap, ShieldAlert, Lock, Package,
+  Settings, Cpu, Printer, Sun, Moon, BellRing, Save, CheckCircle2, ShieldAlert, Lock, Package,
 } from 'lucide-react';
 import { getSystemSettings, saveSystemSettings } from '@/shared/lib/systemSettings';
 import { apiClient } from '@/shared/api/api-client';

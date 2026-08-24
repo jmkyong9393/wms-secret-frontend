@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+type ExtendedTrackConstraint = MediaTrackConstraintSet & { focusMode?: string; zoom?: number };
+
 interface UseCameraOptions {
   idealFacingMode?: 'environment' | 'user';
 }
@@ -58,7 +60,7 @@ async function applyCameraTuning(track: MediaStreamTrack | undefined, quality: C
     }
 
     if (advanced.length === 0) return;
-    await track.applyConstraints({ advanced } as any);
+    await track.applyConstraints({ advanced } as MediaTrackConstraints);
   } catch (e) {
     console.warn(`카메라 튜닝(${quality}) 적용 실패 - 기본값 유지:`, e);
   }
@@ -98,7 +100,7 @@ export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions 
           facingMode: idealFacingMode,
           width: { ideal: preset.width },
           height: { ideal: preset.height },
-          advanced: [{ focusMode: "continuous" } as any]
+          advanced: [{ focusMode: "continuous" } as ExtendedTrackConstraint]
         },
         audio: false,
       };
@@ -118,10 +120,10 @@ export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions 
           videoRef.current?.play().catch(console.error);
         };
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Camera start failed:", err);
       // NotReadableError (Device in use) 발생 시 OS 하드웨어 락 해제 지연으로 인한 것일 수 있으므로 재시도
-      if (err.name === 'NotReadableError' && retryCount < 3) {
+      if ((err as { name?: string }).name === 'NotReadableError' && retryCount < 3) {
         console.warn(`Camera in use, retrying... (${retryCount + 1}/3)`);
         setTimeout(() => startCamera(quality, retryCount + 1), 500);
         return;

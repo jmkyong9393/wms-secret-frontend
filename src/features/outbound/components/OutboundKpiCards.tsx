@@ -1,5 +1,6 @@
 'use client';
 
+import type { DemoOrder } from '@/features/outbound/model/types';
 import { Sparkles, Box, TrendingUp, CheckCircle2 } from 'lucide-react';
 import type { BoxOption } from '../constants/boxOptions';
 
@@ -8,7 +9,7 @@ export function OutboundKpiCards({ selectedCount, bestBox, cushionName, mockOrde
   selectedCount: number;
   bestBox: BoxOption;
   cushionName: string;
-  mockOrder: any;
+  mockOrder: DemoOrder | null;
   outboundSummary: { shippedTodayCount: number; onTimeRatePercent: number };
   isSummaryLoading: boolean;
 }) {

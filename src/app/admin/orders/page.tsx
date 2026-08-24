@@ -1,4 +1,5 @@
 "use client";
+import type { OutboundBook } from '@/features/outbound/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -76,7 +77,7 @@ export default function OrdersPickingPage() {
 
   // 수동 주문 생성 패널 상태
   const [showManualPanel, setShowManualPanel] = useState<boolean>(false);
-  const [availableBooks, setAvailableBooks] = useState<any[]>([]);
+  const [availableBooks, setAvailableBooks] = useState<OutboundBook[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [cart, setCart] = useState<Record<string, number>>({}); // id -> qty
   const [customerName, setCustomerName] = useState<string>('교보문고 B2B 지점');
@@ -112,7 +113,7 @@ export default function OrdersPickingPage() {
         const data = await res.json().catch(() => ({}));
         alert(`삭제 실패: ${data.detail || data.message || res.statusText}`);
       }
-    } catch (e) {
+    } catch {
       alert('백엔드 연결에 실패했습니다.');
     } finally {
       setCancellingId(null);
@@ -143,7 +144,7 @@ export default function OrdersPickingPage() {
       } else {
         alert(`시뮬레이션 실패: ${data.detail || data.message}`);
       }
-    } catch (e) {
+    } catch {
       alert('백엔드 연결에 실패했습니다.');
     } finally {
       setIsSimulating(false);
@@ -179,7 +180,7 @@ export default function OrdersPickingPage() {
       } else {
         alert(`주문 실패: ${data.detail || data.message}`);
       }
-    } catch (e) {
+    } catch {
       alert('백엔드 연결에 실패했습니다.');
     } finally {
       setIsSubmitting(false);

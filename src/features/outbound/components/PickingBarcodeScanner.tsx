@@ -1,9 +1,14 @@
 'use client';
 
+import type { BrowserMultiFormatReader } from '@zxing/browser';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Flashlight, FlashlightOff, Loader2 } from 'lucide-react';
 import { useCamera } from '@/shared/lib/useCamera';
 import { mapGuideToVideoRoi } from '@/shared/lib/camera-roi';
+
+// 표준 lib.dom에 없는 실험 API·제약 키의 최소 형태
+interface BarcodeDetectorLike { detect(source: CanvasImageSource | HTMLVideoElement): Promise<{ rawValue: string }[]> }
+type ExtendedTrackConstraint = MediaTrackConstraintSet & { torch?: boolean };
 
 /**
  * 출고 피킹 전용 바코드 스캐너 (LPN QR / ISBN EAN-13).
@@ -43,8 +48,8 @@ export default function PickingBarcodeScanner({ onDetected, paused = false, vali
   const { videoRef, startCamera, stopCamera, stream, error } = useCamera();
   const guideRef = useRef<HTMLDivElement | null>(null);
   const roiCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const readerRef = useRef<any>(null);
-  const detectorRef = useRef<any>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const detectorRef = useRef<BarcodeDetectorLike | null>(null);
   const lastHitRef = useRef<{ code: string; at: number } | null>(null);
   const tickRef = useRef(0);
 
@@ -81,7 +86,7 @@ export default function PickingBarcodeScanner({ onDetected, paused = false, vali
     if (!track) return;
     try {
       const next = !torchOn;
-      await track.applyConstraints({ advanced: [{ torch: next } as any] } as any);
+      await track.applyConstraints({ advanced: [{ torch: next } as ExtendedTrackConstraint] });
       setTorchOn(next);
     } catch {
       setTorchSupported(false);
@@ -101,7 +106,7 @@ export default function PickingBarcodeScanner({ onDetected, paused = false, vali
         ['qr_code', 'ean_13', 'ean_8'],
       ]) {
         try {
-          // @ts-ignore
+          // @ts-expect-error BarcodeDetector는 표준 lib.dom에 없다
           detectorRef.current = new window.BarcodeDetector({ formats });
           setEngineReady(true);
           break;

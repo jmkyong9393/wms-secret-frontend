@@ -1,5 +1,6 @@
 'use client';
 
+import type { BookMeta } from '../types';
 import { Zap } from 'lucide-react';
 import { LpnPrintLabel } from '@/entities/label/ui/LpnPrintLabel';
 
@@ -8,7 +9,7 @@ export function LabelPreviewStage({ inboundType, isbn, currentLpn, bookInfo, wor
   inboundType: 'NEW_FASTTRACK' | 'USED_RETURN_INSPECTION';
   isbn: string;
   currentLpn: string;
-  bookInfo: any;
+  bookInfo: BookMeta | null;
   workerLabel: string;
 }) {
   return (
