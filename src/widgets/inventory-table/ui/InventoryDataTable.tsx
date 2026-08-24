@@ -92,7 +92,9 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
         return [];
       });
       if (!data || !Array.isArray(data)) return [];
-      return data.map((item: any, idx: number) => {
+      // 출고로 수량이 0이 된 행은 재고가 아니므로 표기하지 않는다 (다권 보유 도서는 실수량 그대로).
+      // 백엔드 목록 API가 0수량 신품 행을 필터 없이 내려보내는 것은 평가 종료 후 백엔드 패치 대상.
+      return data.filter((item: any) => (item.quantity ?? 1) > 0).map((item: any, idx: number) => {
             const safeScore = typeof item.ubci_score === 'number' ? item.ubci_score : null;
             return {
               id: item.id || `inv-real-${idx}`,
@@ -108,7 +110,8 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                 cover_image_url: item.book?.cover_image_url || item.cover_image_url || '',
               },
               zone: item.zone || 'Zone A-1-1',
-              quantity: item.quantity || 1,
+              // ?? 사용: 0은 유효한 값이다. ||로 받으면 출고 완료(0권)가 1권으로 둔갑한다.
+              quantity: item.quantity ?? 1,
               // 백엔드가 실제 등급 확정 주체(AI 자동 판정 / HITL 결재자)를 내려주므로
               // 사번 리터럴로 덮어쓰지 않는다 (목록과 상세가 다른 담당자를 표시하던 원인).
               worker_id: item.worker_id || '미기록',
