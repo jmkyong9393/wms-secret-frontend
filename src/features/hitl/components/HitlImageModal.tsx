@@ -1,5 +1,6 @@
 "use client";
 
+import type { RawBBox, DefectCoordinateGroup, AgentLogs } from "@/entities/inspection/model/types";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { X, ChevronLeft, ChevronRight, Eye, BookOpen, AlertCircle, Bot, ScanSearch, PenSquare, Trash2, RotateCcw } from "lucide-react";
 import { Button } from "@/shared/ui/button";
@@ -63,20 +64,22 @@ const AGENT_LOG_STEPS = [
 ] as const;
 
 /** defect_coordinates의 두 가지 포맷(Per-Image/Flat)에서 특정 이미지의 BBox 목록을 추출 */
-function bboxesForIndex(rawList: any[], idx: number, imageUrl: string): any[] {
-  const out: any[] = [];
-  rawList.forEach((item: any) => {
+type FlatOrGroup = Partial<DefectCoordinateGroup> & Partial<RawBBox>;
+
+function bboxesForIndex(rawList: FlatOrGroup[], idx: number, imageUrl: string): RawBBox[] {
+  const out: RawBBox[] = [];
+  rawList.forEach((item) => {
     if (item.image_index !== undefined && Number(item.image_index) === idx && Array.isArray(item.bboxes)) {
       out.push(...item.bboxes);
     } else if (item.image_url !== undefined && item.image_url === imageUrl && Array.isArray(item.bboxes)) {
       out.push(...item.bboxes);
     } else if (item.xmin !== undefined && item.ymin !== undefined) {
       if (item.image_idx !== undefined && Number(item.image_idx) === idx) {
-        out.push(item);
+        out.push(item as RawBBox);
       } else if (item.image_index !== undefined && Number(item.image_index) === idx) {
-        out.push(item);
+        out.push(item as RawBBox);
       } else if (item.image_idx === undefined && item.image_index === undefined) {
-        out.push(item);
+        out.push(item as RawBBox);
       }
     }
   });
@@ -275,18 +278,18 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
   if (!task) return null;
 
   const images = task.image_urls && task.image_urls.length > 0 ? task.image_urls : [];
-  const defectsMeta: any[] = Array.isArray(task.agent_logs?.defects) ? task.agent_logs.defects : [];
+  const defectsMeta: RawBBox[] = Array.isArray(task.agent_logs?.defects) ? task.agent_logs.defects : [];
   // 좌표만으로 결함을 식별하면 서로 다른 컷의 결함이 같은 defectIndex로 묶인다.
   // VLM이 여러 컷에 동일 좌표를 반환하는 경우가 실제로 있고(LPN-260810-A030:
   // 컷 0·1·2 모두 xmin 0 / ymin 0 / xmax 1000 / ymax 100), 그때 한 BBox를 옮기면
   // 나머지 컷의 BBox까지 함께 움직였다. image_index를 매칭 키에 포함한다.
-  const bboxEq = (a: any, b: any) =>
+  const bboxEq = (a: { xmin?: number; ymin?: number; xmax?: number; ymax?: number } | null | undefined, b: typeof a) =>
     Number(a?.xmin) === Number(b?.xmin) &&
     Number(a?.ymin) === Number(b?.ymin) &&
     Number(a?.xmax) === Number(b?.xmax) &&
     Number(a?.ymax) === Number(b?.ymax);
 
-  const metaIndexFor = (b: any, imageIndex: number, used: Set<number>) => {
+  const metaIndexFor = (b: RawBBox, imageIndex: number, used: Set<number>) => {
     // 1순위 — 같은 컷의 결함 중 좌표가 같은 것
     let i = defectsMeta.findIndex(
       (d, idx) =>
@@ -304,12 +307,12 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
   // 그 안의 개별 bboxes[]에 defectIndex를 매칭해야 한다.
   // 한 결함이 두 BBox에 중복 배정되지 않도록 사용한 인덱스를 그룹 간에 공유한다.
   const usedMeta = new Set<number>();
-  const rawList: any[] = (task.agent_logs?.defect_coordinates || []).map((group: any) => {
+  const rawList = (task.agent_logs?.defect_coordinates || []).map((group) => {
     if (!group || !Array.isArray(group.bboxes)) return group;
     const gi = Number(group.image_index ?? 0);
     return {
       ...group,
-      bboxes: group.bboxes.map((b: any) => {
+      bboxes: group.bboxes.map((b) => {
         const mi = metaIndexFor(b, gi, usedMeta);
         if (mi < 0) return b;
         usedMeta.add(mi);
@@ -318,8 +321,8 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
       }),
     };
   });
-  const logs: Record<string, any> = task.agent_logs || {};
-  const agentEntries = AGENT_LOG_STEPS.filter((s) => typeof logs[s.key] === "string" && logs[s.key].trim().length > 0);
+  const logs: AgentLogs = task.agent_logs || {};
+  const agentEntries = AGENT_LOG_STEPS.filter((s) => { const v = logs[s.key]; return typeof v === "string" && v.trim().length > 0; });
 
   const invalidSet = new Set<number>(
     (Array.isArray(logs.invalid_image_indexes) ? logs.invalid_image_indexes : [])
@@ -336,16 +339,16 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
   const currentAdded = cur.added.filter((a) => a.imageIndex === effIdx);
 
   const YOLO_DISPLAY_CONF = 0.4;
-  const yoloCandidates: any[] = Array.isArray(logs.yolo_candidates) ? logs.yolo_candidates : [];
+  const yoloCandidates: RawBBox[] = Array.isArray(logs.yolo_candidates) ? logs.yolo_candidates : [];
   const allYoloBoxes = yoloCandidates
     .map((c, candIndex) => ({ c, candIndex }))
     .filter(({ c }) => Number(c?.image_index ?? 0) === effIdx && c?.bbox)
     .map(({ c, candIndex }) => ({
       candIndex,
-      xmin: c.bbox.xmin,
-      ymin: c.bbox.ymin,
-      xmax: c.bbox.xmax,
-      ymax: c.bbox.ymax,
+      xmin: c.bbox!.xmin,
+      ymin: c.bbox!.ymin,
+      xmax: c.bbox!.xmax,
+      ymax: c.bbox!.ymax,
       coord_space: 1000,
       type: c.type,
       label: c.type || "YOLO 후보",
@@ -464,6 +467,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
               className={`relative max-w-full inline-block ${drawMode ? "cursor-crosshair" : ""}`}
               onMouseDown={onImageMouseDown}
             >
+              {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
               <img
                 ref={imgRef}
                 src={currentImageUrl}
@@ -478,7 +482,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
 
               {/* 그리는 중인 임시 사각형 */}
               {liveDrawBox && (() => {
-                const { left, top, width, height } = bboxToPercent({ ...liveDrawBox, coord_space: 1000 } as any);
+                const { left, top, width, height } = bboxToPercent({ ...liveDrawBox, coord_space: 1000 });
                 return (
                   <div
                     className="absolute border-2 border-dashed border-blue-400 bg-blue-400/20 pointer-events-none"
@@ -488,7 +492,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
               })()}
 
               {showYolo &&
-                currentYoloBoxes.map((box: any, idx: number) => {
+                currentYoloBoxes.map((box, idx: number) => {
                   const { left, top, width, height } = bboxToPercent(box);
                   const yoloLabelPos = top + height > 92 ? "bottom-1" : "-bottom-6";
                   const yoloLabelAnchor = left > 50 ? "right-0" : "left-0";
@@ -522,7 +526,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                 })}
 
               {showOverlay &&
-                currentBBoxes.map((box: any, idx: number) => {
+                currentBBoxes.map((box, idx: number) => {
                   const di = box.defectIndex;
                   const target: DragTarget | null = typeof di === "number" ? { kind: "existing", defectIndex: di } : null;
                   const effBox = effectiveBboxFor(target, {
@@ -629,7 +633,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
               {currentAdded.map((a) => {
                 const target: DragTarget = { kind: "added", tempId: a.tempId };
                 const effBox = effectiveBboxFor(target, a);
-                const { left, top, width, height } = bboxToPercent({ ...effBox, coord_space: 1000 } as any);
+                const { left, top, width, height } = bboxToPercent({ ...effBox, coord_space: 1000 });
                 const key = `added-${a.tempId}`;
                 return (
                   <div
@@ -774,7 +778,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                 {currentBBoxes.length === 0 && currentAdded.length === 0 && (!showYolo || currentYoloBoxes.length === 0) && (
                   <p className="text-xs text-gray-500 dark:text-gray-500 px-1 py-4 text-center">이 이미지엔 결함 표시가 없습니다.</p>
                 )}
-                {currentBBoxes.map((box: any, idx: number) => {
+                {currentBBoxes.map((box, idx: number) => {
                   const di = box.defectIndex;
                   const excluded = typeof di === "number" && cur.excluded.includes(di);
                   const wasEdited = typeof di === "number" && Boolean(cur.edited[di]);
@@ -841,7 +845,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                   );
                 })}
 
-                {showYolo && currentYoloBoxes.map((box: any) => {
+                {showYolo && currentYoloBoxes.map((box) => {
                   const adopted = cur.adopted.includes(box.candIndex);
                   const key = `yolo-${box.candIndex}`;
                   return (
@@ -933,6 +937,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
                     effIdx === idx ? "border-blue-500 ring-2 ring-blue-200 dark:ring-blue-900 scale-105" : "border-gray-300 dark:border-gray-700 opacity-60 hover:opacity-100"
                   }`}
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                   <img
                     src={url}
                     alt={`thumb-${idx}`}

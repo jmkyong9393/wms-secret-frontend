@@ -2,6 +2,7 @@
 
 // 검수 증거 뷰어 - 촬영 컷 썸네일, AI 판정 오버레이(확정/오탐제외/YOLO 후보) 토글,
 // 선택 컷의 결함 메타 패널을 한 단위로 묶는다. 재고 상세·감사 화면 공용을 전제로 분리.
+import type { RawBBox } from '../model/types';
 import React, { useState } from 'react';
 import { Eye, EyeOff, ScanSearch } from 'lucide-react';
 import {
@@ -13,7 +14,7 @@ interface InspectionEvidenceViewerProps {
   images: string[];
   defectCoords: PerImageDefectCoordinate[];
   excludedCoords: PerImageDefectCoordinate[];
-  yoloCandidates: any[];
+  yoloCandidates: RawBBox[];
   invalidImageIndexes: number[];
   totalDefects: number;
   specialNotes?: string | null;
@@ -41,10 +42,10 @@ export function InspectionEvidenceViewer({
   const currentYoloBoxes = yoloCandidates
     .filter((c) => Number(c?.image_index ?? 0) === selectedImgIdx && c?.bbox)
     .map((c) => ({
-      xmin: c.bbox.xmin,
-      ymin: c.bbox.ymin,
-      xmax: c.bbox.xmax,
-      ymax: c.bbox.ymax,
+      xmin: c.bbox!.xmin,
+      ymin: c.bbox!.ymin,
+      xmax: c.bbox!.xmax,
+      ymax: c.bbox!.ymax,
       coord_space: 1000,
       type: c.type,
       label: c.type || 'YOLO 후보',
@@ -114,6 +115,7 @@ export function InspectionEvidenceViewer({
                               : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                           }`}
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                           <img
                             src={imgUrl}
                             alt={`검수 이미지 ${idx}`}
@@ -134,6 +136,7 @@ export function InspectionEvidenceViewer({
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start pt-2">
                     <div className="md:col-span-2 relative bg-gray-900 rounded-xl overflow-hidden shadow-inner border border-gray-800 flex justify-center items-center p-2 min-h-[480px]">
                       <div className="relative inline-block max-w-full rounded-lg overflow-hidden border border-gray-800 shadow-2xl">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                         <img
                           src={images[selectedImgIdx] || images[0]}
                           alt={`검수 이미지 ${selectedImgIdx}`}

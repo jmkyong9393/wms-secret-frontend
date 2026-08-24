@@ -73,7 +73,7 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
     } else if (pendingAction.type === "delete") {
       deleteMutation.mutate(pendingAction.employeeId, {
         onSuccess: () => setPendingAction(null),
-        onError: (error: any) => {
+        onError: (error: Error) => {
           alert(error.message || "삭제에 실패했습니다.");
           setPendingAction(null);
         },

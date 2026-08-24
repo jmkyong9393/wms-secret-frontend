@@ -32,8 +32,9 @@ export function useA2HS() {
     };
 
     // Check if the event already fired before React hydrated
-    if (typeof window !== 'undefined' && (window as any).__deferredPrompt) {
-      setDeferredPrompt((window as any).__deferredPrompt);
+    const w = typeof window !== 'undefined' ? (window as Window & { __deferredPrompt?: BeforeInstallPromptEvent }) : undefined;
+    if (w?.__deferredPrompt) {
+      setDeferredPrompt(w.__deferredPrompt);
       setIsInstallable(true);
     }
 

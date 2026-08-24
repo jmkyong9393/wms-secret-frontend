@@ -1,4 +1,6 @@
 'use client';
+import type { LucideIcon } from 'lucide-react';
+import Image from "next/image";
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import Link from 'next/link';
@@ -18,7 +20,6 @@ import {
   Users,
   Truck,
   FileCheck,
-  Building2,
   ShieldCheck,
   Boxes,
   PanelLeftClose,
@@ -36,7 +37,7 @@ interface MenuGroup {
   items: {
     name: string;
     href: string;
-    icon: any;
+    icon: LucideIcon;
     badge?: string;
   }[];
 }
@@ -137,12 +138,12 @@ export default function Sidebar() {
           if (resHistory.ok) {
             const historyData = await resHistory.json();
             if (isMounted && Array.isArray(historyData)) {
-              const pending = historyData.filter((item: any) => item.status === 'PENDING' || item.status === 'HITL_REQUIRED').length;
+              const pending = historyData.filter((item: { status?: string }) => item.status === 'PENDING' || item.status === 'HITL_REQUIRED').length;
               setHitlCount(pending);
             }
           }
         }
-      } catch (e) {
+      } catch {
         // network fallback
       }
     };
@@ -205,9 +206,10 @@ export default function Sidebar() {
           {!compact ? (
             <>
               <div className="flex items-center gap-2.5 min-w-0">
-                <img 
+                <Image 
                   src="/nexus_logo.png" 
                   alt="Nexus AI WMS Emblem" 
+                  width={72} height={72}
                   className="w-9 h-9 rounded-2xl object-cover shadow-sm border border-blue-500/20 shrink-0" 
                 />
                 <div className="flex flex-col min-w-0">

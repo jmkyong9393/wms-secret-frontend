@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { adminAPI } from '@/shared/api/api';
+import { adminAPI } from '@/features/hitl/api/adminApi';
 import type { HitlTask } from '../types/hitl';
 
 export interface ReinspectionView {
@@ -47,7 +47,7 @@ export function useAiReinspection(opts: {
       if (saved) {
         try {
           setPipelineLogs(JSON.parse(saved));
-        } catch (e) {}
+        } catch {}
       }
     }
   }, []);
@@ -66,7 +66,7 @@ export function useAiReinspection(opts: {
   };
 
   const handleTriggerAiReinspect = async (jobId: string) => {
-    const targetTask = opts.getTask(jobId) as any;
+    const targetTask = opts.getTask(jobId) as (HitlTask & { lpn_barcode?: string }) | undefined;
     const lpnStr = targetTask?.agent_logs?.lpn_barcode || targetTask?.lpn_barcode || "LPN 미발급";
     const titleStr = targetTask?.book_title || "수동 검수 요청 도서";
 
@@ -181,15 +181,16 @@ export function useAiReinspection(opts: {
       ]);
 
       await opts.onCompleted();
-    } catch (err: any) {
+    } catch (err) {
       console.error("AI Re-inspection failed:", err);
+      const errMsg = err instanceof Error ? err.message : undefined;
       setActiveReinspectionTask((prev) =>
         prev
           ? {
               ...prev,
               isDone: true,
-              error: err?.message || "서버 통신 실패",
-              logs: [...prev.logs, `[${new Date().toLocaleTimeString()}] ❌ 재검수 오류: ${err?.message || "서버 오류"}`],
+              error: errMsg || "서버 통신 실패",
+              logs: [...prev.logs, `[${new Date().toLocaleTimeString()}] ❌ 재검수 오류: ${errMsg || "서버 오류"}`],
             }
           : null
       );

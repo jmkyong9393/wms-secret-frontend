@@ -104,7 +104,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
   const [selectedReportItem, setSelectedReportItem] = useState<InspectionItem | null>(null);
   const [activeImgIdx, setActiveImgIdx] = useState(0);
   const [reportLoading, setReportLoading] = useState(false);
-  const [zoomBook, setZoomBook] = useState<any | null>(null);
+  const [zoomBook, setZoomBook] = useState<React.ComponentProps<typeof BookCoverModal>['book']>(null);
   const [activePrintData, setActivePrintData] = useState<LpnPrintData | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -141,11 +141,11 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
         });
         if (!res.ok) return;
         const payload = await res.json();
-        const items: any[] = payload?.items ?? [];
+        const items: (Partial<InspectionItem> & { id: string; job_id?: string; inspector_label?: string; updated_at?: string; created_at?: string; avg_defect_confidence?: number | null })[] = payload?.items ?? [];
 
         setInspections(
           items.map((it) => ({
-            id: it.job_id,
+            id: it.job_id ?? it.id,
             lpn_barcode: it.lpn_barcode || LPN_UNISSUED_LABEL,
             book: {
               title: it.book?.title || '도서 정보 없음',
@@ -176,7 +176,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
         console.warn('검수 처리 이력 조회 실패', err);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [isMine, workerId]);
 
   // KST 기준 오늘(YYYY-MM-DD). Intl 객체 생성은 비싸므로 마운트 시 한 번만 만든다.
@@ -590,7 +590,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          isNew ? openZoom(item) : openReport(item);
+                          if (isNew) openZoom(item); else openReport(item);
                         }
                       }}
                       aria-label={`${item.book.title} 상세 보기`}
@@ -745,6 +745,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                     <span className="font-mono text-blue-600 dark:text-blue-400">[{activeImgIdx + 1} / {selectedReportItem.image_urls.length}]</span>
                   </div>
                   <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800 max-h-72 flex items-center justify-center bg-gray-950 p-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                     <img
                       src={selectedReportItem.image_urls[activeImgIdx] || selectedReportItem.image_urls[0]}
                       alt="AI Multi Angle Inspection Scan"
@@ -762,6 +763,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                             : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
                         }`}
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                         <img src={url} alt={`Thumb ${idx}`} className="w-10 h-10 object-cover rounded-lg border shrink-0" />
                         <div className="text-[11px] truncate">
                           <p className="font-bold">{SCAN_ANGLE_LABELS[idx] || `각도 ${idx + 1}`}</p>

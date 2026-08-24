@@ -36,3 +36,100 @@ export interface InspectionItem {
   defects_found: InspectionDefect[];
   image_urls?: string[];
 }
+
+/** 파이프라인 산출 BBox — 검수 편집·심사 표식(hitl_*)까지 실려 온다. 좌표는 coord_space 기준. */
+export interface RawBBox {
+  xmin: number;
+  ymin: number;
+  xmax: number;
+  ymax: number;
+  type?: string;
+  label?: string;
+  confidence?: number;
+  image_index?: number;
+  coord_space?: number;
+  deduction?: number;
+  preliminary_deduction?: number;
+  applied_deduction?: number;
+  deduction_note?: string;
+  deduction_scope?: string;
+  evidence_suspect?: boolean;
+  conf_copied_from_candidate?: boolean;
+  hitl_excluded?: boolean;
+  hitl_added?: boolean;
+  hitl_adopted?: boolean;
+  hitl_bbox_edited?: boolean;
+  bbox?: { xmin: number; ymin: number; xmax: number; ymax: number };
+  kind?: string;
+  isLowConf?: boolean;
+  defectIndex?: number;
+  candIndex?: number;
+  tempId?: string;
+}
+
+/** 이미지별 결함 좌표 묶음 (agent_logs.defect_coordinates 원소) */
+export interface DefectCoordinateGroup {
+  image_index?: number;
+  image_idx?: number;
+  image_url?: string;
+  bboxes?: RawBBox[];
+}
+
+/** 파이프라인 감사 로그 — 노드별 산출물이 누적된다. 미선언 키는 unknown으로 취급. */
+export interface AgentLogs {
+  defects?: RawBBox[];
+  defect_coordinates?: DefectCoordinateGroup[];
+  yolo_candidates?: RawBBox[];
+  invalid_image_indexes?: number[];
+  executed_agents?: string[];
+  node_timings?: Record<string, number>;
+  reason?: string;
+  reason_code?: string;
+  primary_reason_code?: string;
+  suggested_grade?: string;
+  suggested_decision?: string;
+  policy_text?: string;
+  vision_text?: string;
+  critic_text?: string;
+  detector_text?: string;
+  supervisor_rationale?: string;
+  report_generated_at?: string;
+  retry_count?: number;
+  auto_refund_eligible?: boolean;
+  /** BBox 편집 후 2차 재검증 기록 — 1차 판독 로그와 분리 보존된다 */
+  hitl_revalidation?: {
+    revalidated_at?: string;
+    revalidated_by?: string;
+    policy_text?: string;
+    policy_score?: number;
+    policy_error?: string;
+    critic_stage_a_passed?: boolean;
+    critic_stage_a_issues?: string[];
+    critic_stage_a_error?: string;
+  };
+  report_text?: string;
+  special_notes?: string;
+  lpn_barcode?: string;
+  book_metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** Report Agent가 생성한 고객 보증서 문서의 결함 항목 */
+export interface CertificateFinding {
+  label?: string;
+  reason?: string;
+  location?: string;
+  deduction?: number;
+}
+
+/** Report Agent 보증서 문서 — 프론트는 문장을 만들지 않고 그대로 렌더한다 */
+export interface CertificateDoc {
+  cert_id?: string;
+  headline?: string;
+  summary?: string;
+  condition_detail?: string;
+  care_tip?: string;
+  policy_basis?: string[];
+  policy_notice?: string;
+  findings?: CertificateFinding[];
+}

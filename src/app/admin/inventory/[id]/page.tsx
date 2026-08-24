@@ -1,4 +1,5 @@
 'use client';
+import type { AgentLogs, CertificateDoc, RawBBox } from '@/entities/inspection/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useEffect, useState } from 'react';
@@ -12,7 +13,7 @@ import { InspectionEvidenceViewer } from '@/entities/inspection/ui/InspectionEvi
 import { PipelineTracePanel } from '@/entities/inspection/ui/PipelineTracePanel';
 import { LpnPrintModal } from '@/entities/label/ui/LpnPrintModal';
 import type { LpnPrintData } from '@/entities/label/model/types';
-import { adminAPI } from '@/shared/api/api';
+import { adminAPI } from '@/features/hitl/api/adminApi';
 import {
   resolveInspectionImages,
   resolveDefectCoordinates,
@@ -49,9 +50,9 @@ interface InventoryDetailData {
   inspector?: InspectorInfo;
   date: string;
   image_urls?: string[];
-  agent_logs?: any;
+  agent_logs?: AgentLogs | null;
   final_report?: string | null;
-  certificate?: any;
+  certificate?: CertificateDoc | null;
   /** 백엔드 orders/pricing.py가 산정한 가격 내역 (프론트는 렌더만) */
   pricing?: {
     list_price: number;
@@ -93,11 +94,11 @@ export default function InventoryDetailPage() {
       if (res.status === 404) throw new Error('해당 재고를 찾을 수 없습니다.');
       if (!res.ok) throw new Error('재고 상세 정보를 불러오는데 실패했습니다.');
       setData(await res.json());
-    } catch (err: any) {
+    } catch (err) {
       // [수정 이력] 예전에는 조회 실패 시 SQL 수험서 목업 데이터를 대신 렌더했다.
       // 실패를 성공처럼 보여줘 어떤 재고를 보고 있는지 알 수 없었으므로 에러를 그대로 표시한다.
       console.error(err);
-      setError(err?.message || '알 수 없는 오류가 발생했습니다.');
+      setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.');
       setData(null);
     } finally {
       setLoading(false);
@@ -147,8 +148,8 @@ export default function InventoryDetailPage() {
       } else {
         alert('재검수가 아직 진행 중입니다. 큐 등록은 완료됐으니 잠시 후 새로고침으로 확인해 주세요.');
       }
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     } finally {
       setIsReinspecting(false);
     }
@@ -164,8 +165,9 @@ export default function InventoryDetailPage() {
       setRecallReason('');
       await fetchDetail();
       alert(res.message);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || err?.message || 'HITL 회수에 실패했습니다.');
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      alert(e?.response?.data?.message || e?.message || 'HITL 회수에 실패했습니다.');
     } finally {
       setIsRecalling(false);
     }
@@ -219,7 +221,6 @@ export default function InventoryDetailPage() {
   const excludedCoords: PerImageDefectCoordinate[] = resolveExcludedDefectCoordinates(data);
   const excludedCount = excludedCoords.reduce((n, c) => n + c.bboxes.length, 0);
   const logs = data.agent_logs || {};
-  const executedAgents: string[] = logs.executed_agents || [];
   const totalDefects = defectCoords.reduce((n, c) => n + c.bboxes.length, 0);
 
   // WBF 3-YOLO 앙상블 사전탐지 후보. Vision이 채택하지 않은 것도 그대로 남아 있어,
@@ -230,7 +231,7 @@ export default function InventoryDetailPage() {
     ? logs.invalid_image_indexes.map(Number)
     : [];
 
-  const yoloCandidates: any[] = Array.isArray(logs.yolo_candidates) ? logs.yolo_candidates : [];
+  const yoloCandidates: RawBBox[] = Array.isArray(logs.yolo_candidates) ? logs.yolo_candidates : [];
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 font-sans bg-gray-50 dark:bg-gray-950 min-h-dvh text-gray-900 dark:text-gray-100 transition-colors">

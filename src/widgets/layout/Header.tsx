@@ -1,4 +1,5 @@
 'use client';
+import Image from "next/image";
 import { API_BASE_URL } from '@/shared/api/api-client';
 import { maskName } from '@/shared/lib/privacy-mask';
 
@@ -22,6 +23,8 @@ interface NotificationItem {
   time: string;
   link?: string | null;
   read: boolean;
+  tag1?: string;
+  tag2?: string;
 }
 
 /**
@@ -45,11 +48,22 @@ function formatTimeAgo(iso?: string | null): string {
   return `${Math.floor(diffSec / 86400)}일 전`;
 }
 
-function toNotificationItem(evt: any): NotificationItem {
+interface NotificationEvent {
+  id?: string | number;
+  category?: string;
+  severity?: string;
+  title?: string;
+  description?: string;
+  created_at?: string;
+  link_url?: string;
+  is_read?: boolean;
+}
+
+function toNotificationItem(evt: NotificationEvent): NotificationItem {
   return {
     id: String(evt.id ?? `N-${Date.now()}`),
     badge: evt.category || '시스템 알림',
-    badgeBg: SEVERITY_BADGE[evt.severity] || SEVERITY_BADGE.INFO,
+    badgeBg: SEVERITY_BADGE[evt.severity ?? 'INFO'] || SEVERITY_BADGE.INFO,
     title: evt.title || '알림',
     desc: evt.description || '',
     time: formatTimeAgo(evt.created_at),
@@ -109,7 +123,7 @@ export default function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   // Active Toast Notification Popup State (Shows up at top-right, disappears after 5 seconds)
-  const [activeToast, setActiveToast] = useState<any | null>(null);
+  const [activeToast, setActiveToast] = useState<NotificationItem | null>(null);
 
   // 저장된 알림 이력 초기 로드 (새로고침해도 남아야 하므로 DB에서 읽는다)
   useEffect(() => {
@@ -309,15 +323,17 @@ export default function Header() {
         <div className="flex items-center gap-[clamp(0.4rem,0.8vw,0.85rem)]">
           <Link href="/admin/dashboard" className="flex items-center gap-2 group shrink-0">
             {/* Light Mode Original Signature Emblem */}
-            <img 
+            <Image 
               src="/nexus_header_logo_light.jpg" 
               alt="Nexus WMS Logo Light" 
+              width={201} height={112}
               className="h-[clamp(2.25rem,4.2vh,3.5rem)] max-w-[18vw] w-auto rounded-xl border-2 border-blue-200/80 shadow-sm object-cover hover:scale-105 transition-all duration-200 dark:hidden"
             />
             {/* Dark Mode Original Signature Emblem */}
-            <img 
+            <Image 
               src="/nexus_header_logo_dark.jpg" 
               alt="Nexus WMS Logo Dark" 
+              width={201} height={112}
               className="h-[clamp(2.25rem,4.2vh,3.5rem)] max-w-[18vw] w-auto rounded-xl border-2 border-blue-500/50 shadow-sm object-cover hover:scale-105 transition-all duration-200 hidden dark:block"
             />
           </Link>

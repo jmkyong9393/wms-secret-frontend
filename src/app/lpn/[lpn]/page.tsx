@@ -1,4 +1,5 @@
 'use client';
+import type { AgentLogs } from '@/entities/inspection/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 
@@ -38,7 +39,19 @@ export default function LpnInternalLookupPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [item, setItem] = useState<any>(null);
+  interface LpnItem {
+    lpn_barcode?: string;
+    grade?: string | null;
+    ubci_score?: number | null;
+    quantity?: number;
+    zone?: string;
+    worker_id?: string;
+    inspector?: { name?: string; employee_id?: string; label?: string } | null;
+    book?: { title?: string; author?: string; publisher?: string; cover_image_url?: string; base_price?: number };
+    agent_logs?: AgentLogs | null;
+    image_urls?: string[];
+  }
+  const [item, setItem] = useState<LpnItem | null>(null);
   const [selectedImgIdx, setSelectedImgIdx] = useState(0);
 
   const isInternalViewer = Boolean(user?.role && INTERNAL_ROLES.includes(user.role));
@@ -61,8 +74,8 @@ export default function LpnInternalLookupPage() {
         if (!res.ok) throw new Error('LPN 정보를 불러오지 못했습니다.');
         const json = await res.json();
         if (!cancelled) setItem(json);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || '알 수 없는 오류');
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : '알 수 없는 오류');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -138,6 +151,7 @@ export default function LpnInternalLookupPage() {
           <div className="flex items-start gap-4">
             <div className="w-16 h-22 bg-gray-100 rounded shadow-sm shrink-0 flex items-center justify-center overflow-hidden">
               {item.book?.cover_image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다
                 <img src={item.book.cover_image_url} alt={item.book.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
                 <BookOpen className="text-gray-400" size={28} />
@@ -203,6 +217,7 @@ export default function LpnInternalLookupPage() {
                         selectedImgIdx === idx ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-gray-50 text-gray-600'
                       }`}
                     >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                       <img src={url} alt={`검수 ${idx}`} className="w-14 h-18 object-cover rounded mb-0.5 bg-gray-200" />
                       #{idx} {cnt > 0 ? `결함 ${cnt}` : '정상'}
                     </button>
@@ -212,6 +227,7 @@ export default function LpnInternalLookupPage() {
 
               <div className="relative bg-gray-900 rounded-xl p-2 flex justify-center">
                 <div className="relative inline-block">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                   <img src={images[selectedImgIdx] || images[0]} alt="검수 이미지" className="max-h-[420px] w-auto object-contain block rounded" />
                   {currentBBoxes.map((box, i) => {
                     const { left, top, width, height } = bboxToPercent(box);

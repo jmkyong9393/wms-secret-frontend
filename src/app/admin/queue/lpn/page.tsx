@@ -2,7 +2,7 @@
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import { useState, useEffect } from 'react';
-import { Printer, RefreshCcw, Search, Barcode, CheckCircle } from 'lucide-react';
+import { Printer, RefreshCcw, Barcode, CheckCircle } from 'lucide-react';
 import { labelsAPI } from '@/shared/api/api';
 
 type LpnRecord = {

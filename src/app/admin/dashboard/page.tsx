@@ -11,8 +11,6 @@ import {
   ArrowRight, 
   Camera, 
   RefreshCcw, 
-  Activity,
-  Layers,
   Sparkles,
   
   TrendingDown
@@ -82,7 +80,15 @@ export default function AdvancedDashboardPage() {
   // 쌓였을 때 프론트가 그 전부를 한 번에 렌더링하게 된다 - 그래서 처음부터 배치
   // 페이지네이션(limit/offset)만 쓰고, "더보기"를 누른 만큼만 이어붙인다.
   const HISTORY_PAGE_SIZE = 10;
-  const [historyItems, setHistoryItems] = React.useState<any[]>([]);
+  interface WeeklyHistoryItem {
+    report_week: string;
+    generated_at?: string;
+    ai_narrative?: string;
+    saved_labor_cost_krw?: number;
+    predicted_returns?: number;
+    logistics?: { week_inspections?: number; week_orders?: number };
+  }
+  const [historyItems, setHistoryItems] = React.useState<WeeklyHistoryItem[]>([]);
   const [historyTotal, setHistoryTotal] = React.useState(0);
   const [historyLoading, setHistoryLoading] = React.useState(false);
   const [historyExpanded, setHistoryExpanded] = React.useState(false);

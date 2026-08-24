@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { BrowserMultiFormatReader as ZXingBrowserReader } from '@zxing/browser';
+import { BrowserMultiFormatReader as ZXingBrowserReader, type IScannerControls } from '@zxing/browser';
 import { DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { validateIsbn13, isLpnCode } from '../isbnValidation';
 
@@ -16,7 +16,7 @@ export function useBarcodeScanEngine(opts: {
   onCode: (text: string) => void | Promise<void>;
 }) {
   // 실제 바코드(ISBN) 스캐닝 로직 (ZXing Browser)
-  const codeReader = useRef<any>(null);
+  const codeReader = useRef<ZXingBrowserReader | null>(null);
 
   // 바코드 인식 처리 중복 방지 잠금.
   //
@@ -65,8 +65,7 @@ export function useBarcodeScanEngine(opts: {
       }
 
       let scanning = true;
-      let controlsRef: any = null;
-      let timeoutId: NodeJS.Timeout;
+      let controlsRef: IScannerControls | null = null;
 
       const startScanning = async () => {
         if (!opts.videoRef.current) return;
@@ -132,8 +131,8 @@ export function useBarcodeScanEngine(opts: {
         try {
           // 반환된 controls를 즉시 보관한다. 콜백 인자로만 받으면 바코드를 한 번도 못 읽고
           // 화면을 벗어났을 때 정리 함수가 세션을 멈추지 못해 세션이 계속 쌓인다.
-          const controls = await codeReader.current?.decodeFromVideoElement(opts.videoRef.current, (result: any, error: any, controls: any) => {
-            controlsRef = controls;
+          const controls = await codeReader.current?.decodeFromVideoElement(opts.videoRef.current, (result, error, controls) => {
+            controlsRef = controls ?? null;
             if (result && scanning) {
               const text = result.getText();
               if (text && text.length >= 4 && tryAcceptScan(text)) {
@@ -141,7 +140,7 @@ export function useBarcodeScanEngine(opts: {
               }
             }
           });
-          controlsRef = controlsRef || controls;
+          controlsRef = controlsRef || controls || null;
           // 대기 중 화면을 벗어났다면 정리 함수는 이미 지나갔다. 직접 멈춘다.
           if (!scanning) {
             controls?.stop();
@@ -154,7 +153,7 @@ export function useBarcodeScanEngine(opts: {
         // 2. 최신 브라우저 내장 하드웨어 가속 바코드 디텍터 (병렬 실행)
         if ('BarcodeDetector' in window) {
           try {
-            // @ts-ignore
+            // @ts-expect-error BarcodeDetector는 표준 lib.dom에 없다
             const barcodeDetector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'qr_code'] }); 
             
             const detectLoop = async () => {
@@ -171,7 +170,7 @@ export function useBarcodeScanEngine(opts: {
                     return;
                   }
                 }
-              } catch (err) {
+              } catch {
                 // 무시 (비디오 덜 로딩됨 등)
               }
               if (scanning) {
@@ -187,7 +186,7 @@ export function useBarcodeScanEngine(opts: {
       };
 
       // 비디오가 켜지고 약간의 지연 후 스캐닝 시작
-      timeoutId = setTimeout(startScanning, 500);
+      const timeoutId = setTimeout(startScanning, 500);
 
       return () => {
         scanning = false;

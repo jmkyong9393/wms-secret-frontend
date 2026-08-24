@@ -1,4 +1,3 @@
-import { apiClient } from '@/shared/api/api-client';
 export interface InventoryFilterDTO {
   page?: number;
   size?: number;
@@ -7,17 +6,16 @@ export interface InventoryFilterDTO {
 }
 
 export interface InventoryResponse {
-  content: any[];
+  content: { id: string; book: string; grade: string; zone: string; date: string }[];
   totalElements: number;
   totalPages: number;
   size: number;
   number: number;
 }
 
-const BASE_URL = '/api/v1/inventory';
 
 export const inventoryService = {
-  getInventoryList: async (params: InventoryFilterDTO): Promise<InventoryResponse> => {
+  getInventoryList: async (_params: InventoryFilterDTO): Promise<InventoryResponse> => {
     // const response = await apiClient.get<InventoryResponse>(BASE_URL, { params });
     // return response.data;
 

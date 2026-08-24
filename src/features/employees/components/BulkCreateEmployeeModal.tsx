@@ -101,7 +101,7 @@ export function BulkCreateEmployeeModal({ open, onClose, currentUser }: BulkCrea
           return;
         }
 
-        const headers = data[0];
+        
         const parsedRows: DraftRow[] = [];
         let missingNamesCount = 0;
         let invalidRolesCount = 0;
@@ -166,7 +166,7 @@ export function BulkCreateEmployeeModal({ open, onClose, currentUser }: BulkCrea
 
         setRows(parsedRows);
         if (fileInputRef.current) fileInputRef.current.value = ""; // 초기화
-      } catch (err) {
+      } catch {
         setValidationError("엑셀 파일을 읽는 중 오류가 발생했습니다.");
       }
     };

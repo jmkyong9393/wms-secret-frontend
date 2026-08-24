@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Box, RotateCw, Sparkles, ShieldCheck, Cpu, ZoomIn, ZoomOut, Maximize2, X, RefreshCw, PackageCheck, Package, BookOpen, Layers, Eye, AlertTriangle } from 'lucide-react';
+import { Box, RotateCw, Sparkles, Cpu, ZoomIn, ZoomOut, Maximize2, X, RefreshCw, Package, BookOpen, Layers, Eye } from 'lucide-react';
 
 export interface BookItem {
   id: string;
@@ -38,7 +38,6 @@ export default function BinPacking3DViewer({
   selectedBox,
   selectedBook,
   selectedBooks,
-  aiRecommendationLog
 }: BinPacking3DViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const modalCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -74,7 +73,7 @@ export default function BinPacking3DViewer({
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [showCutaway, setShowCutaway] = useState<boolean>(false); // Front & Right Cushion Cutaway Inspect Mode
-  const [cushionGhostMode, setCushionGhostMode] = useState<boolean>(false); // Semi-transparent Ghost Cushion Mode
+  const [cushionGhostMode] = useState<boolean>(false); // Semi-transparent Ghost Cushion Mode
 
   // Parse Outer Box Physical Dimensions (mm)
   const dimMatches = activeBox.specs.match(/(\d+)x(\d+)x(\d+)/);
@@ -528,7 +527,7 @@ export default function BinPacking3DViewer({
 
     const horizCols = shouldRotate90 ? colsRotated : colsNormal;
     const horizRows = shouldRotate90 ? rowsRotated : rowsNormal;
-    const horizPerLayer = Math.max(1, horizCols * horizRows);
+    
 
     const orientedBookW = shouldRotate90 ? rawSampleD : rawSampleW;
     const orientedBookD = shouldRotate90 ? rawSampleW : rawSampleD;

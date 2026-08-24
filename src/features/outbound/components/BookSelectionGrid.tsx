@@ -1,5 +1,6 @@
 'use client';
 
+import type { OutboundBook } from '@/features/outbound/model/types';
 import { Package, Search, Check } from 'lucide-react';
 import BookCover from '@/entities/book/ui/BookCover';
 
@@ -20,7 +21,7 @@ export function BookSelectionGrid({
   setBookQty,
 }: {
   inventoryCount: number;
-  filteredBooks: any[];
+  filteredBooks: OutboundBook[];
   outboundBookTypeFilter: 'ALL' | 'NEW' | 'USED';
   setOutboundBookTypeFilter: (f: 'ALL' | 'NEW' | 'USED') => void;
   searchTerm: string;

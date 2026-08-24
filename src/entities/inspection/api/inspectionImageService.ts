@@ -1,3 +1,4 @@
+import type { AgentLogs, RawBBox } from '../model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 /**
  * WMS 검수 이미지 / BBox 좌표 단일 소스(Single Source of Truth) 서비스
@@ -80,7 +81,15 @@ export function normalizeImageUrl(raw: string): string | null {
  * 검수 촬영 이미지 목록을 반환한다. 실제 촬영본이 없으면 빈 배열.
  * (표지 이미지는 검수 사진이 아니므로 여기서 대체물로 끼워넣지 않는다.)
  */
-export function resolveInspectionImages(itemOrJob: any): string[] {
+/** 검수 이미지·좌표를 뽑을 수 있는 최소 형태 — 재고 항목(InspectionItem)과 원장 job 응답을 모두 받는다. */
+export interface InspectionSource {
+  image_urls?: unknown;
+  images?: unknown;
+  agent_logs?: AgentLogs | null;
+  defects?: RawBBox[];
+}
+
+export function resolveInspectionImages(itemOrJob: InspectionSource | null | undefined): string[] {
   const raw = itemOrJob?.image_urls ?? itemOrJob?.images ?? [];
   if (!Array.isArray(raw)) return [];
 
@@ -103,17 +112,17 @@ export function resolveInspectionImages(itemOrJob: any): string[] {
  * 제외분은 삭제하지 않고 `resolveExcludedDefectCoordinates()`로 따로 꺼내 쓴다 —
  * 판정 근거를 남겨야 감사 추적이 된다.
  */
-export function resolveDefectCoordinates(itemOrJob: any): PerImageDefectCoordinate[] {
+export function resolveDefectCoordinates(itemOrJob: InspectionSource | null | undefined): PerImageDefectCoordinate[] {
   return collectDefectCoordinates(itemOrJob, false);
 }
 
 /** HITL 관리자가 오탐으로 제외한 BBox만 반환한다 (대조 표시용). */
-export function resolveExcludedDefectCoordinates(itemOrJob: any): PerImageDefectCoordinate[] {
+export function resolveExcludedDefectCoordinates(itemOrJob: InspectionSource | null | undefined): PerImageDefectCoordinate[] {
   return collectDefectCoordinates(itemOrJob, true);
 }
 
 function collectDefectCoordinates(
-  itemOrJob: any,
+  itemOrJob: InspectionSource | null | undefined,
   wantExcluded: boolean,
 ): PerImageDefectCoordinate[] {
   const logs = itemOrJob?.agent_logs ?? {};
@@ -122,9 +131,9 @@ function collectDefectCoordinates(
   //  2) AI 증거 대조 검증이 오탐 지목 (deduction_scope='excluded', applied_deduction=0)
   // 종전에는 1)만 걸러서, AI가 감점 제외한 박스까지 "확정 결함"으로 세고 그렸다
   // (실측: UBCI 40점 = 확정 6건 감점인데 화면은 "확정 결함 23건" 표기).
-  const isExcluded = (b: any) =>
+  const isExcluded = (b: RawBBox | null | undefined) =>
     Boolean(b?.hitl_excluded) || b?.deduction_scope === 'excluded';
-  const keep = (b: any) => isExcluded(b) === wantExcluded;
+  const keep = (b: RawBBox) => isExcluded(b) === wantExcluded;
 
   const normalized = logs.defect_coordinates;
   if (Array.isArray(normalized) && normalized.length > 0) {
@@ -180,7 +189,7 @@ function collectDefectCoordinates(
  * 100으로 잘못 잡히는 등 좌표가 어긋났다. 이제 백엔드가 coord_space를 명시해 내려주므로
  * 추측하지 않는다.
  */
-export function bboxToPercent(box: BBoxItem) {
+export function bboxToPercent(box: { xmin: number; ymin: number; xmax: number; ymax: number; coord_space?: number }) {
   const scale = box.coord_space && box.coord_space > 0 ? box.coord_space : 1000;
 
   const left = Math.max(0, Math.min(100, (Number(box.xmin) / scale) * 100));
@@ -196,7 +205,7 @@ export function bboxToPercent(box: BBoxItem) {
  * 결함이 하나도 없으면 0(첫 촬영본)을 반환한다.
  * 고객 보증서의 "AI 실물 검수 및 결함 판독 내역"이 대표 사진을 고를 때 사용한다.
  */
-export function pickRepresentativeImageIndex(itemOrJob: any): number {
+export function pickRepresentativeImageIndex(itemOrJob: InspectionSource | null | undefined): number {
   const coords = resolveDefectCoordinates(itemOrJob);
   if (coords.length === 0) return 0;
 

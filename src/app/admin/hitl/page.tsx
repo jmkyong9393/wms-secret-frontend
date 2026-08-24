@@ -8,13 +8,13 @@ import {
   Search,
   Shield as ShieldIcon,
 } from "lucide-react";
-import { adminAPI } from "@/shared/api/api";
+import { adminAPI } from "@/features/hitl/api/adminApi";
 import { getSystemSettings, SETTINGS_CHANGE_EVENT } from "@/shared/lib/systemSettings";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
 import { HitlImageModal, EMPTY_BBOX_EDITS, type BBoxEdits } from "@/features/hitl/components/HitlImageModal";
 // 관리자 설정의 읽기 전용 정책 뷰와 같은 정의를 쓴다 (features/hitl/policy.ts)
 import { gradeFromUbciScore, defaultDecisionForGrade } from "@/features/hitl/policy";
-import { formatQueuedAt, getPrimaryDefectReason } from "@/features/hitl/utils";
+import { getPrimaryDefectReason } from "@/features/hitl/utils";
 import { useAiReinspection } from "@/features/hitl/hooks/useAiReinspection";
 import { PipelineLogPanel } from "@/features/hitl/components/PipelineLogPanel";
 import { ReinspectionLiveModal } from "@/features/hitl/components/ReinspectionLiveModal";
@@ -114,7 +114,7 @@ export default function AdminHitlDashboard() {
       setGrades(initGrades);
       setReasons(initReasons);
       setComments(initComments);
-    } catch (err: any) {
+    } catch (err) {
       // 401(세션 만료) 처리는 apiClient의 전역 response 인터셉터(lib/api-client.ts)가
       // 이미 담당한다 - 여기서 중복으로 리다이렉트하지 않는다.
       console.error("Failed to fetch HITL tasks:", err);
@@ -176,7 +176,7 @@ export default function AdminHitlDashboard() {
     }
     const nextDecisions = { ...decisions };
     const nextGrades = { ...grades };
-    const nextReasons = { ...reasons } as Record<string, any>;
+    const nextReasons = { ...reasons };
 
     selectedIds.forEach((id) => {
       nextDecisions[id] = values.decision;
@@ -205,8 +205,8 @@ export default function AdminHitlDashboard() {
       const targetGrade = grades[id] || "NORMAL";
       const rawReason = reasons[id];
       const reasonList: string[] = Array.isArray(rawReason)
-        ? (rawReason as any)
-        : (rawReason ? [rawReason as any] : []);
+        ? rawReason
+        : (rawReason ? [rawReason] : []);
       const primaryReasonCode = reasonList.join(",");
       const comment = comments[id] || "관리자 HITL 최종 결재 승인";
 
@@ -238,7 +238,7 @@ export default function AdminHitlDashboard() {
     }
 
     try {
-      const res = await adminAPI.submitHitlOverrides(payloadList);
+      await adminAPI.submitHitlOverrides(payloadList);
       const timeNow = new Date().toLocaleTimeString();
       const firstPayload = payloadList[0];
       const summaryInfo = `총 ${payloadList.length}건 데이터베이스 오버라이드 승인 완료 (처분: ${firstPayload?.decision || 'APPROVE'}, 목표등급: ${firstPayload?.targetGrade || 'B'}, 사유: ${firstPayload?.primaryReasonCode || 'CLEAN'})`;
@@ -257,16 +257,17 @@ export default function AdminHitlDashboard() {
 
       setSelectedIds(new Set());
       fetchTasks();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Batch submit failed:", err);
+      const failMsg = (err as { response?: { data?: { message?: string } }; message?: string });
       const timeNow = new Date().toLocaleTimeString();
       appendPipelineLog({
         time: timeNow,
         agent: "Human Node (HITL) 👤",
-        text: `❌ [HITL 결재 처리 실패] ${err?.response?.data?.message || err?.message}`,
+        text: `❌ [HITL 결재 처리 실패] ${failMsg?.response?.data?.message || failMsg?.message}`,
         type: "error",
       });
-      setApprovalToast(`❌ 처리에 실패했습니다. (${err?.response?.data?.message || err?.message})`);
+      setApprovalToast(`❌ 처리에 실패했습니다. (${failMsg?.response?.data?.message || failMsg?.message})`);
       setTimeout(() => setApprovalToast(null), 4500);
     }
   };

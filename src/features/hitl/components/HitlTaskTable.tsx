@@ -158,7 +158,7 @@ export function HitlTaskTable({
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 mt-1">
                           {(() => {
-                            const realLpn = (t as any).agent_logs?.lpn_barcode || (t as any).lpn_barcode;
+                            const realLpn = t.agent_logs?.lpn_barcode || (t as HitlTask & { lpn_barcode?: string }).lpn_barcode;
                             return realLpn ? (
                               <span className="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono text-[11px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
                                 {realLpn}
@@ -290,7 +290,7 @@ export function HitlTaskTable({
                         <Select
                           disabled={!isSelected}
                           value={decisions[t.id] || "APPROVE_DOWNGRADE"}
-                          onValueChange={(val: any) => setDecisions({ ...decisions, [t.id]: val })}
+                          onValueChange={(val: string | null) => setDecisions({ ...decisions, [t.id]: val ?? "" })}
                         >
                           <SelectTrigger className="w-full h-9 text-xs font-bold rounded-xl bg-gray-50/50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white">
                             <SelectValue>
@@ -311,7 +311,7 @@ export function HitlTaskTable({
                         <Select
                           disabled={!isSelected || decisions[t.id] === "REJECT_RETURN" || decisions[t.id] === "RE_CHECK"}
                           value={grades[t.id] || "GOOD"}
-                          onValueChange={(val: any) => setGrades({ ...grades, [t.id]: val })}
+                          onValueChange={(val: string | null) => setGrades({ ...grades, [t.id]: val ?? "" })}
                         >
                           <SelectTrigger className="w-full h-9 text-xs font-bold rounded-xl bg-gray-50/50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white">
                             <SelectValue>
@@ -332,8 +332,8 @@ export function HitlTaskTable({
                         {(() => {
                           const rawVal = reasons[t.id];
                           const selectedList: string[] = Array.isArray(rawVal)
-                            ? (rawVal as any)
-                            : (rawVal ? [rawVal as any] : []);
+                            ? rawVal
+                            : (rawVal ? [rawVal] : []);
 
                           const toggleReasonCode = (codeToToggle: string) => {
                             const current = selectedList.includes(codeToToggle)

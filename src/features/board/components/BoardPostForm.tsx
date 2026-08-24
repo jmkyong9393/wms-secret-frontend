@@ -159,6 +159,7 @@ export function BoardPostForm({
                 key={path}
                 className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                 <img
                   src={attachmentUrl(path)}
                   alt={`첨부 ${idx + 1}`}
