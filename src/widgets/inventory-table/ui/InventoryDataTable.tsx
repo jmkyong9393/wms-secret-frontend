@@ -917,9 +917,12 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                       </td>
 
                       {/* 작업 — 조회·라벨·검수·삭제를 한 칸에 모은다. 두 칸으로 나누면 폭만 먹고,
-                          좁은 화면에서 뒤쪽 칸이 잘려 접근 자체가 막혔다. */}
+                          좁은 화면에서 뒤쪽 칸이 잘려 접근 자체가 막혔다.
+                          윗줄은 라벨이 붙는 버튼(상세·인쇄), 아랫줄은 아이콘 전용 버튼으로 고정한다 —
+                          flex-wrap에 맡기면 폭에 따라 3+2/4+1로 흘러 줄마다 성격이 섞였다. */}
                       <td className="py-4 px-2 text-center">
-                        <div className="flex flex-wrap justify-center items-center gap-1">
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="flex items-center gap-1">
                           {href ? (
                             <Link
                               href={href}
@@ -951,9 +954,11 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                             </button>
                           )}
 
-                          {/* 관리자 전용: 검수/삭제 */}
+                          </div>
+
+                          {/* 관리자 전용: 검수/삭제 — 아이콘 전용 아랫줄 */}
                           {isAdmin && (
-                            <>
+                            <div className="flex items-center gap-1">
                             {!isNew && (
                               <>
                                 <button onClick={() => handleSingleAiRetry(item)} className="p-1.5 bg-purple-50 dark:bg-purple-950 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold rounded-xl transition-all shadow-2xs active:scale-95 shrink-0" title="AI Vision Agent 재검수 요청">
@@ -967,7 +972,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                             <button onClick={() => handleSingleDelete(item.id, item.lpn_barcode)} className="p-1.5 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold rounded-xl transition-all shadow-2xs active:scale-95 shrink-0" title="재고 삭제 (폐기)">
                               <Trash2 className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                             </button>
-                            </>
+                            </div>
                           )}
                         </div>
                       </td>
