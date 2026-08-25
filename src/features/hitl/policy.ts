@@ -64,6 +64,18 @@ export const UBCI_GRADE_POLICY: UbciGradePolicy[] = [
  * GRADE_OPTIONS/백엔드 ConditionGradeEnum 어디에도 없는 값이라 클램프도 안 먹었다).
  * 경계값은 models/wms.py UBCI_GRADE_SCORE_BANDS와 반드시 같게 유지한다(정본은 백엔드).
  */
+/**
+ * 등급별 점수 구간의 하한. 백엔드 clamp_ubci_score_to_grade가 선택 등급 구간으로
+ * 점수를 사상하므로, 화면에서 "무슨 점수로 저장될지" 미리 알리려면 같은 경계가 필요하다.
+ * 경계값은 models/wms.py UBCI_GRADE_SCORE_BANDS와 반드시 같게 유지한다(정본은 백엔드).
+ */
+export const GRADE_SCORE_FLOOR: Record<string, number> = {
+  MINT: 95,
+  GOOD: 85,
+  NORMAL: 65,
+  REJECT: 0,
+};
+
 export function gradeFromUbciScore(
   score: number | null | undefined
 ): 'MINT' | 'GOOD' | 'NORMAL' | 'REJECT' | null {
