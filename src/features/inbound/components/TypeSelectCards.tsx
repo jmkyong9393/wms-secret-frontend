@@ -48,7 +48,7 @@ export function TypeSelectCards({ onSelect }: {
                     🔍 중고 / 반품 도서 (AI 정밀 검수)
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-slate-300 mt-1.5 leading-relaxed">
-                    표지 및 속지 카메라 촬영 후 <strong>4-Agent AI 비전 파이프라인(YOLOv8)</strong>으로 훼손 등급 및 매입/반품가를 정밀 평가합니다.
+                    표지 및 속지 카메라 촬영 후 <strong>Multi-Agent AI 비전 파이프라인(YOLOv8)</strong>으로 훼손 등급 및 매입/반품가를 정밀 평가합니다.
                   </p>
                 </button>
               </div>

@@ -75,7 +75,7 @@ export default function TermsOfServicePage() {
             <div className="space-y-2">
               <h4 className="font-black text-gray-900">제3조 (LPN 선부착 후검수 및 50×31mm 열전사 출력)</h4>
               <p className="text-gray-700 font-medium text-xs">
-                모든 입고물은 50×31mm 열전사 롤 스티커 라벨(`LPN-YYMMDD-XXXX`)을 선부착 후 AI 뷰파인더 5-Agent 검수를 진행합니다.
+                모든 입고물은 50×31mm 열전사 롤 스티커 라벨(`LPN-YYMMDD-XXXX`)을 선부착 후 AI 뷰파인더 Multi-Agent 검수를 진행합니다.
               </p>
             </div>
 
