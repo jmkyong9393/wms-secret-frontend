@@ -186,6 +186,10 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
     []
   );
 
+  // 7일 창의 기준 시각도 진입 시점으로 고정한다 - 렌더마다 시계를 읽으면
+  // 같은 목록이 렌더 타이밍에 따라 다르게 걸러진다(react-hooks/purity).
+  const [weekCutoffTs] = useState(() => Date.now() - 7 * 24 * 3600 * 1000);
+
   // 키 입력마다 전체 재필터링으로 입력이 버벅이지 않게 지연 값으로 계산한다.
   const deferredTerm = useDeferredValue(searchTerm);
 
@@ -210,11 +214,11 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
         matchDate = i.inspected_at.includes(kstToday);
       } else if (dateFilter === 'WEEK') {
         const t = new Date(i.inspected_at.replace(' ', 'T'));
-        matchDate = isNaN(t.getTime()) || t.getTime() >= Date.now() - 7 * 24 * 3600 * 1000;
+        matchDate = isNaN(t.getTime()) || t.getTime() >= weekCutoffTs;
       }
       return matchSearch && matchStatus && matchDate;
     });
-  }, [inspections, deferredTerm, statusFilter, dateFilter, mineOnly, workerId, kstToday]);
+  }, [inspections, deferredTerm, statusFilter, dateFilter, mineOnly, workerId, kstToday, weekCutoffTs]);
 
   const totalPages = Math.ceil(filteredInspections.length / PAGE_SIZE) || 1;
   const paginatedInspections = useMemo(() => {

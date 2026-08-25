@@ -16,10 +16,6 @@ export default function LpnDashboardPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isPrinting, setIsPrinting] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchLpns();
-  }, []);
-
   const fetchLpns = async () => {
     setIsLoading(true);
     try {
@@ -40,6 +36,10 @@ export default function LpnDashboardPage() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchLpns();
+  }, []);
 
   const handlePrint = async (lpn: string) => {
     setIsPrinting(lpn);

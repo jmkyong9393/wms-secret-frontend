@@ -147,6 +147,10 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
   // 버벅이는 것을 막는다 (입력 반영은 즉시, 목록 갱신은 여유 프레임에).
   const deferredQuery = useDeferredValue(searchQuery);
 
+  // 7일 창의 기준 시각은 진입 시점으로 고정한다 - 렌더마다 시계를 읽으면
+  // 같은 목록이 렌더 타이밍에 따라 다르게 걸러진다(react-hooks/purity).
+  const [weekCutoffTs] = useState(() => Date.now() - 7 * 24 * 3600 * 1000);
+
   const filteredItems = useMemo(() => {
     const kstToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
     return items.filter((item) => {
@@ -170,7 +174,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
       if (dateFilter === 'TODAY' && !item.date.includes(kstToday)) return false;
       if (dateFilter === 'WEEK') {
         const t = new Date(item.date.replace(' ', 'T')).getTime();
-        if (isNaN(t) || t < Date.now() - 7 * 24 * 3600 * 1000) return false;
+        if (isNaN(t) || t < weekCutoffTs) return false;
       }
 
       if (!deferredQuery.trim()) return true;
@@ -197,7 +201,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
           );
       }
     });
-  }, [items, deferredQuery, searchField, gradeFilter, ubciScoreFilter, dateFilter, bookTypeFilter]);
+  }, [items, deferredQuery, searchField, gradeFilter, ubciScoreFilter, dateFilter, bookTypeFilter, weekCutoffTs]);
 
   const sortedItems = useMemo(() => {
     const list = [...filteredItems];

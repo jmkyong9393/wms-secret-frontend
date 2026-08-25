@@ -73,6 +73,10 @@ export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions 
   const streamRef = useRef<MediaStream | null>(null);
   const qualityRef = useRef<CameraQuality>('barcode');
 
+  // 재시도는 자기 자신을 다시 부른다. useCallback 본문에서 자신을 직접 참조하면
+  // '선언 전 접근'이 되어 컴파일러가 최적화를 포기하므로 ref를 거친다.
+  const startCameraRef = useRef<((q: CameraQuality, r?: number) => Promise<void>) | null>(null);
+
   const startCamera = useCallback(async (quality: CameraQuality = 'barcode', retryCount = 0) => {
     const preset = QUALITY_PRESETS[quality];
 
@@ -125,12 +129,16 @@ export function useCamera({ idealFacingMode = 'environment' }: UseCameraOptions 
       // NotReadableError (Device in use) 발생 시 OS 하드웨어 락 해제 지연으로 인한 것일 수 있으므로 재시도
       if ((err as { name?: string }).name === 'NotReadableError' && retryCount < 3) {
         console.warn(`Camera in use, retrying... (${retryCount + 1}/3)`);
-        setTimeout(() => startCamera(quality, retryCount + 1), 500);
+        setTimeout(() => startCameraRef.current?.(quality, retryCount + 1), 500);
         return;
       }
       setError("카메라 접근 권한이 없거나, 지원하지 않는 브라우저입니다.");
     }
   }, [idealFacingMode]);
+
+  useEffect(() => {
+    startCameraRef.current = startCamera;
+  }, [startCamera]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
