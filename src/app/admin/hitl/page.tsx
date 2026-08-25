@@ -1,336 +1,49 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import {
   RefreshCw,
   CheckCircle2,
   AlertTriangle,
-  FileCheck,
   Search,
-  Maximize2,
-  Sliders,
-  Sparkles,
-  Bot,
   Shield as ShieldIcon,
-  ShieldAlert,
-  Clock
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import BookCover from "@/components/BookCover";
-import { adminAPI } from "@/lib/api";
-import { getSystemSettings, SETTINGS_CHANGE_EVENT } from "@/lib/systemSettings";
+import { adminAPI } from "@/features/hitl/api/adminApi";
+import { useSystemSettingValue } from "@/shared/lib/systemSettings";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
 import { HitlImageModal, EMPTY_BBOX_EDITS, type BBoxEdits } from "@/features/hitl/components/HitlImageModal";
 // 관리자 설정의 읽기 전용 정책 뷰와 같은 정의를 쓴다 (features/hitl/policy.ts)
-import { UBCI_GRADE_POLICY, HITL_ROUTING_POLICY, gradeFromUbciScore, defaultDecisionForGrade } from "@/features/hitl/policy";
-
-const DECISION_OPTIONS = [
-  { value: "APPROVE_NORMAL", label: "정상 승인 (입고)" },
-  { value: "APPROVE_DOWNGRADE", label: "등급 하향 승인" },
-  { value: "REJECT_RETURN", label: "반려 (출판사/고객 반송)" },
-  { value: "RE_CHECK", label: "재검수 요청 (재촬영)" },
-];
-
-const GRADE_OPTIONS = [
-  { value: "MINT", label: "MINT (최상급)" },
-  { value: "GOOD", label: "GOOD (상급)" },
-  { value: "NORMAL", label: "NORMAL (중급)" },
-  { value: "REJECT", label: "REJECT (폐기)" },
-];
-
-const REASON_OPTIONS = [
-  { group: "오탐 방어 (정정)", items: [
-    { value: "FP_SHADOW", label: "그림자 오탐" },
-    { value: "FP_GLARE", label: "빛 반사 오탐" },
-  ]},
-  { group: "외부 손상", items: [
-    { value: "DMG_EXT_CRUSH", label: "모서리 찌그러짐" },
-    { value: "DMG_EXT_WET", label: "외부 습기/침수" },
-    { value: "DMG_EXT_TEAR", label: "커버 찢어짐" },
-  ]},
-  { group: "내부 훼손", items: [
-    { value: "DMG_INT_DOODLE", label: "내부 손글씨/낙서" },
-    { value: "DMG_INT_STAIN", label: "내지 오염/이물질" },
-    { value: "DMG_INT_DISCOLOR", label: "내지 황변/변색" },
-  ]},
-];
-
-const REASON_CODE_MAP: Record<string, { label: string; category: string; color: string }> = {
-  DMG_EXT_CRUSH: { label: '모서리 찌그러짐', category: '외부 손상', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-  DMG_EXT_WET: { label: '외부 습기/침수', category: '외부 손상', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
-  DMG_EXT_TEAR: { label: '커버 찢어짐', category: '외부 손상', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
-  DMG_INT_DOODLE: { label: '내부 손글씨/낙서', category: '내부 훼손', color: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-  DMG_INT_STAIN: { label: '내지 오염/이물질', category: '내부 훼손', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
-  DMG_INT_DISCOLOR: { label: '내지 황변/변색', category: '내부 훼손', color: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800' },
-  FP_SHADOW: { label: '그림자 오탐', category: '오탐 방어', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
-  FP_GLARE: { label: '빛 반사 오탐', category: '오탐 방어', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
-  // 백엔드 DEFECT_TRANSLATION_MAP과 동기화된 결함 코드 라벨.
-  DMG_EXT_SCRATCH: { label: '표지 긁힘/스크래치', category: '외부 손상', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-  DMG_EXT_STICKER: { label: '스티커/바코드 자국', category: '외부 손상', color: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800' },
-  DMG_EDGE_WEAR: { label: '모서리 마모', category: '외부 손상', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-  DMG_SPINE_CRACK: { label: '책등 갈라짐', category: '외부 손상', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
-  DMG_BINDING_LOOSE: { label: '제본 벌어짐', category: '외부 손상', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
-  DMG_SIGNATURE: { label: '측면 서명/이름', category: '내부 훼손', color: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-  DMG_STAMP: { label: '도서관/장서인 도장', category: '내부 훼손', color: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-  // Supervisor가 사유 코드 없이 이관한 건은 백엔드가 이 상태 코드를 내려준다.
-  // 매핑이 없으면 원시 코드가 그대로 노출되어 다른 관제 화면과 이질적으로 보였다.
-  AWAITING_HUMAN_REVIEW: { label: '관리자 판독 대기', category: 'HITL 이관', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-};
-
-/** HITL 이관 사유(라우팅 코드) 라벨. 결함 분류 코드(REASON_CODE_MAP)와는 별개 taxonomy. */
-const HITL_ESCALATION_LABELS: Record<string, { label: string; category: string; color: string }> = {
-  NO_VALID_IMAGE_HITL: { label: '도서 미식별 (판독 불가)', category: 'HITL 이관 사유', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-  CRITIC_RETRY_EXCEEDED: { label: '재검수 한도 초과', category: 'HITL 이관 사유', color: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800' },
-  SCORE_BOUNDARY: { label: '등급 경계 점수', category: 'HITL 이관 사유', color: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800' },
-  CRITIC_INTEGRITY_VIOLATION: { label: '판정 정합성 위반', category: 'HITL 이관 사유', color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-800' },
-  AWAITING_HUMAN_REVIEW: { label: '관리자 판독 대기', category: 'HITL 이관 사유', color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800' },
-  OK: { label: '정합성 확인됨', category: 'HITL 이관 사유', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800' },
-};
-
-/**
- * 결재 대기 목록의 정렬 기준 시각(HITL 이관/회수 시점)을 "08-13 09:15" 형태로 보여준다.
- * 이 값이 화면에 없으면 목록이 최신순인지 결재자가 확인할 방법이 없다.
- */
-function formatQueuedAt(iso?: string): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-/**
- * agent_logs.defects[](Vision/YOLO가 실제로 낸 결함 목록)에서 hitl_excluded/evidence_suspect가
- * 아닌 것 중 감점 비중이 가장 큰 유형을 대표 결함으로 반환한다. "AI 비전 감지 사유" 컬럼과
- * "오버라이드 사유" 초기값이 반드시 같은 값을 봐야 하므로(둘 다 이 함수 하나로 통일),
- * 컴포넌트 바깥으로 뺐다 - 두 군데서 각자 계산하면 로직이 갈라져 서로 다른 값을 보여줄 수 있다.
- */
-function getPrimaryDefectReason(t: HitlTask): string | null {
-  const defects: any[] = Array.isArray(t.agent_logs?.defects) ? t.agent_logs.defects : [];
-  const candidates = defects.filter(
-    (d) => d && typeof d.type === "string" && d.type && !d.hitl_excluded && !d.evidence_suspect
-  );
-  if (candidates.length === 0) return null;
-  candidates.sort(
-    (a, b) =>
-      Number(b.applied_deduction ?? b.preliminary_deduction ?? 0) -
-      Number(a.applied_deduction ?? a.preliminary_deduction ?? 0)
-  );
-  return candidates[0].type;
-}
+import { gradeFromUbciScore, defaultDecisionForGrade } from "@/features/hitl/policy";
+import { getPrimaryDefectReason } from "@/features/hitl/utils";
+import { useAiReinspection } from "@/features/hitl/hooks/useAiReinspection";
+import { PipelineLogPanel } from "@/features/hitl/components/PipelineLogPanel";
+import { ReinspectionLiveModal } from "@/features/hitl/components/ReinspectionLiveModal";
+import { HitlSummaryCards } from "@/features/hitl/components/HitlSummaryCards";
+import { HitlPolicyGuide } from "@/features/hitl/components/HitlPolicyGuide";
+import { MasterBulkToolbar, type MasterBulkValues } from "@/features/hitl/components/MasterBulkToolbar";
+import { HitlTaskTable } from "@/features/hitl/components/HitlTaskTable";
 
 export default function AdminHitlDashboard() {
-  const [reinspectingIds, setReinspectingIds] = useState<Set<string>>(new Set());
-  const [activeReinspectionTask, setActiveReinspectionTask] = useState<{
-    id: string;
-    lpn: string;
-    title: string;
-    step: number;
-    logs: string[];
-    isDone: boolean;
-    error?: string;
-  } | null>(null);
-
-  // 로그 패널은 실제 파이프라인 노드 명칭(Detector→Vision→Policy→Critic→Supervisor→Report)
-  // 기준. 구 명칭("Explainer Agent") 저장 키는 마운트 시 청소한다.
-  const [pipelineLogs, setPipelineLogs] = useState<Array<{ time: string; agent: string; text: string; type: string }>>([]);
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("hitl_explainer_logs");
-      const saved = localStorage.getItem("hitl_pipeline_logs");
-      if (saved) {
-        try {
-          setPipelineLogs(JSON.parse(saved));
-        } catch (e) {}
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isMounted && typeof window !== "undefined") {
-      localStorage.setItem("hitl_pipeline_logs", JSON.stringify(pipelineLogs));
-    }
-  }, [pipelineLogs, isMounted]);
-
-  const handleClearLogs = () => {
-    setPipelineLogs([]);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("hitl_pipeline_logs");
-    }
-  };
-
-  const handleTriggerAiReinspect = async (jobId: string) => {
-    const targetTask = tasks.find((t) => t.id === jobId) as any;
-    const lpnStr = targetTask?.agent_logs?.lpn_barcode || targetTask?.lpn_barcode || "LPN 미발급";
-    const titleStr = targetTask?.book_title || "수동 검수 요청 도서";
-
-    setReinspectingIds((prev) => new Set(prev).add(jobId));
-    setActiveReinspectionTask({
-      id: jobId,
-      lpn: lpnStr,
-      title: titleStr,
-      step: 1,
-      logs: [
-        // 이 시점에 확실한 사실은 "요청을 보냈다"뿐이다. 워커가 아직 작업을 집지도
-        // 않았는데 "Detector 추론 중"이라고 쓰면 화면이 없는 사실을 말하게 된다.
-        // 실제 단계별 서술은 파이프라인이 끝난 뒤 agent_logs에서 가져온다.
-        `[${new Date().toLocaleTimeString()}] 재검수 요청 전송...`,
-      ],
-      isDone: false,
-    });
-
-    try {
-      // 재검수는 Celery 비동기다. 큐 등록 응답에는 판독 결과가 없으므로(십수 초 뒤 완료),
-      // 등록 직후에는 "진행 중"만 보여주고 **실제 결과가 DB에 반영되면 그때 렌더**한다.
-      //
-      // 완료 판정은 트리거 전 스냅샷 대비 policy_text/report_text 두 필드의 변화로만 한다.
-      // agent_logs 전체 비교는 큐잉 직전 hitl_locked 기록만으로도 '완료'로 오판한다.
-      // (경위: 90_코드_변경이력_설계배경_아카이브)
-      const t = () => new Date().toLocaleTimeString();
-      const baseline = await adminAPI.getInspectionResult(jobId).catch(() => null);
-      const baselinePolicyText = baseline?.agent_logs?.policy_text;
-      const baselineReportText = baseline?.agent_logs?.report_text;
-      await adminAPI.triggerAiReinspection(jobId);
-
-      setActiveReinspectionTask((prev) =>
-        prev && prev.id === jobId
-          ? { ...prev, step: 2, logs: [...prev.logs, `[${t()}] ⏳ 큐 등록 완료 - 파이프라인 실행을 기다리는 중...`] }
-          : prev
-      );
-
-      // --- 결과 폴링 ---
-      const POLL_MS = 2000;
-      const MAX_WAIT_MS = 120000;
-      const startedAt = Date.now();
-      let result: Awaited<ReturnType<typeof adminAPI.getInspectionResult>> | null = null;
-
-      while (Date.now() - startedAt < MAX_WAIT_MS) {
-        await new Promise((r) => setTimeout(r, POLL_MS));
-        try {
-          const cur = await adminAPI.getInspectionResult(jobId);
-          const lg = (cur?.agent_logs || {}) as Record<string, string | undefined>;
-          // 재검수가 끝나면 Policy/Report 서술이 채워진다. 단, 그 값이 트리거 전 기준선과
-          // 완전히 같으면(=옛 시도의 잔여 텍스트) 새 실행이 아직 반영 안 된 것이므로 기다린다.
-          const changed = lg.policy_text !== baselinePolicyText || lg.report_text !== baselineReportText;
-          if ((lg.policy_text || lg.report_text) && changed) {
-            result = cur;
-            break;
-          }
-        } catch {
-          // 일시적 조회 실패는 무시하고 다음 주기에 재시도한다.
-        }
-      }
-
-      if (!result) {
-        setActiveReinspectionTask((prev) =>
-          prev && prev.id === jobId
-            ? {
-                ...prev,
-                isDone: true,
-                logs: [...prev.logs, `[${t()}] ⚠️ 제한 시간(2분) 내에 결과가 반영되지 않았습니다. 목록을 새로고침해 확인하세요.`],
-              }
-            : prev
-        );
-        return;
-      }
-
-      const logs = (result.agent_logs || {}) as Record<string, string | undefined>;
-      const score = result.ubci_score;
-      const scoreStr = typeof score === "number" ? `UBCI ${score}점` : "UBCI 점수 보류";
-      // 실제 서술만 싣는다. 없는 단계는 줄 자체를 만들지 않는다 - 문구를 지어내지 않기 위해서다.
-      const realLines: Array<[string, string | undefined]> = [
-        ["🔬 [Detector]", logs.detector_text],
-        ["👁️ [Vision Agent]", logs.vision_text],
-        ["⚖️ [Policy Agent]", logs.policy_text],
-        ["🛡️ [Critic Agent]", logs.critic_text],
-        ["🧭 [Supervisor]", logs.supervisor_rationale],
-        ["💬 [Report Agent]", logs.report_text],
-      ];
-      const summaryMsg = logs.report_text || logs.policy_text || scoreStr;
-
-      setActiveReinspectionTask((prev) =>
-        prev && prev.id === jobId
-          ? {
-              ...prev,
-              step: 5,
-              isDone: true,
-              logs: [
-                ...prev.logs,
-                `[${t()}] ✅ 파이프라인 완료 - ${scoreStr}`,
-                ...realLines.filter(([, v]) => v && v.trim()).map(([tag, v]) => `[${t()}] ${tag} ${v}`),
-              ],
-            }
-          : prev
-      );
-
-      const timeNow = t();
-      setPipelineLogs((prev) => [
-        {
-          time: timeNow,
-          agent: "Report Agent 💬",
-          text: `[${lpnStr}] DB 연산 결과: "${summaryMsg}" DB 반영 완료!`,
-          type: "success",
-        },
-        ...prev,
-      ]);
-
-      await fetchTasks();
-    } catch (err: any) {
-      console.error("AI Re-inspection failed:", err);
-      setActiveReinspectionTask((prev) =>
-        prev
-          ? {
-              ...prev,
-              isDone: true,
-              error: err?.message || "서버 통신 실패",
-              logs: [...prev.logs, `[${new Date().toLocaleTimeString()}] ❌ 재검수 오류: ${err?.message || "서버 오류"}`],
-            }
-          : null
-      );
-    } finally {
-      setReinspectingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(jobId);
-        return next;
-      });
-    }
-  };
   const [tasks, setTasks] = useState<HitlTask[]>([]);
+
+  const {
+    reinspectingIds,
+    appendPipelineLog,
+    activeReinspectionTask,
+    closeReinspection,
+    pipelineLogs,
+    handleClearLogs,
+    handleTriggerAiReinspect,
+  } = useAiReinspection({
+    getTask: (jobId) => tasks.find((t) => t.id === jobId),
+    onCompleted: () => fetchTasks(),
+  });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // 시스템 설정의 HITL 대기열 경보 임계값 (설정 페이지에서 변경 시 실시간 반영)
-  const [alertThreshold, setAlertThreshold] = useState<number>(10);
-  useEffect(() => {
-    setAlertThreshold(getSystemSettings().hitlAlertThreshold);
-    const onSettingsChange = (e: Event) => {
-      const evt = e as CustomEvent<{ hitlAlertThreshold?: number }>;
-      if (evt.detail && Number.isFinite(evt.detail.hitlAlertThreshold)) {
-        setAlertThreshold(evt.detail.hitlAlertThreshold as number);
-      }
-    };
-    window.addEventListener(SETTINGS_CHANGE_EVENT, onSettingsChange);
-    return () => window.removeEventListener(SETTINGS_CHANGE_EVENT, onSettingsChange);
-  }, []);
+  // 시스템 설정의 HITL 대기열 경보 임계값 - 저장소 구독으로 실시간 반영 (설정 페이지 변경 포함)
+  const alertThreshold = useSystemSettingValue('hitlAlertThreshold');
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
-  // 결재 규칙 패널. 매번 펼쳐 두면 목록이 밀려나므로 기본은 접어 둔다.
-  const [showPolicy, setShowPolicy] = useState(false);
   const [modalTask, setModalTask] = useState<HitlTask | null>(null);
   // 결재 건별 BBox 채택/제외. 모달을 닫아도 유지되어야 제출까지 이어진다.
   const [bboxEdits, setBboxEdits] = useState<Record<string, BBoxEdits>>({});
@@ -342,9 +55,14 @@ export default function AdminHitlDashboard() {
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
 
-  const pageEnterTime = useRef(Date.now());
+  // 렌더 중 시계를 읽으면 같은 입력에 다른 결과가 나온다(react-hooks/purity).
+  // 체류 시간 기준점은 마운트 직후에 한 번만 찍는다.
+  const pageEnterTime = useRef(0);
+  useEffect(() => {
+    pageEnterTime.current = Date.now();
+  }, []);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     setLoading(true);
     try {
       const data = await adminAPI.getPendingHitlTasks();
@@ -390,18 +108,23 @@ export default function AdminHitlDashboard() {
       setGrades(initGrades);
       setReasons(initReasons);
       setComments(initComments);
-    } catch (err: any) {
+    } catch (err) {
       // 401(세션 만료) 처리는 apiClient의 전역 response 인터셉터(lib/api-client.ts)가
       // 이미 담당한다 - 여기서 중복으로 리다이렉트하지 않는다.
       console.error("Failed to fetch HITL tasks:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [reinspectingIds, setLoading, setTasks, setDecisions, setGrades, setReasons, setComments]);
 
+  // 최초 1회만 조회한다. fetchTasks는 재검수 목록이 바뀌면 재생성되지만
+  // (pinned 병합이 그 값을 쓴다) 그때마다 재조회할 이유는 없다.
+  const didInitialFetch = useRef(false);
   useEffect(() => {
+    if (didInitialFetch.current) return;
+    didInitialFetch.current = true;
     fetchTasks();
-  }, []);
+  }, [fetchTasks]);
 
   // 검색어 필터링
   // PENDING = AI 파이프라인이 아직 도는 중(판정 전). 결재 대상(HITL_REQUIRED)이 아니므로
@@ -444,42 +167,20 @@ export default function AdminHitlDashboard() {
     }
   };
 
-  const [masterDecision, setMasterDecision] = useState<string>("APPROVE_DOWNGRADE");
-  const [masterGrade, setMasterGrade] = useState<string>("GOOD");
-  const [masterReasons, setMasterReasons] = useState<string[]>(["DMG_INT_DOODLE", "DMG_EXT_CRUSH"]);
-
-  const handleMasterDecisionChange = (val: string | null) => {
-    if (val) setMasterDecision(val);
-  };
-
-  const handleMasterGradeChange = (val: string | null) => {
-    if (val) setMasterGrade(val);
-  };
-
-  const toggleMasterReason = (code: string) => {
-    if (masterReasons.includes(code)) {
-      if (masterReasons.length > 1) {
-        setMasterReasons(masterReasons.filter((c) => c !== code));
-      }
-    } else {
-      setMasterReasons([...masterReasons, code]);
-    }
-  };
-
   // 마스터 설정값을 선택된 항목들에 [폼에 세팅] 버튼 클릭 시 수동 반영
-  const handleApplyMasterSettings = () => {
+  const handleApplyMasterSettings = (values: MasterBulkValues) => {
     if (selectedIds.size === 0) {
       alert("일괄 세팅할 항목의 체크박스를 먼저 선택해 주세요.");
       return;
     }
     const nextDecisions = { ...decisions };
     const nextGrades = { ...grades };
-    const nextReasons = { ...reasons } as Record<string, any>;
+    const nextReasons = { ...reasons };
 
     selectedIds.forEach((id) => {
-      nextDecisions[id] = masterDecision;
-      nextGrades[id] = masterGrade;
-      nextReasons[id] = masterReasons.length > 0 ? masterReasons.join(", ") : "";
+      nextDecisions[id] = values.decision;
+      nextGrades[id] = values.grade;
+      nextReasons[id] = values.reasons.length > 0 ? values.reasons.join(", ") : "";
     });
 
     setDecisions(nextDecisions);
@@ -503,8 +204,8 @@ export default function AdminHitlDashboard() {
       const targetGrade = grades[id] || "NORMAL";
       const rawReason = reasons[id];
       const reasonList: string[] = Array.isArray(rawReason)
-        ? (rawReason as any)
-        : (rawReason ? [rawReason as any] : []);
+        ? rawReason
+        : (rawReason ? [rawReason] : []);
       const primaryReasonCode = reasonList.join(",");
       const comment = comments[id] || "관리자 HITL 최종 결재 승인";
 
@@ -536,21 +237,18 @@ export default function AdminHitlDashboard() {
     }
 
     try {
-      const res = await adminAPI.submitHitlOverrides(payloadList);
+      await adminAPI.submitHitlOverrides(payloadList);
       const timeNow = new Date().toLocaleTimeString();
       const firstPayload = payloadList[0];
       const summaryInfo = `총 ${payloadList.length}건 데이터베이스 오버라이드 승인 완료 (처분: ${firstPayload?.decision || 'APPROVE'}, 목표등급: ${firstPayload?.targetGrade || 'B'}, 사유: ${firstPayload?.primaryReasonCode || 'CLEAN'})`;
 
       // 1. 하단 실시간 모니터링 로그에 누적 기록
-      setPipelineLogs((prev) => [
-        {
-          time: timeNow,
-          agent: "Human Node (HITL) 👤",
-          text: `🚀 [HITL 최종 결재 승인 성공] ${summaryInfo}`,
-          type: "success",
-        },
-        ...prev,
-      ]);
+      appendPipelineLog({
+        time: timeNow,
+        agent: "Human Node (HITL) 👤",
+        text: `🚀 [HITL 최종 결재 승인 성공] ${summaryInfo}`,
+        type: "success",
+      });
 
       // 2. 브라우저 alert 대신 고급 승인 완료 토스트 메시지 렌더링
       setApprovalToast(`🚀 [HITL 최종 결재 승인 완료] ${summaryInfo}`);
@@ -558,19 +256,17 @@ export default function AdminHitlDashboard() {
 
       setSelectedIds(new Set());
       fetchTasks();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Batch submit failed:", err);
+      const failMsg = (err as { response?: { data?: { message?: string } }; message?: string });
       const timeNow = new Date().toLocaleTimeString();
-      setPipelineLogs((prev) => [
-        {
-          time: timeNow,
-          agent: "Human Node (HITL) 👤",
-          text: `❌ [HITL 결재 처리 실패] ${err?.response?.data?.message || err?.message}`,
-          type: "error",
-        },
-        ...prev,
-      ]);
-      setApprovalToast(`❌ 처리에 실패했습니다. (${err?.response?.data?.message || err?.message})`);
+      appendPipelineLog({
+        time: timeNow,
+        agent: "Human Node (HITL) 👤",
+        text: `❌ [HITL 결재 처리 실패] ${failMsg?.response?.data?.message || failMsg?.message}`,
+        type: "error",
+      });
+      setApprovalToast(`❌ 처리에 실패했습니다. (${failMsg?.response?.data?.message || failMsg?.message})`);
       setTimeout(() => setApprovalToast(null), 4500);
     }
   };
@@ -578,7 +274,7 @@ export default function AdminHitlDashboard() {
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-200">
       {/* Top Banner Header (admin/inspections, admin/inventory 등 다른 관제 페이지와 동일 패턴) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-bold font-mono flex items-center gap-1">
@@ -594,11 +290,11 @@ export default function AdminHitlDashboard() {
             Supervisor가 자동 확정이 부적절하다고 판단해 이관한 건(HITL_REQUIRED)을 관리자가 직접 검증하여 최종 승인/반려/등급을 확정합니다.
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
           <button
             onClick={fetchTasks}
             disabled={loading}
-            className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 font-extrabold text-xs rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            className="whitespace-nowrap px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 font-extrabold text-xs rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             새로고침
@@ -606,7 +302,7 @@ export default function AdminHitlDashboard() {
           <button
             onClick={handleSubmit}
             disabled={selectedIds.size === 0}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="whitespace-nowrap px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCircle2 className="w-4 h-4" />
             선택 {selectedIds.size}건 최종 결재 제출
@@ -625,117 +321,9 @@ export default function AdminHitlDashboard() {
         </div>
       )}
 
-      {/* Summary Cards (검수 처리 내역 KPI 카드와 동일 패턴) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className={`bg-white dark:bg-gray-900 p-5 rounded-2xl border shadow-xs space-y-1 transition-colors ${
-          tasks.length >= alertThreshold
-            ? 'border-rose-300 dark:border-rose-800 ring-2 ring-rose-500/20'
-            : 'border-gray-200 dark:border-gray-800'
-        }`}>
-          <div className="flex items-center justify-between text-xs font-extrabold text-gray-500 dark:text-gray-400">
-            <span>검수 대기 총계</span>
-            <AlertTriangle className={`w-4 h-4 ${tasks.length >= alertThreshold ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} />
-          </div>
-          <p className={`text-3xl font-black font-mono ${tasks.length >= alertThreshold ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>
-            {tasks.length}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-            Supervisor 이관 - 관리자 결재 대기 (경보 기준 {alertThreshold}건)
-          </p>
-        </div>
+      <HitlSummaryCards total={tasks.length} selected={selectedIds.size} filtered={filteredTasks.length} alertThreshold={alertThreshold} />
 
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-xs font-extrabold text-gray-500 dark:text-gray-400">
-            <span>선택된 처리 건</span>
-            <FileCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-          </div>
-          <p className="text-3xl font-black text-blue-600 dark:text-blue-400 font-mono">
-            {selectedIds.size}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">체크박스 선택 시 결재 폼 활성화</p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-xs font-extrabold text-gray-500 dark:text-gray-400">
-            <span>검색 필터 적용 건</span>
-            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-          </div>
-          <p className="text-3xl font-black text-purple-600 dark:text-purple-400 font-mono">
-            {filteredTasks.length}<span className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">건</span>
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">도서명 / ISBN / LPN / Task ID 키워드 필터</p>
-        </div>
-      </div>
-
-      {/* 결재 규칙 안내 — 이 대기열에 왜 올라왔는지와 무엇을 먼저 볼지 */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
-        <button
-          type="button"
-          onClick={() => setShowPolicy((v) => !v)}
-          className="w-full flex items-center justify-between gap-2 p-5 cursor-pointer"
-        >
-          <span className="flex items-center gap-2 text-sm font-extrabold text-gray-800 dark:text-gray-100">
-            <ShieldAlert className="w-4 h-4 text-amber-500" />
-            HITL 결재 규칙 · UBCI 등급 기준
-          </span>
-          <span className="text-xs font-bold text-gray-400 dark:text-gray-500">
-            {showPolicy ? '접기 ▲' : '펼치기 ▼'}
-          </span>
-        </button>
-
-        {showPolicy && (
-          <div className="px-5 pb-5 space-y-4">
-            <div>
-              <p className="text-[11px] font-black text-gray-600 dark:text-gray-300 mb-2">
-                자동 이관 규칙 (Supervisor / Critic)
-              </p>
-              <ul className="space-y-2">
-                {HITL_ROUTING_POLICY.map((rule, i) => (
-                  <li
-                    key={rule.code}
-                    className="flex items-start gap-2 text-[11px] text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2.5 border border-gray-100 dark:border-gray-800"
-                  >
-                    <span className="text-amber-500 font-black shrink-0">{i + 1}.</span>
-                    <span className="min-w-0">
-                      <span className="font-bold text-gray-700 dark:text-gray-200">{rule.title}</span>
-                      <span className="ml-1.5 font-mono text-[10px] px-1 py-0.5 rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-                        {rule.code}
-                      </span>
-                      <span className="block mt-1 leading-snug">{rule.detail}</span>
-                      <span className="block mt-1 leading-snug text-blue-600 dark:text-blue-400 font-medium">
-                        → {rule.reviewHint}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-black text-gray-600 dark:text-gray-300 mb-2">
-                UBCI 등급 기준 (확정 등급 선택 시 참고)
-              </p>
-              <div className="space-y-1.5">
-                {UBCI_GRADE_POLICY.map((p) => (
-                  <div
-                    key={p.grade}
-                    className="grid grid-cols-[7rem_5.5rem_1fr] items-start gap-2 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-800 text-xs"
-                  >
-                    <span className={`font-black ${p.color}`}>{p.grade}</span>
-                    <span className="font-mono font-bold text-gray-700 dark:text-gray-300 tabular-nums">{p.range}</span>
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-snug">{p.quality}</p>
-                      <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-bold ${p.badge}`}>
-                        {p.action}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <HitlPolicyGuide />
 
       {/* Control & Toolbar */}
       <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
@@ -751,520 +339,31 @@ export default function AdminHitlDashboard() {
             />
           </div>
 
-          {/* Master Bulk Setting Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 bg-blue-50/70 dark:bg-blue-950/50 p-2 rounded-xl border border-blue-100 dark:border-blue-800 w-full md:w-auto">
-            <div className="flex items-center text-xs font-extrabold text-blue-900 dark:text-blue-300 mr-1">
-              <Sliders className="w-3.5 h-3.5 mr-1" />
-              선택항목 일괄 설정:
-            </div>
-            <Select value={masterDecision} onValueChange={handleMasterDecisionChange}>
-              <SelectTrigger className="h-9 text-xs font-bold rounded-xl bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white w-36">
-                <SelectValue>
-                  {DECISION_OPTIONS.find((o) => o.value === masterDecision)?.label || masterDecision}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                {DECISION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={masterGrade} onValueChange={handleMasterGradeChange}>
-              <SelectTrigger className="h-9 text-xs font-bold rounded-xl bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white w-28">
-                <SelectValue>
-                  {GRADE_OPTIONS.find((o) => o.value === masterGrade)?.label || masterGrade}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                {GRADE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800/80 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
-              {masterReasons.map((code) => {
-                const meta = REASON_CODE_MAP[code] || { label: code, color: "bg-gray-100 text-gray-700 border-gray-200" };
-                return (
-                  <span
-                    key={code}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border transition-all ${meta.color}`}
-                  >
-                    {meta.label}
-                    {masterReasons.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => toggleMasterReason(code)}
-                        className="hover:text-red-500 font-bold ml-0.5 text-xs leading-none"
-                        title="사유 제거"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </span>
-                );
-              })}
-              <Select
-                onValueChange={(val: string | null) => {
-                  if (val && !masterReasons.includes(val)) {
-                    setMasterReasons([...masterReasons, val]);
-                  }
-                }}
-              >
-                <SelectTrigger className="h-6 w-24 text-[10px] font-bold px-2 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-dashed border-purple-300 dark:border-purple-800">
-                  <span>+ 사유 선택</span>
-                </SelectTrigger>
-                <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                  {REASON_OPTIONS.map((grp) => (
-                    <React.Fragment key={grp.group}>
-                      <div className="px-2 py-1 text-[10px] font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800">{grp.group}</div>
-                      {grp.items.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          <span className="flex items-center gap-1.5">
-                            {masterReasons.includes(opt.value) ? "✓ " : ""}
-                            {opt.label}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <button
-              onClick={handleApplyMasterSettings}
-              disabled={selectedIds.size === 0}
-              className="h-9 px-4 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl disabled:opacity-50 transition-all cursor-pointer shadow-xs"
-            >
-              ⚡ {selectedIds.size > 0 ? `선택 ${selectedIds.size}건 폼에 세팅` : '선택 항목 폼에 세팅'}
-            </button>
-          </div>
+          <MasterBulkToolbar selectedCount={selectedIds.size} onApply={handleApplyMasterSettings} />
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-          <h2 className="text-sm font-black text-gray-900 dark:text-white">
-            결재 대기 목록: <strong className="text-blue-600 dark:text-blue-400 font-mono">{filteredTasks.length}</strong>건
-            <span className="ml-2 font-medium text-[11px] text-gray-400 dark:text-gray-500">
-              이관 시각 최신순
-            </span>
-          </h2>
-          {inFlightTasks.length > 0 && (
-            <span
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-900"
-              title="AI 파이프라인이 아직 판정 중인 건. 완료되면 자동 확정되거나 이 목록으로 이관됩니다. 오래 머물면 워커 상태를 확인하세요."
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" />
-              AI 검수 진행 중 {inFlightTasks.length}건
-            </span>
-          )}
-        </div>
-        {loading ? (
-          <div className="py-12 text-center text-gray-400 dark:text-gray-500 text-sm">데이터를 불러오는 중...</div>
-        ) : filteredTasks.length === 0 ? (
-          <div className="py-12 text-center text-gray-400 dark:text-gray-500 text-sm">대기 중인 검수 건이 없습니다.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 uppercase border-y border-gray-200 dark:border-gray-800 text-xs font-bold">
-                <tr>
-                  <th className="py-3.5 px-4 w-10 text-center">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                      checked={selectedIds.size === filteredTasks.length && filteredTasks.length > 0}
-                      onChange={toggleAll}
-                    />
-                  </th>
-                  <th className="py-3.5 px-4 w-20 text-center whitespace-nowrap">이미지</th>
-                  <th className="py-3.5 px-4 w-56 whitespace-nowrap">도서 정보 및 바코드</th>
-                  <th className="py-3.5 px-4 w-48 whitespace-nowrap">AI 비전 감지 사유</th>
-                  <th className="py-3.5 px-4 w-36 whitespace-nowrap">처분 결정 (Decision)</th>
-                  <th className="py-3.5 px-4 w-28 whitespace-nowrap">목표 등급</th>
-                  <th className="py-3.5 px-4 w-40 whitespace-nowrap">오버라이드 사유</th>
-                  <th className="py-3.5 px-4 w-48 whitespace-nowrap">관리자 메모</th>
-                  <th className="py-3.5 px-4 w-28 text-center whitespace-nowrap">AI 재검수</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
-                {filteredTasks.map((t) => {
-                  const isSelected = selectedIds.has(t.id);
-                  const hasImage = t.image_urls && t.image_urls.length > 0;
-                  const firstImage = hasImage ? t.image_urls[0] : t.cover_image_url;
+      <HitlTaskTable
+        tasks={filteredTasks}
+        inFlightCount={inFlightTasks.length}
+        loading={loading}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleAll={toggleAll}
+        decisions={decisions}
+        grades={grades}
+        reasons={reasons}
+        comments={comments}
+        setDecisions={setDecisions}
+        setGrades={setGrades}
+        setReasons={setReasons}
+        setComments={setComments}
+        reinspectingIds={reinspectingIds}
+        onReinspect={handleTriggerAiReinspect}
+        onOpenImage={setModalTask}
+      />
 
-                  return (
-                    <tr
-                      key={t.id}
-                      className={`transition-colors ${
-                        // 재검수 중 붙잡아 둔 행. 목록에서 사라지지는 않지만 지금 값이
-                        // 갱신 전이라는 사실은 드러나야 한다.
-                        reinspectingIds.has(t.id)
-                          ? "bg-purple-50/50 dark:bg-purple-950/30 animate-pulse"
-                          : isSelected
-                            ? "bg-blue-50/40 dark:bg-blue-950/40"
-                            : "hover:bg-gray-50/80 dark:hover:bg-gray-800/50"
-                      }`}
-                    >
-                      <td className="p-3 text-center">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                          checked={isSelected}
-                          onChange={() => toggleSelect(t.id)}
-                        />
-                      </td>
-
-                      <td className="p-3">
-                        <div
-                          className="relative w-14 h-18 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer group shadow-sm flex items-center justify-center"
-                          onClick={() => setModalTask(t)}
-                          title="클릭하여 원본 이미지 및 결함 박스 확대보기"
-                        >
-                          <BookCover
-                            src={firstImage || t.cover_image_url}
-                            title={t.book_title || "도서 제목 미지정"}
-                            isbn={t.isbn}
-                            className="w-full h-full"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Maximize2 className="w-4 h-4 text-white" />
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="p-3">
-                        <div
-                          className="font-bold text-gray-900 dark:text-white line-clamp-1 cursor-pointer hover:underline hover:text-blue-700 dark:hover:text-blue-400 w-fit"
-                          onClick={() => setModalTask(t)}
-                          title="클릭하여 원본 이미지 및 결함 박스 확대보기"
-                        >
-                          {t.book_title || "도서 정보 없음"}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          {(() => {
-                            const realLpn = (t as any).agent_logs?.lpn_barcode || (t as any).lpn_barcode;
-                            return realLpn ? (
-                              <span className="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-mono text-[11px] font-extrabold px-2 py-0.5 rounded shadow-2xs">
-                                {realLpn}
-                              </span>
-                            ) : (
-                              <span
-                                className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-600 font-mono text-[11px] font-bold px-2 py-0.5 rounded"
-                                title="이 건은 아직 물리 LPN 라벨이 발급되지 않았습니다"
-                              >
-                                LPN 미발급
-                              </span>
-                            );
-                          })()}
-                          <span className="text-gray-500 dark:text-gray-400 font-mono text-[11px]">ISBN: {t.isbn || "-"}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px]">Task: {t.id.slice(0, 8)}...</span>
-                          {(() => {
-                            const queuedAt = formatQueuedAt(t.updated_at || t.created_at);
-                            return queuedAt ? (
-                              <span
-                                className="flex items-center gap-1 text-gray-500 dark:text-gray-400 font-mono text-[10px] tabular-nums"
-                                title="이 건이 결재 대기열에 올라온 시각. 목록은 이 시각 기준 최신순으로 정렬됩니다."
-                              >
-                                <Clock className="w-3 h-3" />
-                                {queuedAt}
-                              </span>
-                            ) : null;
-                          })()}
-                          {t.ubci_score !== undefined && (
-                            <span className="bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                              UBCI: {t.ubci_score}점
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="p-3">
-                        {(() => {
-                          // 이 컬럼은 "AI 비전 감지 사유"(getPrimaryDefectReason와 동일 소스).
-                          // reason_code류는 결함 분류가 아니라 HITL 라우팅 사유다 — 실제 결함이 없을 때만 라우팅
-                          // 사유를 정직하게 보여준다(HITL_ESCALATION_LABELS, 별도 톤).
-                          const primaryDefect = getPrimaryDefectReason(t);
-                          const routingCode = t.agent_logs?.reason_code || t.agent_logs?.primary_reason_code;
-                          const code = primaryDefect || routingCode;
-                          const meta = primaryDefect
-                            ? REASON_CODE_MAP[primaryDefect] || {
-                                label: primaryDefect,
-                                category: 'AI 감지',
-                                color: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700',
-                              }
-                            : routingCode
-                              ? HITL_ESCALATION_LABELS[routingCode] || {
-                                  label: routingCode,
-                                  category: 'HITL 이관 사유',
-                                  color: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700',
-                                }
-                              : { label: '판정 정보 없음', category: '-', color: 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' };
-                          return (
-                            <div className="space-y-1">
-                              {/* 원시 코드([DMG_...]) 노출 대신 검수 처리 내역과 동일한 한글 라벨 필 배지로 표기 */}
-                              <span
-                                title={code ? `[${code}] ${meta.category}` : meta.category}
-                                className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-extrabold border ${meta.color}`}
-                              >
-                                {meta.label}
-                              </span>
-                              <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium truncate" title={t.agent_logs?.reason || "Vision Agent 1차 감지 완료"}>
-                                {t.agent_logs?.reason || "Vision Agent 1차 감지 완료"}
-                              </p>
-
-                              {/*
-                                HITL 이관 근거를 검수자에게 노출한다.
-                                증거 대조 검증이 결함을 오탐으로 지목하면 Policy가 감점에서 제외하고,
-                                그 결과 감점이 0이 되면 Critic이 "결함 N건인데 감점 0점"으로 잡아
-                                여기로 보낸다. 이 맥락 없이 결함 목록과 점수만 보면 검수자는
-                                "결함 4건인데 왜 100점인가"를 판단할 수 없다.
-                              */}
-                              {(() => {
-                                const logs = t.agent_logs || {};
-                                const lines: { label: string; text: string; tone: string }[] = [];
-                                const vision: string = logs.vision_text || "";
-                                const policy: string = logs.policy_text || "";
-                                const critic: string = logs.critic_text || "";
-
-                                if (vision.includes("증거 대조 검증 반려")) {
-                                  lines.push({
-                                    label: "증거 대조",
-                                    text: vision.split("증거 대조 검증 반려 -")[1]?.trim() || vision,
-                                    tone: "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-900",
-                                  });
-                                }
-                                if (policy.includes("감점 제외")) {
-                                  const seg = policy.split("증거 대조 검증에서 오탐으로 지목되어 감점 제외:")[1];
-                                  lines.push({
-                                    label: "감점 제외",
-                                    text: (seg || "").split("|")[0].trim(),
-                                    tone: "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-900",
-                                  });
-                                }
-                                if (critic.includes("교차 검증 실패")) {
-                                  lines.push({
-                                    label: "이관 사유",
-                                    text: critic.split("불일치 감지:")[1]?.split(".")[0]?.trim() || critic,
-                                    tone: "text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900",
-                                  });
-                                }
-                                if (lines.length === 0) return null;
-
-                                return (
-                                  <div className="pt-1.5 space-y-1">
-                                    {lines.map((l) => (
-                                      <div
-                                        key={l.label}
-                                        className={`px-2 py-1 rounded-lg border text-[10px] leading-snug font-semibold ${l.tone}`}
-                                      >
-                                        <span className="font-black">{l.label}</span> · {l.text}
-                                      </div>
-                                    ))}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          );
-                        })()}
-                      </td>
-
-                      <td className="p-3">
-                        <Select
-                          disabled={!isSelected}
-                          value={decisions[t.id] || "APPROVE_DOWNGRADE"}
-                          onValueChange={(val: any) => setDecisions({ ...decisions, [t.id]: val })}
-                        >
-                          <SelectTrigger className="w-full h-9 text-xs font-bold rounded-xl bg-gray-50/50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white">
-                            <SelectValue>
-                              {DECISION_OPTIONS.find((o) => o.value === (decisions[t.id] || "APPROVE_DOWNGRADE"))?.label || (decisions[t.id] || "APPROVE_DOWNGRADE")}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                            {DECISION_OPTIONS.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-
-                      <td className="p-3">
-                        <Select
-                          disabled={!isSelected || decisions[t.id] === "REJECT_RETURN" || decisions[t.id] === "RE_CHECK"}
-                          value={grades[t.id] || "GOOD"}
-                          onValueChange={(val: any) => setGrades({ ...grades, [t.id]: val })}
-                        >
-                          <SelectTrigger className="w-full h-9 text-xs font-bold rounded-xl bg-gray-50/50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white">
-                            <SelectValue>
-                              {GRADE_OPTIONS.find((o) => o.value === (grades[t.id] || "GOOD"))?.label || (grades[t.id] || "GOOD")}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                            {GRADE_OPTIONS.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-
-                      <td className="p-3">
-                        {(() => {
-                          const rawVal = reasons[t.id];
-                          const selectedList: string[] = Array.isArray(rawVal)
-                            ? (rawVal as any)
-                            : (rawVal ? [rawVal as any] : []);
-
-                          const toggleReasonCode = (codeToToggle: string) => {
-                            const current = selectedList.includes(codeToToggle)
-                              ? selectedList.filter((c) => c !== codeToToggle)
-                              : [...selectedList, codeToToggle];
-                            setReasons({ ...reasons, [t.id]: current.join(", ") });
-                          };
-
-                          return (
-                            <div className="flex flex-wrap items-center gap-1.5 min-w-[210px]">
-                              {selectedList.length === 0 ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
-                                  [CLEAN] 결함 없음 (정상)
-                                </span>
-                              ) : (
-                                selectedList.map((code) => {
-                                  const meta = REASON_CODE_MAP[code] || { label: code, color: "bg-gray-100 text-gray-700 border-gray-200" };
-                                  return (
-                                    <span
-                                      key={code}
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border transition-all ${meta.color}`}
-                                    >
-                                      {meta.label}
-                                      {isSelected && (
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleReasonCode(code)}
-                                          className="hover:text-red-600 dark:hover:text-red-400 font-bold ml-1 text-xs leading-none p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
-                                          title="AI 감지 사유 삭제/수정"
-                                        >
-                                          ✕
-                                        </button>
-                                      )}
-                                    </span>
-                                  );
-                                })
-                              )}
-                              <Select
-                                disabled={!isSelected}
-                                onValueChange={(val: string | null) => {
-                                  if (val && !selectedList.includes(val)) {
-                                    setReasons({ ...reasons, [t.id]: [...selectedList, val].join(", ") });
-                                  }
-                                }}
-                              >
-                                <SelectTrigger className="h-6 w-20 text-[10px] font-bold px-1.5 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-dashed border-purple-300 dark:border-purple-800">
-                                  <span>+ 사유 추가</span>
-                                </SelectTrigger>
-                                <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                                  {REASON_OPTIONS.map((grp) => (
-                                    <React.Fragment key={grp.group}>
-                                      <div className="px-2 py-1 text-[10px] font-bold text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800">{grp.group}</div>
-                                      {grp.items.map((opt) => (
-                                        <SelectItem key={opt.value} value={opt.value}>
-                                          <span className="flex items-center gap-1.5">
-                                            {selectedList.includes(opt.value) ? "✓ " : ""}
-                                            {opt.label}
-                                          </span>
-                                        </SelectItem>
-                                      ))}
-                                    </React.Fragment>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          );
-                        })()}
-                      </td>
-
-                      <td className="p-3">
-                        <Input
-                          disabled={!isSelected}
-                          placeholder="사유 작성 (선택)"
-                          value={comments[t.id] || ""}
-                          onChange={(e) => setComments({ ...comments, [t.id]: e.target.value })}
-                          className="h-9 text-xs font-medium rounded-xl bg-gray-50/50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 dark:text-white"
-                        />
-                      </td>
-
-                      <td className="p-3 text-center">
-                        <button
-                          className="px-3.5 py-2 bg-purple-50 dark:bg-purple-950 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-extrabold rounded-xl transition-all text-xs flex items-center gap-1 shadow-2xs active:scale-95 whitespace-nowrap cursor-pointer disabled:opacity-50 mx-auto"
-                          onClick={() => handleTriggerAiReinspect(t.id)}
-                          disabled={reinspectingIds.has(t.id)}
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                          {reinspectingIds.has(t.id) ? "재검수 중..." : "AI 재검수"}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Multi-Agent 파이프라인 실시간 처리 로그 (Bottom Panel) */}
-      <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-purple-50 dark:bg-purple-950 rounded-lg text-purple-600 dark:text-purple-400">
-              <Bot className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                Multi-Agent 파이프라인 실시간 처리 로그
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse" /> Live Stream
-                </span>
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Detector(YOLO) ➔ Vision(GPT-4o) ➔ Policy ➔ Critic ➔ Supervisor ➔ Report ➔ Human Node(HITL)
-              </p>
-            </div>
-          </div>
-          <Button size="xs" variant="ghost" className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={handleClearLogs}>
-            로그 초기화
-          </Button>
-        </div>
-
-        {/* 재고 상세의 파이프라인 진단 기록과 동일한 라이트/다크 겸용 로그 패널 스타일 */}
-        <div className="bg-gray-50/70 dark:bg-gray-800/60 text-gray-700 dark:text-gray-200 p-4 rounded-xl text-xs space-y-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700">
-          {pipelineLogs.length === 0 ? (
-            <div className="text-gray-400 dark:text-gray-500 italic text-center py-4">대기 중인 Multi-Agent 로그가 없습니다. [AI 재검수] 실행 시 실시간 스트리밍됩니다.</div>
-          ) : (
-            pipelineLogs.map((log, idx) => (
-              <div key={idx} className="flex items-start gap-3 py-1 border-b border-gray-200/70 dark:border-gray-700/60 last:border-0">
-                <span className="text-gray-400 dark:text-gray-500 font-mono text-[11px] min-w-[65px]">[{log.time}]</span>
-                <span className="font-bold text-purple-700 dark:text-purple-400 min-w-[120px]">{log.agent}</span>
-                <span className={`flex-1 leading-relaxed ${log.type === "success" ? "text-emerald-700 dark:text-emerald-400" : log.type === "warning" ? "text-amber-700 dark:text-amber-300" : "text-gray-700 dark:text-gray-300"}`}>
-                  {log.text}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      <PipelineLogPanel logs={pipelineLogs} onClear={handleClearLogs} />
 
       {/* HITL Image BBox Modal */}
       {modalTask && (
@@ -1280,113 +379,7 @@ export default function AdminHitlDashboard() {
 
       {/* Multi-Agent AI Re-inspection Live Modal */}
       {activeReinspectionTask && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-md">
-                  <Sparkles className="w-6 h-6 text-purple-300 animate-spin-slow" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-extrabold flex items-center gap-2">
-                    Multi-Agent AI 비전 실시간 재검수 파이프라인
-                  </h3>
-                  <p className="text-xs text-purple-200 mt-0.5">
-                    대상 LPN: <span className="font-mono font-bold text-yellow-300">{activeReinspectionTask.lpn}</span> ({activeReinspectionTask.title})
-                  </p>
-                </div>
-              </div>
-              {activeReinspectionTask.isDone && (
-                <button
-                  onClick={() => setActiveReinspectionTask(null)}
-                  className="text-purple-200 hover:text-white text-xl font-bold p-1 hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-6">
-              {/* Stepper Progress */}
-              <div className="grid grid-cols-5 gap-2 text-center text-xs">
-                {[
-                  // 모델 배정은 wms-secret-backend/.claude/rules/01-freeze-zones.md가 정본.
-                  // Vision 박스는 Detector(YOLO, LLM 미사용)까지 시각적으로 묶어 보여준다 -
-                  // 백엔드 그래프 노드는 그대로 분리돼 있고 여기 라벨만 축약한 것.
-                  { step: 1, label: "Vision 👁️", desc: "YOLO탐지+GPT-4o 판독·증거검증" },
-                  // Policy는 LLM을 쓰지 않는 UBCI v2.0 매트릭스 결정론적 산식이다.
-                  { step: 2, label: "Policy ⚖️", desc: "UBCI 매트릭스(결정론적)" },
-                  // Stage A(정합성 게이트, LLM 미사용) 통과 + 결함 1건 이상일 때만 Stage B(GPT-4o-mini) 심사.
-                  { step: 3, label: "Critic 🛡️", desc: "정합성게이트+4o-mini 심사" },
-                  // HITL이 Report보다 앞이다. Supervisor가 HITL로 이관하면 그래프는
-                  // human_node에서 끝나고, 보증서(Report)는 관리자 결재가 확정된 뒤에야
-                  // 생성된다. 종전 순서(Report → HITL)는 실제 흐름과 반대였다.
-                  { step: 4, label: "HITL 👤", desc: "관리자결재(Supervisor 이관)" },
-                  { step: 5, label: "Report 📋", desc: "GPT-4o-mini 보증서생성" },
-                ].map((s) => {
-                  const isActive = activeReinspectionTask.step >= s.step;
-                  const isCurrent = activeReinspectionTask.step === s.step;
-
-                  return (
-                    <div
-                      key={s.step}
-                      className={`p-3 rounded-xl border transition-all ${
-                        isCurrent
-                          ? "bg-purple-50 dark:bg-purple-950 border-purple-500 text-purple-700 dark:text-purple-300 font-extrabold ring-2 ring-purple-500/20"
-                          : isActive
-                          ? "bg-emerald-50 dark:bg-emerald-950 border-emerald-300 text-emerald-700 dark:text-emerald-300"
-                          : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400"
-                      }`}
-                    >
-                      <div className="text-xs font-bold">{s.label}</div>
-                      <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{s.desc}</div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-gray-100 dark:bg-gray-800 h-2.5 rounded-full overflow-hidden">
-                <div
-                  className="bg-gradient-to-r from-purple-600 to-indigo-500 h-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, (activeReinspectionTask.step / 5) * 100)}%` }}
-                />
-              </div>
-
-              {/* Live Terminal Stream */}
-              <div className="bg-gray-950 text-gray-100 p-5 rounded-xl font-mono text-xs sm:text-sm space-y-3 h-64 overflow-y-auto border border-gray-800 shadow-inner">
-                {activeReinspectionTask.logs.map((log, i) => (
-                  <div key={i} className="leading-relaxed border-b border-gray-900/60 pb-1.5 last:border-none">
-                    {log}
-                  </div>
-                ))}
-                {!activeReinspectionTask.isDone && (
-                  <div className="text-purple-400 animate-pulse flex items-center gap-1.5 mt-2">
-                    <span className="w-2 h-2 rounded-full bg-purple-400" /> Multi-Agent 비전 텐서 및 룰 엔진 계산 중...
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="bg-gray-50 dark:bg-gray-800/80 px-6 py-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-800">
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {activeReinspectionTask.isDone
-                  ? "✅ Multi-Agent 비전 재검수 완료 (PostgreSQL DB 동기화 완료)"
-                  : "⏳ 비전 검수 파이프라인 가동 중..."}
-              </span>
-              <Button
-                disabled={!activeReinspectionTask.isDone}
-                onClick={() => setActiveReinspectionTask(null)}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-5 py-2 rounded-lg"
-              >
-                {activeReinspectionTask.isDone ? "완료 및 결과 반영" : "재검수 진행 중..."}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <ReinspectionLiveModal task={activeReinspectionTask} onClose={closeReinspection} />
       )}
       {/* Floating Approval Toast Notification */}
       {approvalToast && (

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getMe, updateProfile } from '@/features/auth/api/authService';
 import { ChangePasswordFields } from '@/features/auth/components/ChangePasswordFields';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import type { AuthMeResponse } from '@/features/auth/types/authApiTypes';
 
 export default function MyPage() {
@@ -53,7 +53,7 @@ export default function MyPage() {
       });
       setUser(updated);
       setMessage('정보가 성공적으로 수정되었습니다.');
-    } catch (err) {
+    } catch {
       setError('정보 수정에 실패했습니다. 다시 시도해 주세요.');
     } finally {
       setLoading(false);

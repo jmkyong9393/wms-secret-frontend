@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { adminAPI, type HitlScorePreview } from '@/lib/api';
+import { adminAPI, type HitlScorePreview } from '@/features/hitl/api/adminApi';
 import type { BBoxEdits } from '../components/HitlImageModal';
 
 const DEBOUNCE_MS = 350;
@@ -37,43 +37,48 @@ export function toPreviewPayload(edits: BBoxEdits) {
 }
 
 export function useScorePreview(jobId: string | undefined, edits: BBoxEdits | undefined, enabled: boolean) {
-  const [preview, setPreview] = useState<HitlScorePreview | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // 응답을 "요청 키"와 함께 저장하고, 노출값은 현재 키와 대조해 파생한다.
+  // 이펙트에서 동기적으로 setLoading/클리어를 하지 않기 위한 구조 - 키가 어긋난
+  // 저장분은 자동으로 무시되므로 별도 초기화 코드가 필요 없다.
+  const [result, setResult] = useState<{
+    key: string;
+    preview: HitlScorePreview | null;
+    error: string | null;
+  } | null>(null);
   const genRef = useRef(0);
 
   // 편집 내용을 문자열로 접어 의존성으로 쓴다. 객체 참조로 걸면 리렌더마다 재요청된다.
-  const key = edits ? JSON.stringify(toPreviewPayload(edits)) : '';
+  const payloadJson = edits ? JSON.stringify(toPreviewPayload(edits)) : '';
+  const active = enabled && !!jobId && payloadJson !== '';
+  const requestKey = active ? `${jobId}|${payloadJson}` : '';
 
   useEffect(() => {
-    if (!enabled || !jobId || !edits) {
-      setPreview(null);
-      setError(null);
-      return;
-    }
+    if (!requestKey || !jobId) return;
     const gen = ++genRef.current;
-    setLoading(true);
     const timer = setTimeout(() => {
       adminAPI
-        .previewHitlScore(jobId, toPreviewPayload(edits))
+        .previewHitlScore(jobId, JSON.parse(payloadJson))
         .then((res) => {
           if (gen !== genRef.current) return; // 늦게 온 이전 요청 무시
-          setPreview(res);
-          setError(null);
+          setResult({ key: requestKey, preview: res, error: null });
         })
         .catch((e: unknown) => {
           if (gen !== genRef.current) return;
-          setPreview(null);
-          setError(e instanceof Error ? e.message : '점수 미리보기를 불러오지 못했습니다.');
-        })
-        .finally(() => {
-          if (gen === genRef.current) setLoading(false);
+          setResult({
+            key: requestKey,
+            preview: null,
+            error: e instanceof Error ? e.message : '점수 미리보기를 불러오지 못했습니다.',
+          });
         });
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId, key, enabled]);
+  }, [jobId, payloadJson, requestKey]);
 
-  return { preview, loading, error };
+  const fresh = active && result !== null && result.key === requestKey;
+  return {
+    preview: fresh ? result.preview : null,
+    loading: active && !fresh,
+    error: fresh ? result.error : null,
+  };
 }

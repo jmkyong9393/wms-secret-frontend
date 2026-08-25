@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL } from '@/shared/api/api-client';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
@@ -31,8 +31,8 @@ export async function GET(request: Request) {
     } else {
       return NextResponse.json({ error: 'Book not found from backend proxy' }, { status: 404 });
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error("Backend Proxy ISBN lookup error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

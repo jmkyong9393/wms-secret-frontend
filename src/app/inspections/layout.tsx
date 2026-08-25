@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
-import MainLayout from '@/components/layout/MainLayout';
-import WorkerMobileShell from '@/components/layout/WorkerMobileShell';
+import MainLayout from '@/widgets/layout/MainLayout';
+import WorkerMobileShell from '@/widgets/layout/WorkerMobileShell';
 
 /**
  * 검수 처리 내역 — 역할 적응형 레이아웃.

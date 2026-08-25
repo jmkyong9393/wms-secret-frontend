@@ -1,14 +1,16 @@
+# 운영 클러스터의 실물 스펙과 일치시킨 매니페스트 (2026-08-25 대조).
+# NodePort 30080이 외부 진입점이므로 포트 번호를 임의로 바꾸지 않는다.
 apiVersion: v1
 kind: Service
 metadata:
-  name: wms-frontend-service
-  labels:
-    app: wms-frontend
+  name: wms-frontend-svc
+  namespace: default
 spec:
-  type: ClusterIP
-  ports:
-  - port: 80
-    targetPort: 3000
-    protocol: TCP
+  type: NodePort
   selector:
     app: wms-frontend
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30080
+      protocol: TCP

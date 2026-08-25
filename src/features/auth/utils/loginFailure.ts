@@ -39,13 +39,14 @@ interface ApiErrorBody {
   retry_after_seconds?: number;
 }
 
-export function resolveLoginFailure(err: any): LoginFailure {
-  const status: number | undefined = err?.response?.status;
-  const body: ApiErrorBody = err?.response?.data ?? {};
+export function resolveLoginFailure(err: unknown): LoginFailure {
+  const e = err as { response?: { status?: number; data?: ApiErrorBody }; code?: string } | null | undefined;
+  const status: number | undefined = e?.response?.status;
+  const body: ApiErrorBody = e?.response?.data ?? {};
 
   // 1) 응답 자체가 없는 경우 - 서버 다운, 프록시 미기동, 네트워크 단절
-  if (!err?.response) {
-    const timedOut = err?.code === "ECONNABORTED";
+  if (!e?.response) {
+    const timedOut = e?.code === "ECONNABORTED";
     return {
       code: timedOut ? "CLIENT_TIMEOUT" : "NETWORK_ERROR",
       title: timedOut ? "서버 응답 시간 초과" : "서버에 연결하지 못했습니다",

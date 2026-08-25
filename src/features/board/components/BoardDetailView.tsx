@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useHydratedUser } from "@/features/auth/hooks/useHydratedUser";
+import { Button } from "@/shared/ui/button";
+import { useHydratedUser } from "@/entities/user/model/useHydratedUser";
 import { useBoardPostQuery } from "@/features/board/hooks/useBoardPostQuery";
 import { useDeleteBoardPostMutation } from "@/features/board/hooks/useBoardPostMutations";
 import { canDeletePost, canEditPost } from "@/features/board/utils/permissions";
@@ -15,7 +15,7 @@ import { BoardCommentList } from "@/features/board/components/BoardCommentList";
 import { BoardCommentForm } from "@/features/board/components/BoardCommentForm";
 import { ConfirmDialog } from "@/features/board/components/ConfirmDialog";
 import { canWriteComment } from "@/features/board/utils/permissions";
-import { maskName } from "@/lib/privacy-mask";
+import { maskName } from "@/shared/lib/privacy-mask";
 
 interface BoardDetailViewProps {
   postId: string;
@@ -126,6 +126,7 @@ export function BoardDetailView({ postId }: BoardDetailViewProps) {
             {post.attachment_paths.map((path, idx) =>
               isImageAttachment(path) ? (
                 <a key={path} href={attachmentUrl(path)} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                   <img
                     src={attachmentUrl(path)}
                     alt={`첨부 ${idx + 1}`}

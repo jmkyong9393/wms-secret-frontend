@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
-import MainLayout from '@/components/layout/MainLayout';
-import WorkerMobileShell from '@/components/layout/WorkerMobileShell';
+import MainLayout from '@/widgets/layout/MainLayout';
+import WorkerMobileShell from '@/widgets/layout/WorkerMobileShell';
 
 /**
  * Worker 전용 라우트(/worker/outbound 출고 피킹 스캐너) — 역할 적응형 레이아웃.

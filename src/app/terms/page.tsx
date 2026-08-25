@@ -2,9 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { FileText, ArrowLeft, ShieldCheck, Lock, EyeOff, Server, AlertOctagon, CheckCircle2, ShieldAlert, KeyRound } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/shared/ui/card';
+import { Badge } from '@/shared/ui/badge';
+import { FileText, ArrowLeft, ShieldCheck, Lock, EyeOff, Server, KeyRound } from 'lucide-react';
 
 export default function TermsOfServicePage() {
   return (
@@ -61,9 +61,9 @@ export default function TermsOfServicePage() {
             <div className="space-y-2">
               <h4 className="font-black text-gray-900">제2조 (용어의 정의)</h4>
               <ul className="list-disc pl-5 space-y-1.5 text-xs text-gray-700 font-medium">
-                <li><strong>"개인정보 표시제한(ISMS-P 2.6.3)"</strong>: 성명, 전화번호, 이메일, IP 등 식별 가능 개인정보를 조작 마스킹하여 유출을 차단하는 보호 조치입니다.</li>
-                <li><strong>"일방향 암호화 (SHA-256 / Bcrypt)"</strong>: 입력된 비밀번호를 복호화 불가능한 해시값으로 변환하여 안전하게 보관하는 기술 기법입니다.</li>
-                <li><strong>"시큐어 코딩 (Secure Coding)"</strong>: SQL Injection, XSS, CSRF, 파일 업로드 취약점 등 보안 약점을 개발 단계에서 근본 제거하는 안전 코딩 지침입니다.</li>
+                <li><strong>&quot;개인정보 표시제한(ISMS-P 2.6.3)&quot;</strong>: 성명, 전화번호, 이메일, IP 등 식별 가능 개인정보를 조작 마스킹하여 유출을 차단하는 보호 조치입니다.</li>
+                <li><strong>&quot;일방향 암호화 (SHA-256 / Bcrypt)&quot;</strong>: 입력된 비밀번호를 복호화 불가능한 해시값으로 변환하여 안전하게 보관하는 기술 기법입니다.</li>
+                <li><strong>&quot;시큐어 코딩 (Secure Coding)&quot;</strong>: SQL Injection, XSS, CSRF, 파일 업로드 취약점 등 보안 약점을 개발 단계에서 근본 제거하는 안전 코딩 지침입니다.</li>
               </ul>
             </div>
           </section>

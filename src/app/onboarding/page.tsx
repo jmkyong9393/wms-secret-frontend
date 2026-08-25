@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAtomValue } from 'jotai';
 import { ChangePasswordFields } from '@/features/auth/components/ChangePasswordFields';
 import { PrivacyConsentStep } from '@/features/auth/components/PrivacyConsentStep';
-import { currentUserAtom } from '@/features/auth/store/authAtoms';
+import { currentUserAtom } from '@/entities/user/model/authAtoms';
 
 /**
  * 최초 로그인 온보딩.

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import type { BoardPostListItem } from "@/features/board/types/board";
 import { CATEGORY_BADGE_CLASS, CATEGORY_LABEL } from "@/features/board/components/categoryLabels";
-import { maskName } from "@/lib/privacy-mask";
+import { maskName } from "@/shared/lib/privacy-mask";
 
 interface BoardPostListProps {
   items: BoardPostListItem[];
@@ -20,7 +20,7 @@ function formatDate(iso: string): string {
 
 /**
  * 게시글 목록 - 좁은 화면(WORKER 모바일 셸)에서는 카드, md 이상(MASTER/ADMIN 데스크톱)에서는
- * 표로 렌더링한다. src/features/stock/components/InspectionDataTable.tsx의
+ * 표로 렌더링한다. src/widgets/inspection-table/ui/InspectionDataTable.tsx의
  * md:hidden 카드 / hidden md:block 표 듀얼 렌더링 패턴을 그대로 따른다.
  */
 export function BoardPostList({ items }: BoardPostListProps) {

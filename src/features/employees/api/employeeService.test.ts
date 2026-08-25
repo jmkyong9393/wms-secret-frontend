@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { apiClient } from "@/lib/api-client";
+import { apiClient } from "@/shared/api/api-client";
 import {
   listEmployees,
   bulkCreateEmployees,
@@ -9,7 +9,7 @@ import {
   deleteEmployee,
 } from "./employeeService";
 
-vi.mock("@/lib/api-client", () => {
+vi.mock("@/shared/api/api-client", () => {
   return {
     apiClient: {
       get: vi.fn(),

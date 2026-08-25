@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Providers from "@/components/providers";
-import MainLayout from "@/components/layout/MainLayout";
-import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
-import { A2HSBanner } from "@/components/a2hs-banner";
-import { GlobalErrorBoundary } from "@/components/error/GlobalErrorBoundary";
-import { SessionAutoLogout } from "@/components/auth/SessionAutoLogout";
-import ReactQueryProvider from "@/lib/react-query-provider";
+import Providers from "./providers";
+import { ServiceWorkerRegistration } from "@/shared/pwa/ServiceWorkerRegistration";
+import { A2HSBanner } from "@/shared/pwa/a2hs-banner";
+import { GlobalErrorBoundary } from "@/shared/ui/GlobalErrorBoundary";
+import { SessionAutoLogout } from "@/features/auth/components/SessionAutoLogout";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,7 +36,6 @@ export default function RootLayout({
         <GlobalErrorBoundary>
           <ServiceWorkerRegistration />
           <A2HSBanner />
-          <ReactQueryProvider>
             <Providers>
               {/* 탭 생존 마커는 반드시 **모든 페이지**에서 설정되어야 한다.
                   종전에는 MainLayout/WorkerMobileShell(인증 셸) 안에만 있어서 로그인
@@ -48,7 +45,6 @@ export default function RootLayout({
               <SessionAutoLogout />
               {children}
             </Providers>
-          </ReactQueryProvider>
         </GlobalErrorBoundary>
       </body>
     </html>

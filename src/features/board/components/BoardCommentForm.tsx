@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
+import { Textarea } from "@/shared/ui/textarea";
+import { Button } from "@/shared/ui/button";
 import { useCreateBoardCommentMutation } from "@/features/board/hooks/useBoardCommentMutations";
 
 interface BoardCommentFormProps {
