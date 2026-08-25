@@ -23,8 +23,12 @@ class FakeEventSource {
   constructor(public url: string) {
     FakeEventSource.instances.push(this);
   }
+  named: Record<string, Array<() => void>> = {};
   close() { this.closed = true; this.readyState = 2; }
   emit(payload: unknown) { this.onmessage?.({ data: JSON.stringify(payload) }); }
+  addEventListener(type: string, fn: () => void) { (this.named[type] ||= []).push(fn); }
+  /** 이름 붙은 heartbeat 이벤트. onmessage는 발화하지 않는다. */
+  heartbeat() { (this.named['heartbeat'] ?? []).forEach((f) => f()); }
 
   /** 서버가 연결을 받아들였다. */
   accept() { this.readyState = 1; this.onopen?.(); }
@@ -231,6 +235,33 @@ describe('연결 복구', () => {
     expect(FakeEventSource.instances).toHaveLength(1);
     un();
     vi.useRealTimers();
+  });
+
+  it('이름 붙은 heartbeat 이벤트로 감시 시계가 되감긴다', async () => {
+    // 서버는 `event: heartbeat`로 보낸다. 기본 message로 보내면 이 파일을 모르는
+    // 클라이언트가 하트비트를 일반 알림으로 표시한다(운영에서 실제로 발생).
+    vi.useFakeTimers();
+    const { subscribeRealtime } = await freshModule();
+    const un = subscribeRealtime(() => {});
+    const es = FakeEventSource.instances[0];
+    es.accept();
+    for (let i = 0; i < 4; i += 1) {
+      vi.advanceTimersByTime(25000);
+      es.heartbeat();
+    }
+    expect(es.closed).toBe(false);                       // 100초가 지나도 살아 있다
+    expect(FakeEventSource.instances).toHaveLength(1);
+    un();
+    vi.useRealTimers();
+  });
+
+  it('이름 붙은 하트비트는 화면에 전달되지 않는다', async () => {
+    const { subscribeRealtime } = await freshModule();
+    const got: string[] = [];
+    const un = subscribeRealtime((e) => got.push(e.type));
+    FakeEventSource.instances[0].heartbeat();
+    expect(got).toEqual([]);
+    un();
   });
 
   it('구독자가 없으면 재연결하지 않는다', async () => {

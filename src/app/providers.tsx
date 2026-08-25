@@ -18,6 +18,8 @@ import { Provider as JotaiProvider } from "jotai";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAtomValue } from "jotai";
+import { isAuthenticatedAtom } from "@/entities/user/model/authAtoms";
 import { subscribeRealtime, checkRealtimeConnection, RECONNECTED_EVENT } from "@/shared/lib/realtimeEvents";
 
 /** 이벤트 타입 → 낡아지는 쿼리 키. 목록에 없는 이벤트는 무효화 없이 지나간다. */
@@ -37,28 +39,33 @@ const INVALIDATES: Record<string, string[]> = {
 function RealtimeQuerySync() {
   const queryClient = useQueryClient();
   const pathname = usePathname();
+  // 스트림은 인증을 요구한다. 로그인 전에 구독하면 401만 받고 재연결을 반복하게 된다
+  // (로그인 화면에 머무는 동안 요청이 7건 나간 것을 운영에서 확인, 2026-08-26).
+  // 세션이 만료돼 401이 나면 api-client가 이 값을 비우므로 구독도 함께 끊긴다.
+  const isAuthenticated = useAtomValue(isAuthenticatedAtom);
 
-  // 화면을 옴길 때마다 연결을 점검한다. 탭을 계속 보고 있으면
+  // 화면을 옮길 때마다 연결을 점검한다. 탭을 계속 보고 있으면
   // visibilitychange가 발화하지 않아, 감시 시계가 돌 때까지 기다려야 한다.
-  useEffect(() => { checkRealtimeConnection(); }, [pathname]);
+  useEffect(() => {
+    if (isAuthenticated) checkRealtimeConnection();
+  }, [pathname, isAuthenticated]);
 
-  useEffect(
-    () =>
-      subscribeRealtime((evt) => {
-        // 재연결은 "끊긴 동안 뭐가 바뀌었는지 모른다"는 신호다. 전부 다시 가져온다.
-        if (evt.type === RECONNECTED_EVENT) {
-          queryClient.invalidateQueries();
-          return;
-        }
-        const keys = INVALIDATES[evt.type];
-        if (!keys) return;
-        for (const key of keys) {
-          // 부분 일치로 무효화한다 - 같은 접두사에 파라미터가 붙은 키까지 함께 걸린다.
-          queryClient.invalidateQueries({ queryKey: [key] });
-        }
-      }),
-    [queryClient],
-  );
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    return subscribeRealtime((evt) => {
+      // 재연결은 "끊긴 동안 뭐가 바뀌었는지 모른다"는 신호다. 전부 다시 가져온다.
+      if (evt.type === RECONNECTED_EVENT) {
+        queryClient.invalidateQueries();
+        return;
+      }
+      const keys = INVALIDATES[evt.type];
+      if (!keys) return;
+      for (const key of keys) {
+        // 부분 일치로 무효화한다 - 같은 접두사에 파라미터가 붙은 키까지 함께 걸린다.
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
+    });
+  }, [queryClient, isAuthenticated]);
 
   return null;
 }
