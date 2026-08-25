@@ -1,4 +1,5 @@
 'use client';
+import { useLocalStorageItem, writeLocalStorageItem } from '@/shared/lib/clientStore';
 import type { BookMeta } from '@/features/inbound/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
@@ -50,24 +51,14 @@ export default function InboundScannerPage() {
   const [bookInfo, setBookInfo] = useState<BookMeta | null>(null);
   const [isLoadingBook, setIsLoadingBook] = useState(false);
   const [fasttrackQty, setFasttrackQty] = useState<number>(1);
-  const [activeStation, setActiveStation] = useState<string>('A');
+  // 작업 스테이션은 localStorage가 원천(새로고침·재방문 유지) - 구독으로 읽는다.
+  const activeStation = useLocalStorageItem('active_workstation_line', 'nexus-workstation-change') ?? 'A';
   // 화면 꺼짐·새로고침으로 페이지가 재생성된 뒤 이전 작업을 되살렸을 때 띄우는 안내.
   // null이면 평소 진입(복원 없음)이다.
   const [resumedDraft, setResumedDraft] = useState<{ lpn: string; shots: number } | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('active_workstation_line') || 'A';
-      setActiveStation(saved);
-      localStorage.setItem('active_workstation_line', saved);
-    }
-  }, []);
-
   const handleStationChange = (line: string) => {
-    setActiveStation(line);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('active_workstation_line', line);
-    }
+    writeLocalStorageItem('active_workstation_line', line, 'nexus-workstation-change');
   };
 
   // Multi-Capture State

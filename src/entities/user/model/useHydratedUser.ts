@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
+import { useIsHydrated } from '@/shared/lib/clientStore';
 import { currentUserAtom } from '@/entities/user/model/authAtoms';
 import type { CurrentUser } from '@/entities/user/model/types';
 
@@ -25,9 +25,8 @@ import type { CurrentUser } from '@/entities/user/model/types';
  */
 export function useHydratedUser(): { user: CurrentUser | null; hydrated: boolean } {
   const stored = useAtomValue(currentUserAtom);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => setHydrated(true), []);
+  // useState+useEffect(setHydrated) 관용구의 uSES 버전 - 마운트 직후 재렌더 캐스케이드가 없다.
+  const hydrated = useIsHydrated();
 
   return { user: hydrated ? stored : null, hydrated };
 }

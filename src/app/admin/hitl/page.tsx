@@ -9,7 +9,7 @@ import {
   Shield as ShieldIcon,
 } from "lucide-react";
 import { adminAPI } from "@/features/hitl/api/adminApi";
-import { getSystemSettings, SETTINGS_CHANGE_EVENT } from "@/shared/lib/systemSettings";
+import { useSystemSettingValue } from "@/shared/lib/systemSettings";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
 import { HitlImageModal, EMPTY_BBOX_EDITS, type BBoxEdits } from "@/features/hitl/components/HitlImageModal";
 // 관리자 설정의 읽기 전용 정책 뷰와 같은 정의를 쓴다 (features/hitl/policy.ts)
@@ -40,19 +40,8 @@ export default function AdminHitlDashboard() {
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // 시스템 설정의 HITL 대기열 경보 임계값 (설정 페이지에서 변경 시 실시간 반영)
-  const [alertThreshold, setAlertThreshold] = useState<number>(10);
-  useEffect(() => {
-    setAlertThreshold(getSystemSettings().hitlAlertThreshold);
-    const onSettingsChange = (e: Event) => {
-      const evt = e as CustomEvent<{ hitlAlertThreshold?: number }>;
-      if (evt.detail && Number.isFinite(evt.detail.hitlAlertThreshold)) {
-        setAlertThreshold(evt.detail.hitlAlertThreshold as number);
-      }
-    };
-    window.addEventListener(SETTINGS_CHANGE_EVENT, onSettingsChange);
-    return () => window.removeEventListener(SETTINGS_CHANGE_EVENT, onSettingsChange);
-  }, []);
+  // 시스템 설정의 HITL 대기열 경보 임계값 - 저장소 구독으로 실시간 반영 (설정 페이지 변경 포함)
+  const alertThreshold = useSystemSettingValue('hitlAlertThreshold');
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState("");
   const [modalTask, setModalTask] = useState<HitlTask | null>(null);
