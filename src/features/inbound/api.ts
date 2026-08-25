@@ -132,3 +132,64 @@ export const inboundService = {
     return [...realLogs, ...activeMockLogs];
   }
 };
+
+// ── 검수 제출 (온라인 전송 · 오프라인 재전송 공용) ─────────────────────────
+//
+// 온라인 경로와 재전송 경로가 **같은 함수**를 쓴다. 경로를 나누면 한쪽만 낡아
+// 조용히 죽는다 (종전 CloudFront 업로드 경로가 그렇게 됐다).
+
+import { API_BASE_URL } from '@/shared/api/api-client';
+
+export interface EvaluationSubmission {
+  lpn: string;
+  images: Blob[];
+  bookMetadata?: unknown;
+  workerId?: string | null;
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('이미지를 읽지 못했습니다.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * AI 검수를 요청한다.
+ *
+ * 네트워크 단계에서 실패하면 fetch가 TypeError로 reject한다 — 그 경우에만
+ * 재전송이 안전하다(서버에 닿지 않았으므로). 서버가 응답한 4xx/5xx는 Error로 바꿔
+ * 던지며, 이건 재전송 대상이 아니다.
+ */
+export async function submitEvaluation(input: EvaluationSubmission) {
+  const images = await Promise.all(input.images.map(blobToDataUrl));
+  const res = await fetch(`${API_BASE_URL}/api/v1/inbound/evaluate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      lpn: input.lpn,
+      images,
+      book_metadata: input.bookMetadata,
+      worker_id: input.workerId ?? null,
+    }),
+  });
+  if (!res.ok) throw new Error(`Evaluation failed (HTTP ${res.status})`);
+  return res.json();
+}
+
+/**
+ * 해당 LPN이 이미 검수됐는지 확인한다 (재전송 중복 방지용).
+ *
+ * 검수 전 LPN은 `PENDING_INSPECTION`으로 등록돼 있다. 그 상태가 아니면 이미
+ * 판정이 끝났다는 뜻이므로 재전송하면 같은 책이 두 번 검수된다.
+ */
+export async function isLpnAlreadyInspected(lpn: string): Promise<boolean> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/inventory/${encodeURIComponent(lpn)}`);
+  if (res.status === 404) return false;          // 아직 없음 → 보내야 한다
+  if (!res.ok) throw new Error(`LPN 조회 실패 (HTTP ${res.status})`);
+  const data = await res.json();
+  const status = data?.item_status ?? data?.status;
+  return typeof status === 'string' && status !== 'PENDING_INSPECTION';
+}

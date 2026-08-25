@@ -1,6 +1,8 @@
 import type { BookMeta } from '../types';
 import { useMutation } from '@tanstack/react-query';
 import { useSetAtom } from 'jotai';
+import { OfflineQueue, isNetworkFailure, OfflineQueuedError } from '@/shared/api/offlineQueue';
+import { submitEvaluation } from '@/features/inbound/api';
 import { API_BASE_URL } from '@/shared/api/api-client';
 import { uploadQueueAtom } from '@/entities/upload-task/model/uploadQueueAtoms';
 
@@ -31,24 +33,26 @@ export function useEvaluationStream(opts: {
   // 앞당기고, 큐에 찍히는 상태는 요청·SSE의 실제 결과를 따른다.
   const evaluateMutation = useMutation({
     mutationFn: async (data: { lpn: string, images: Blob[], previewUrl: string, book_metadata?: BookMeta }) => {
-      const getBase64 = (blob: Blob): Promise<string> => new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(blob);
-      });
-      const base64Images = await Promise.all(data.images.map(getBase64));
-
-      // worker_id 누락 - 백엔드는 이미 이 값을 받아 agent_logs.
-      // inbound_worker_id에 저장하고 "내 검수만" 필터(returns/inspections?worker_id=)가
-      // 그 값을 기준으로 거른다. 이 필드가 빠져 있으면 서버에 저장되는 값이 항상 null이라,
-      // 실제로 촬영·검수한 작업자 본인의 "나의 검수 내역"이 매번 0건으로 뜬다.
-      const res = await fetch(`${API_BASE_URL}/api/v1/inbound/evaluate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lpn: data.lpn, images: base64Images, book_metadata: data.book_metadata, worker_id: opts.workerId || null })
-      });
-      if (!res.ok) throw new Error("Evaluation failed");
-      return res.json();
+      // 온라인 전송과 오프라인 재전송이 같은 함수를 쓴다(features/inbound/api.ts).
+      // worker_id를 실어야 "나의 검수 내역" 필터가 본인 건을 찾는다.
+      const payload = {
+        lpn: data.lpn,
+        images: data.images,
+        bookMetadata: data.book_metadata,
+        workerId: opts.workerId || null,
+      };
+      try {
+        return await submitEvaluation(payload);
+      } catch (e) {
+        // 서버에 닿지 못한 경우에만 보관한다. 서버가 4xx/5xx로 답했다면 이미 처리했을
+        // 수 있어, 재전송하면 같은 책이 두 번 검수된다.
+        if (isNetworkFailure(e)) {
+          await new OfflineQueue().enqueue(payload);
+          window.dispatchEvent(new CustomEvent('wms:offline-queue-changed'));
+          throw new OfflineQueuedError(data.lpn);
+        }
+        throw e;
+      }
     },
     onMutate: async (newEvaluation) => {
       // 임시 ID(tempJobId)로 큐에 먼저 자리를 잡아 두고, 화면은 곧바로 다음 단계로 넘긴다.
@@ -278,12 +282,18 @@ export function useEvaluationStream(opts: {
     onError: (err, newEvaluation, context) => {
       // 3. 서버 통신이 실패했다면(네트워크 단절 등) 큐 항목을 실패로 표시한다.
       // 삭제하지 않는 이유는 작업자가 어떤 LPN을 다시 보내야 하는지 알아야 하기 때문이다.
+      const queued = err instanceof OfflineQueuedError;
       if (context?.tempJobId) {
         setUploadQueue(prev => prev.map(q => q.id === context.tempJobId
-          ? { ...q, status: 'FAILED' as const, message: '전송 실패 — 재촬영이 필요합니다' }
+          ? queued
+            ? { ...q, status: 'FAILED' as const, message: '오프라인 — 연결되면 자동 전송됩니다' }
+            : { ...q, status: 'FAILED' as const, message: '전송 실패 — 재촬영이 필요합니다' }
           : q));
       }
-      alert("AI 판독 큐 전송에 실패했습니다. 다시 시도해주세요.");
+      // 보관에 성공한 건은 사고가 아니다. 재촬영을 요구하면 작업자가 같은 책을 또 찍는다.
+      alert(queued
+        ? "오프라인 상태입니다. 촬영분을 안전하게 보관했고, 통신이 복구되면 자동으로 전송됩니다."
+        : "AI 판독 큐 전송에 실패했습니다. 다시 시도해주세요.");
     }
   });
 

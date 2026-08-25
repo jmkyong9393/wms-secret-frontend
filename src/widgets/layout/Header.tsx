@@ -7,6 +7,7 @@ import { maskName } from '@/shared/lib/privacy-mask';
 
 import Link from 'next/link';
 import React, { useState } from 'react';
+import { useOfflineEvaluationSync } from '@/features/inbound/hooks/useOfflineEvaluationSync';
 import { useAtomValue } from 'jotai';
 import { inFlightUploadCountAtom } from '@/entities/upload-task/model/uploadQueueAtoms';
 import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
@@ -77,6 +78,9 @@ function toNotificationItem(evt: NotificationEvent): NotificationItem {
 export default function Header() {
   // 전송·분석이 진행 중인 AI 검수 건수 (실패·완료 건 제외)
   const pendingCount = useAtomValue(inFlightUploadCountAtom);
+  // 오프라인으로 보관된 검수 건. 이 훅이 재전송 트리거도 겸한다
+  // (Header는 모든 화면에 있어 앱 시작·온라인 복귀를 놓치지 않는다).
+  const { pendingCount: offlineCount } = useOfflineEvaluationSync();
   // 사용자명·역할을 그대로 렌더하므로 하이드레이션 안전 훅을 쓴다 (Sidebar와 동일한 이유).
   const { user } = useHydratedUser();
   const logout = useLogout();
@@ -312,6 +316,17 @@ export default function Header() {
           <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
             대기열: <span className={pendingCount > 0 ? "text-blue-600 dark:text-blue-400 font-bold" : ""}>{pendingCount}건</span>
           </span>
+          {offlineCount > 0 && (
+            <>
+              <div className="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-3"></div>
+              <span
+                className="text-xs font-medium text-gray-600 dark:text-gray-300"
+                title="통신이 끊겨 기기에 보관된 검수 건입니다. 연결되면 자동으로 전송됩니다."
+              >
+                보관: <span className="text-amber-600 dark:text-amber-400 font-bold">{offlineCount}건</span>
+              </span>
+            </>
+          )}
         </div>
 
         {/* Global Light / Dark Mode Toggle */}

@@ -43,6 +43,7 @@ jobs:
           NEXT_PUBLIC_API_URL=https://nexus-wms.p-e.kr
           BACKEND_ORIGIN=http://wms-api-svc:8000
           NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          NEXT_PUBLIC_CDN_DOMAIN=https://deao4fid6qoyp.cloudfront.net
         tags: |
           ${{ steps.ecr.outputs.registry }}/nexus-frontend-repo:${{ github.sha }}
           ${{ steps.ecr.outputs.registry }}/nexus-frontend-repo:latest
