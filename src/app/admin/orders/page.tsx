@@ -224,7 +224,7 @@ export default function OrdersPickingPage() {
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 font-sans text-gray-900 dark:text-gray-100">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
         <div>
           <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-full text-xs font-bold font-mono inline-flex items-center gap-1 mb-1">
             <Bot className="w-3.5 h-3.5" /> ORDER → AI PICKING INSTRUCTION
@@ -235,10 +235,10 @@ export default function OrdersPickingPage() {
             발행된 지시서는 출고 최적화 화면과 현장 피킹 스캐너에 실시간 연동됩니다.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
             onClick={() => setShowManualPanel(v => !v)}
-            className="bg-white dark:bg-gray-800 border-2 border-indigo-500 text-indigo-700 dark:text-indigo-300 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all hover:bg-indigo-50 dark:hover:bg-indigo-950 cursor-pointer"
+            className="bg-white dark:bg-gray-800 border-2 border-indigo-500 text-indigo-700 dark:text-indigo-300 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 whitespace-nowrap transition-all hover:bg-indigo-50 dark:hover:bg-indigo-950 cursor-pointer"
           >
             <ShoppingCart className="w-4 h-4" />
             {showManualPanel ? '수동 주문 닫기' : '수동 주문 등록'}
@@ -246,7 +246,7 @@ export default function OrdersPickingPage() {
           <button
             onClick={handleSimulate}
             disabled={isSimulating}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 whitespace-nowrap transition-all shadow-xs disabled:opacity-50 cursor-pointer"
           >
             <RefreshCcw className={`w-4 h-4 ${isSimulating ? 'animate-spin' : ''}`} />
             {isSimulating ? '주문 생성 중...' : '🎲 B2B 주문 시뮬레이션'}

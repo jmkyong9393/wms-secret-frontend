@@ -84,7 +84,7 @@ export function HitlTaskTable({
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-50/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 uppercase border-y border-gray-200 dark:border-gray-800 text-xs font-bold">
                 <tr>
-                  <th className="py-3.5 px-4 w-10 text-center">
+                  <th className="py-3.5 px-3 w-10 text-center">
                     <input
                       type="checkbox"
                       className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
@@ -92,14 +92,14 @@ export function HitlTaskTable({
                       onChange={onToggleAll}
                     />
                   </th>
-                  <th className="py-3.5 px-4 w-20 text-center whitespace-nowrap">이미지</th>
-                  <th className="py-3.5 px-4 w-56 whitespace-nowrap">도서 정보 및 바코드</th>
-                  <th className="py-3.5 px-4 w-48 whitespace-nowrap">AI 비전 감지 사유</th>
-                  <th className="py-3.5 px-4 w-36 whitespace-nowrap">처분 결정 (Decision)</th>
-                  <th className="py-3.5 px-4 w-28 whitespace-nowrap">목표 등급</th>
-                  <th className="py-3.5 px-4 w-40 whitespace-nowrap">오버라이드 사유</th>
-                  <th className="py-3.5 px-4 w-48 whitespace-nowrap">관리자 메모</th>
-                  <th className="py-3.5 px-4 w-28 text-center whitespace-nowrap">AI 재검수</th>
+                  <th className="py-3.5 px-3 w-20 text-center whitespace-nowrap">이미지</th>
+                  <th className="py-3.5 px-3 w-56 whitespace-nowrap">도서 정보 및 바코드</th>
+                  <th className="py-3.5 px-3 w-48 whitespace-nowrap">AI 비전 감지 사유</th>
+                  <th className="py-3.5 px-3 w-36 whitespace-nowrap">처분 결정 (Decision)</th>
+                  <th className="py-3.5 px-3 w-28 whitespace-nowrap">목표 등급</th>
+                  <th className="py-3.5 px-3 w-40 whitespace-nowrap">오버라이드 사유</th>
+                  <th className="py-3.5 px-3 w-48 whitespace-nowrap hidden 2xl:table-cell">관리자 메모</th>
+                  <th className="py-3.5 px-3 w-28 text-center whitespace-nowrap hidden 2xl:table-cell">AI 재검수</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
@@ -121,7 +121,7 @@ export function HitlTaskTable({
                             : "hover:bg-gray-50/80 dark:hover:bg-gray-800/50"
                       }`}
                     >
-                      <td className="p-3 text-center">
+                      <td className="px-2 py-3 text-center">
                         <input
                           type="checkbox"
                           className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
@@ -130,7 +130,7 @@ export function HitlTaskTable({
                         />
                       </td>
 
-                      <td className="p-3">
+                      <td className="px-2 py-3">
                         <div
                           className="relative w-14 h-18 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer group shadow-sm flex items-center justify-center"
                           onClick={() => onOpenImage(t)}
@@ -148,7 +148,7 @@ export function HitlTaskTable({
                         </div>
                       </td>
 
-                      <td className="p-3">
+                      <td className="px-2 py-3">
                         <div
                           className="font-bold text-gray-900 dark:text-white line-clamp-1 cursor-pointer hover:underline hover:text-blue-700 dark:hover:text-blue-400 w-fit"
                           onClick={() => onOpenImage(t)}
@@ -196,7 +196,7 @@ export function HitlTaskTable({
                         </div>
                       </td>
 
-                      <td className="p-3">
+                      <td className="px-2 py-3">
                         {(() => {
                           // 이 컬럼은 "AI 비전 감지 사유"(getPrimaryDefectReason와 동일 소스).
                           // reason_code류는 결함 분류가 아니라 HITL 라우팅 사유다 — 실제 결함이 없을 때만 라우팅
@@ -286,7 +286,7 @@ export function HitlTaskTable({
                         })()}
                       </td>
 
-                      <td className="p-3">
+                      <td className="px-2 py-3">
                         <Select
                           disabled={!isSelected}
                           value={decisions[t.id] || "APPROVE_DOWNGRADE"}
@@ -307,7 +307,7 @@ export function HitlTaskTable({
                         </Select>
                       </td>
 
-                      <td className="p-3">
+                      <td className="px-2 py-3">
                         <Select
                           disabled={!isSelected || decisions[t.id] === "REJECT_RETURN" || decisions[t.id] === "RE_CHECK"}
                           value={grades[t.id] || "GOOD"}
@@ -328,7 +328,7 @@ export function HitlTaskTable({
                         </Select>
                       </td>
 
-                      <td className="p-3">
+                      <td className="px-2 py-3">
                         {(() => {
                           const rawVal = reasons[t.id];
                           const selectedList: string[] = Array.isArray(rawVal)
@@ -403,7 +403,7 @@ export function HitlTaskTable({
                         })()}
                       </td>
 
-                      <td className="p-3">
+                      <td className="px-2 py-3 hidden 2xl:table-cell">
                         <Input
                           disabled={!isSelected}
                           placeholder="사유 작성 (선택)"
@@ -413,7 +413,7 @@ export function HitlTaskTable({
                         />
                       </td>
 
-                      <td className="p-3 text-center">
+                      <td className="px-2 py-3 text-center hidden 2xl:table-cell">
                         <button
                           className="px-3.5 py-2 bg-purple-50 dark:bg-purple-950 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-extrabold rounded-xl transition-all text-xs flex items-center gap-1 shadow-2xs active:scale-95 whitespace-nowrap cursor-pointer disabled:opacity-50 mx-auto"
                           onClick={() => onReinspect(t.id)}

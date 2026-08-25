@@ -283,7 +283,7 @@ export default function WorkerOutboundPage() {
             <ClipboardList className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             내 피킹 지시서 (AI 발행)
           </label>
-          <button onClick={fetchInstructions} className="text-[10px] font-bold text-gray-400 hover:text-indigo-600 flex items-center gap-1 cursor-pointer">
+          <button onClick={fetchInstructions} className="text-[10px] font-bold text-gray-400 hover:text-indigo-600 flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer">
             <RefreshCcw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} /> 새로고침
           </button>
         </div>

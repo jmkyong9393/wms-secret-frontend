@@ -560,7 +560,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                 <th className="py-3.5 px-4 min-w-[280px]">도서 정보</th>
                 <th className="py-3.5 px-4 text-center whitespace-nowrap">UBCI 등급 (점수)</th>
                 <th className="py-3.5 px-4 text-center whitespace-nowrap">AI 판독 결과</th>
-                <th className="py-3.5 px-4 text-center whitespace-nowrap">AI 신뢰도</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap hidden 2xl:table-cell">AI 신뢰도</th>
                 <th className="py-3.5 px-4 text-center whitespace-nowrap">검수 시각</th>
                 <th className="py-3.5 px-4 text-right whitespace-nowrap">작업 기능</th>
               </tr>
@@ -645,7 +645,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
                           </span>
                         )}
                       </td>
-                      <td className="py-4 px-4 text-center font-mono font-bold text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      <td className="py-4 px-4 text-center font-mono font-bold text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap hidden 2xl:table-cell">
                         {isNew ? (
                           <span className="text-slate-500 dark:text-slate-400 font-bold text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                             스킵 (Fast-Track)

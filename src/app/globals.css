@@ -132,6 +132,11 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* 한국어는 기본값(word-break: normal)에서 글자 단위로 꺾인다 - "수동 주문 등/록",
+       "대/기 중"처럼 어절이 쪼개져 화면이 난잡해졌다. keep-all로 어절 단위로만 꺾고,
+       ISBN·LPN·URL 같은 긴 무공백 토큰은 overflow-wrap으로 빠져나갈 구멍을 남긴다. */
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
   html {
     @apply font-sans;

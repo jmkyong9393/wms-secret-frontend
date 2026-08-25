@@ -114,7 +114,7 @@ export default function AdminFdsPage() {
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 font-sans text-gray-900 dark:text-gray-100 transition-colors">
       {/* Top Banner Header (관제 표준 패턴) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-full text-xs font-bold font-mono flex items-center gap-1">
@@ -134,7 +134,7 @@ export default function AdminFdsPage() {
         <button
           onClick={handleScan}
           disabled={scanning}
-          className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+          className="shrink-0 whitespace-nowrap px-4 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
         >
           <Radar className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
           <span>{scanning ? 'Analyst Agent 분석 중...' : '전체 스캔 실행 (룰 4종)'}</span>

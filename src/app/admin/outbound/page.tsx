@@ -415,7 +415,7 @@ export default function OutboundDashboard() {
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 font-sans text-gray-900 dark:text-gray-100 transition-colors duration-200">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-bold font-mono flex items-center gap-1">
@@ -430,11 +430,11 @@ export default function OutboundDashboard() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* 1. Navigate directly to worker outbound picking scanner app */}
           <Link 
             href="/worker/outbound"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center transition-all shadow-xs active:scale-95 cursor-pointer"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center whitespace-nowrap transition-all shadow-xs active:scale-95 cursor-pointer"
             title="현장 작업자 전용 출고 피킹 스캐너 화면으로 이동합니다"
           >
             <Camera className="w-4 h-4 mr-2" />
@@ -445,7 +445,7 @@ export default function OutboundDashboard() {
           <button 
             onClick={handleTestOrder}
             disabled={isLoading}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center whitespace-nowrap transition-all shadow-xs disabled:opacity-50 cursor-pointer"
             title="랜덤 B2B 묶음 주문을 즉시 생성하여 3D Bin Packing 규격 박스 패킹과 동적 가격 할인을 실시간 시뮬레이션합니다"
           >
             <RefreshCcw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
@@ -465,7 +465,7 @@ export default function OutboundDashboard() {
       />
 
       {/* Main Content: 3D Bin Packing & Dynamic Pricing Detail Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         
         {/* Dynamic Pricing Real Book Metadata Automatic Calculation Card */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-4">

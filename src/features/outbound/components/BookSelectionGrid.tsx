@@ -47,10 +47,10 @@ export function BookSelectionGrid({
 
               <div className="flex items-center gap-2">
                 {/* Book Type Filter Tabs (ALL / NEW / USED) */}
-                <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700 shrink-0">
                   <button
                     onClick={() => setOutboundBookTypeFilter('ALL')}
-                    className={`px-2 py-0.5 rounded font-black text-[10px] transition-all ${
+                    className={`px-2 py-0.5 rounded font-black text-[10px] whitespace-nowrap transition-all ${
                       outboundBookTypeFilter === 'ALL'
                         ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-2xs'
                         : 'text-gray-500 hover:text-gray-900'
@@ -60,7 +60,7 @@ export function BookSelectionGrid({
                   </button>
                   <button
                     onClick={() => setOutboundBookTypeFilter('NEW')}
-                    className={`px-2 py-0.5 rounded font-black text-[10px] transition-all ${
+                    className={`px-2 py-0.5 rounded font-black text-[10px] whitespace-nowrap transition-all ${
                       outboundBookTypeFilter === 'NEW'
                         ? 'bg-blue-600 text-white shadow-2xs'
                         : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50'
@@ -70,7 +70,7 @@ export function BookSelectionGrid({
                   </button>
                   <button
                     onClick={() => setOutboundBookTypeFilter('USED')}
-                    className={`px-2 py-0.5 rounded font-black text-[10px] transition-all ${
+                    className={`px-2 py-0.5 rounded font-black text-[10px] whitespace-nowrap transition-all ${
                       outboundBookTypeFilter === 'USED'
                         ? 'bg-purple-600 text-white shadow-2xs'
                         : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50'
@@ -82,17 +82,17 @@ export function BookSelectionGrid({
 
                 <button
                   onClick={handleSelectAllBooks}
-                  className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-[10px] font-bold hover:bg-indigo-100 cursor-pointer"
+                  className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded text-[10px] font-bold whitespace-nowrap hover:bg-indigo-100 cursor-pointer"
                 >
                   ✓ 전체 선택
                 </button>
                 <button
                   onClick={handleDeselectAllBooks}
-                  className="px-2 py-0.5 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded text-[10px] font-bold hover:bg-rose-100 cursor-pointer"
+                  className="px-2 py-0.5 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded text-[10px] font-bold whitespace-nowrap hover:bg-rose-100 cursor-pointer"
                 >
                   ✕ 전체 해제
                 </button>
-                <span className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-extrabold bg-indigo-50 dark:bg-indigo-950 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                <span className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-extrabold bg-indigo-50 dark:bg-indigo-950 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 whitespace-nowrap">
                   총 {totalBooksCount}권 선택됨
                 </span>
               </div>

@@ -71,7 +71,7 @@ export function BoxSelectionPanel({
           </div>
 
           {/* 8-Box Tabbed Grid with Dynamic AI Physical Bounding Box Containment Algorithm */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 2xl:grid-cols-4 gap-3">
             {(boxCategoryTab === 'slim' ? BOOK_SLIM_BOX_OPTIONS : STANDARD_COURIER_BOX_OPTIONS).map((box) => {
               // 3D Bounding Box Containment Test (W, D, H Containment Test)
               const dim = box.specs.match(/(\d+)x(\d+)x(\d+)/);
@@ -142,22 +142,22 @@ export function BoxSelectionPanel({
                     <span className="font-bold text-[11px] text-gray-900 dark:text-white truncate">{box.name}</span>
                     <div className="flex items-center gap-1 flex-wrap">
                       {isRecommendedBox && (
-                        <span className="text-[9px] font-extrabold bg-emerald-500 text-white px-1.5 py-0.5 rounded shrink-0 shadow-xs animate-pulse">추천</span>
+                        <span className="text-[9px] font-extrabold bg-emerald-500 text-white px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap shadow-xs animate-pulse">추천</span>
                       )}
                       {isWeightExceeded && (
-                        <span className="text-[9px] font-bold bg-amber-600 text-white px-1 py-0.5 rounded shrink-0">무게초과</span>
+                        <span className="text-[9px] font-bold bg-amber-600 text-white px-1 py-0.5 rounded shrink-0 whitespace-nowrap">무게초과</span>
                       )}
                       {isHeightExceeded && (
-                        <span className="text-[9px] font-bold bg-red-600 text-white px-1 py-0.5 rounded shrink-0">높이초과</span>
+                        <span className="text-[9px] font-bold bg-red-600 text-white px-1 py-0.5 rounded shrink-0 whitespace-nowrap">높이초과</span>
                       )}
                       {!isDimensionValid && (
-                        <span className="text-[9px] font-bold bg-rose-500 text-white px-1 py-0.5 rounded shrink-0">크기초과</span>
+                        <span className="text-[9px] font-bold bg-rose-500 text-white px-1 py-0.5 rounded shrink-0 whitespace-nowrap">크기초과</span>
                       )}
                     </div>
                   </div>
-                  <p className="text-[10px] font-mono text-gray-500 dark:text-gray-400 flex items-center justify-between">
-                    <span>{box.specs}</span>
-                    <span className="font-bold text-gray-600 dark:text-gray-300">최대 {box.maxWeight_kg}kg</span>
+                  <p className="text-[10px] font-mono text-gray-500 dark:text-gray-400 flex items-center justify-between gap-1">
+                    <span className="truncate">{box.specs}</span>
+                    <span className="font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap shrink-0">최대 {box.maxWeight_kg}kg</span>
                   </p>
                   <p className={`text-[11px] font-extrabold ${isPhysicallyValid ? 'text-indigo-600 dark:text-indigo-400' : 'text-red-500'}`}>
                     {isWeightExceeded 
