@@ -1,46 +1,48 @@
+# 운영 클러스터의 실물 스펙과 일치시킨 매니페스트 (2026-08-25 대조).
+# 이미지는 CI(.github/workflows/deploy.yml)가 `kubectl set image`로 교체하므로
+# 여기서는 자리표시자를 둔다 — 레지스트리 주소는 공개 레포에 싣지 않는다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: wms-frontend
-  labels:
-    app: wms-frontend
+  namespace: default
 spec:
-  replicas: 2
+  replicas: 1
+  revisionHistoryLimit: 10
   selector:
     matchLabels:
       app: wms-frontend
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+      maxSurge: 25%
+      maxUnavailable: 25%
   template:
     metadata:
       labels:
         app: wms-frontend
     spec:
+      # AI 워커와 분리된 앱 노드에 고정한다. 없으면 패치할 때마다 배치가 흐트러진다.
+      nodeSelector:
+        workload-type: app
+      # ECR 인증 시크릿. 토큰이 12시간마다 만료되어 cron으로 갱신된다.
+      imagePullSecrets:
+        - name: ecr-secret
       containers:
-      - name: wms-frontend-container
-        # Placeholder image, will be overridden by kubectl set image in CI
-        image: REPLACE_WITH_ECR_URI:latest 
-        ports:
-        - containerPort: 3000
-        resources:
-          requests:
-            cpu: "250m"
-            memory: "512Mi"
-          limits:
-            cpu: "500m"
-            memory: "1Gi"
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 3000
-          initialDelaySeconds: 15
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 3000
-          initialDelaySeconds: 5
-          periodSeconds: 10
+        # 컨테이너 이름은 CI의 `set image deployment/wms-frontend frontend=...`가
+        # 지정하는 대상이다. 바꾸면 배포가 실패한다.
+        - name: frontend
+          image: REPLACE_WITH_ECR_URI:latest
+          imagePullPolicy: Always
+          env:
+            - name: NEXT_PUBLIC_API_URL
+              value: https://nexus-wms.p-e.kr
+          ports:
+            - containerPort: 3000
+          # limits는 두지 않는다(실물 기준). requests만으로 노드 예약을 잡는다.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          # 실물에는 liveness/readiness probe가 없다. 도입하려면 클러스터에도 함께
+          # 적용해야 이 파일과 실물이 다시 어긋나지 않는다.

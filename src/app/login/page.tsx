@@ -1,10 +1,10 @@
 'use client';
 
+import Image from "next/image";
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useSetAtom } from 'jotai';
-import { Button } from '@/components/ui/button';
-import { CURRENT_USER_STORAGE_KEY, currentUserAtom } from '@/features/auth/store/authAtoms';
+import { Button } from '@/shared/ui/button';
+import { CURRENT_USER_STORAGE_KEY, currentUserAtom } from '@/entities/user/model/authAtoms';
 import { login } from '@/features/auth/api/authService';
 import LoginFailureAlert from '@/features/auth/components/LoginFailureAlert';
 import PasswordResetGuideModal from '@/features/auth/components/PasswordResetGuideModal';
@@ -26,7 +26,6 @@ export default function LoginPage() {
   const [failure, setFailure] = useState<LoginFailure | null>(null);
   const [resetGuideOpen, setResetGuideOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const setCurrentUser = useSetAtom(currentUserAtom);
 
   // 로그인 페이지 진입 시 기존 세션 표시 정보 초기화 (레거시 stores/auth.ts 잔재 포함)
@@ -80,14 +79,14 @@ export default function LoginPage() {
           : '/admin/dashboard';
       window.location.href = next;
 
-    } catch (err: any) {
+    } catch (err) {
       // [수정 이력] 종전에는 모든 실패를 문구 하나로 뭉개, 시도 제한(429)조차
       // "비밀번호가 올바르지 않습니다"로 표시됐다. 이제 백엔드 error_code를 근거로
       // 사유를 특정해 알림창과 인라인 배너에 함께 노출한다.
       const resolved = resolveLoginFailure(err);
       console.error(`[Login Failed] ${resolved.code}`, {
         status: resolved.status,
-        body: err?.response?.data,
+        body: (err as { response?: { data?: unknown } })?.response?.data,
       });
       setFailure(resolved);
       setError(resolved.message);
@@ -120,9 +119,10 @@ export default function LoginPage() {
           {/* Giant Light Mode Emblem Showcase */}
           <div className="relative group">
             <div className="absolute -inset-1.5 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-3xl blur-xl opacity-30 group-hover:opacity-60 transition duration-500"></div>
-            <img 
+            <Image 
               src="/nexus_hero_light_emblem.jpg" 
               alt="Bright Giant Nexus Hero Emblem" 
+              width={1024} height={1024} priority
               className="relative w-64 sm:w-80 md:w-96 lg:w-[420px] h-auto rounded-3xl border-2 border-blue-200 shadow-xl object-cover hover:scale-105 transition-transform duration-300 bg-white"
             />
           </div>

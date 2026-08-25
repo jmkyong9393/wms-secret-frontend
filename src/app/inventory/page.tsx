@@ -6,8 +6,8 @@
  * 단일 /inventory 로 수렴. URL은 리소스만 가리키고 권한은 세션 role이 표현한다.
  */
 
-import { InventoryDataTable } from '@/features/stock/components/InventoryDataTable';
-import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
+import { InventoryDataTable } from '@/widgets/inventory-table/ui/InventoryDataTable';
+import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 
 export default function InventoryPage() {
   const { user, hydrated } = useHydratedUser();

@@ -1,22 +1,26 @@
 'use client';
-import { API_BASE_URL } from '@/lib/api-client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AgentLogs, CertificateDoc, RawBBox } from '@/entities/inspection/model/types';
+import { API_BASE_URL } from '@/shared/api/api-client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import Link from 'next/link';
-import { ArrowLeft, Printer, ShieldCheck, MapPin, Tag, UserCheck, Package, ExternalLink, Bot, Image as ImageIcon, AlertTriangle, Eye, EyeOff, ScanSearch, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Printer, ShieldCheck, MapPin, Tag, UserCheck, Package, ExternalLink, Bot, Image as ImageIcon, AlertTriangle, RotateCcw } from 'lucide-react';
 
-import BookCover from '@/components/BookCover';
-import { LpnPrintLabel, LpnLabelData } from '@/features/inbound/components/LpnPrintLabel';
-import { labelsAPI, adminAPI } from '@/lib/api';
+import BookCover from '@/entities/book/ui/BookCover';
+import { InspectionEvidenceViewer } from '@/entities/inspection/ui/InspectionEvidenceViewer';
+import { PipelineTracePanel } from '@/entities/inspection/ui/PipelineTracePanel';
+import { LpnPrintModal } from '@/entities/label/ui/LpnPrintModal';
+import type { LpnPrintData } from '@/entities/label/model/types';
+import { adminAPI } from '@/features/hitl/api/adminApi';
 import {
   resolveInspectionImages,
   resolveDefectCoordinates,
-  bboxToPercent,
   resolveExcludedDefectCoordinates,
   type PerImageDefectCoordinate,
-} from '@/features/inspection/utils/inspectionImageService';
+} from '@/entities/inspection/api/inspectionImageService';
 
 interface InspectorInfo {
   inspection_source: string;
@@ -47,9 +51,9 @@ interface InventoryDetailData {
   inspector?: InspectorInfo;
   date: string;
   image_urls?: string[];
-  agent_logs?: any;
+  agent_logs?: AgentLogs | null;
   final_report?: string | null;
-  certificate?: any;
+  certificate?: CertificateDoc | null;
   /** 백엔드 orders/pricing.py가 산정한 가격 내역 (프론트는 렌더만) */
   pricing?: {
     list_price: number;
@@ -67,66 +71,39 @@ interface InventoryDetailData {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || `${API_BASE_URL}`;
 
-/**
- * LangGraph 파이프라인 노드 표시 정의. executed_agents에 없으면 SKIPPED로 렌더한다.
- *
- * Detector(YOLO) ➔ Vision(GPT-4o) ➔ Policy ➔ Critic ➔ Supervisor ➔ Report
- * (MINT Fast-track 분기와 Auto-Refund 노드는 구조 개편으로 제거됨 -
- *  검증을 건너뛰고 자동 매입이 확정되던 경로였다. 이제 전 건이 동일 경로를 통과한다.)
- */
-const PIPELINE_STEPS = [
-  { node: 'detector_node', label: 'Detector (YOLO)', icon: '🔬', logKey: 'detector_text', tone: 'text-gray-700 dark:text-gray-300' },
-  { node: 'vision_agent', label: 'Vision Agent', icon: '👁️', logKey: 'vision_text', tone: 'text-gray-700 dark:text-gray-300' },
-  { node: 'policy_agent', label: 'Policy Agent', icon: '📜', logKey: 'policy_text', tone: 'text-amber-700 dark:text-amber-300' },
-  { node: 'critic_agent', label: 'Critic Agent', icon: '🛡️', logKey: 'critic_text', tone: 'text-emerald-700 dark:text-emerald-400' },
-  { node: 'supervisor', label: 'Supervisor', icon: '🧭', logKey: 'supervisor_rationale', tone: 'text-sky-700 dark:text-sky-300' },
-  { node: 'report_agent', label: 'Report Agent', icon: '💬', logKey: 'report_text', tone: 'text-emerald-700 dark:text-emerald-400' },
-] as const;
 
 export default function InventoryDetailPage() {
   const params = useParams();
   const router = useRouter();
   const inventoryId = params?.id as string;
 
-  const [data, setData] = useState<InventoryDetailData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activePrintData, setActivePrintData] = useState<LpnLabelData | null>(null);
-  const [isPrinting, setIsPrinting] = useState<boolean>(false);
-  const [selectedImgIdx, setSelectedImgIdx] = useState<number>(0);
+  const [activePrintData, setActivePrintData] = useState<LpnPrintData | null>(null);
   const [isReinspecting, setIsReinspecting] = useState<boolean>(false);
   // HITL 회수. 되돌리기는 판매 가능 재고에서 빼는 동작이라 확인 절차를 거친다.
   const [recallOpen, setRecallOpen] = useState<boolean>(false);
   const [recallReason, setRecallReason] = useState<string>('');
   const [isRecalling, setIsRecalling] = useState<boolean>(false);
-  // AI 판독 오버레이 표시 여부. Vision 확정 결함과 YOLO 사전탐지 후보를 각각 껐다 켤 수 있다
-  // (원본 사진 그대로도 봐야 하고, AI가 무엇을 기각했는지도 대조해야 하므로 분리한다).
-  const [showVisionBoxes, setShowVisionBoxes] = useState<boolean>(true);
-  const [showYoloBoxes, setShowYoloBoxes] = useState<boolean>(false);
 
-  const fetchDetail = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  // [수정 이력] 예전에는 조회 실패 시 SQL 수험서 목업 데이터를 대신 렌더했다.
+  // 실패를 성공처럼 보여줘 어떤 재고를 보고 있는지 알 수 없었으므로 에러를 그대로 표시한다.
+  // 마운트 fetch 이펙트 대신 useQuery - 로딩·에러·재조회를 쿼리가 담당한다 (재시도 없음).
+  const queryClient = useQueryClient();
+  const { data: queryData, isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: ['inventory-detail', inventoryId],
+    enabled: !!inventoryId,
+    retry: false,
+    queryFn: async (): Promise<InventoryDetailData> => {
       const res = await fetch(`${API_BASE}/api/v1/inventory/${inventoryId}`);
       if (res.status === 404) throw new Error('해당 재고를 찾을 수 없습니다.');
       if (!res.ok) throw new Error('재고 상세 정보를 불러오는데 실패했습니다.');
-      setData(await res.json());
-    } catch (err: any) {
-      // [수정 이력] 예전에는 조회 실패 시 SQL 수험서 목업 데이터를 대신 렌더했다.
-      // 실패를 성공처럼 보여줘 어떤 재고를 보고 있는지 알 수 없었으므로 에러를 그대로 표시한다.
-      console.error(err);
-      setError(err?.message || '알 수 없는 오류가 발생했습니다.');
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [inventoryId]);
-
-  useEffect(() => {
-    if (!inventoryId) return;
-    fetchDetail();
-  }, [inventoryId, fetchDetail]);
+      return res.json();
+    },
+  });
+  const data = queryData ?? null;
+  const error = queryError ? (queryError instanceof Error ? queryError.message : '알 수 없는 오류가 발생했습니다.') : null;
+  const fetchDetail = React.useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   const handleReinspect = async () => {
     if (!data) return;
@@ -156,7 +133,7 @@ export default function InventoryDetailPage() {
         if (!poll.ok) continue;
         const fresh: InventoryDetailData = await poll.json();
         if (stampOf(fresh) !== before) {
-          setData(fresh);
+          queryClient.setQueryData(['inventory-detail', inventoryId], fresh);
           done = true;
           break;
         }
@@ -166,8 +143,8 @@ export default function InventoryDetailPage() {
       } else {
         alert('재검수가 아직 진행 중입니다. 큐 등록은 완료됐으니 잠시 후 새로고침으로 확인해 주세요.');
       }
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
     } finally {
       setIsReinspecting(false);
     }
@@ -183,8 +160,9 @@ export default function InventoryDetailPage() {
       setRecallReason('');
       await fetchDetail();
       alert(res.message);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || err?.message || 'HITL 회수에 실패했습니다.');
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      alert(e?.response?.data?.message || e?.message || 'HITL 회수에 실패했습니다.');
     } finally {
       setIsRecalling(false);
     }
@@ -238,13 +216,7 @@ export default function InventoryDetailPage() {
   const excludedCoords: PerImageDefectCoordinate[] = resolveExcludedDefectCoordinates(data);
   const excludedCount = excludedCoords.reduce((n, c) => n + c.bboxes.length, 0);
   const logs = data.agent_logs || {};
-  const executedAgents: string[] = logs.executed_agents || [];
   const totalDefects = defectCoords.reduce((n, c) => n + c.bboxes.length, 0);
-  const currentCoords = defectCoords.find((c) => c.image_index === selectedImgIdx);
-  const currentBBoxes = currentCoords?.bboxes || [];
-  // 오탐 제외분(AI 증거검증·HITL)은 확정과 분리해 회색 점선으로만 그린다.
-  const currentExcludedBBoxes =
-    excludedCoords.find((c) => c.image_index === selectedImgIdx)?.bboxes || [];
 
   // WBF 3-YOLO 앙상블 사전탐지 후보. Vision이 채택하지 않은 것도 그대로 남아 있어,
   // 검수자가 "AI가 무엇을 보고 무엇을 기각했는지"까지 대조할 수 있다.
@@ -254,29 +226,7 @@ export default function InventoryDetailPage() {
     ? logs.invalid_image_indexes.map(Number)
     : [];
 
-  const yoloCandidates: any[] = Array.isArray(logs.yolo_candidates) ? logs.yolo_candidates : [];
-  const currentYoloBoxes = yoloCandidates
-    .filter((c) => Number(c?.image_index ?? 0) === selectedImgIdx && c?.bbox)
-    .map((c) => ({
-      xmin: c.bbox.xmin,
-      ymin: c.bbox.ymin,
-      xmax: c.bbox.xmax,
-      ymax: c.bbox.ymax,
-      coord_space: 1000,
-      type: c.type,
-      label: c.type || 'YOLO 후보',
-      confidence: c.confidence,
-    }));
-  const inspectionTime = data.date ? data.date.split(' ')[1] : 'KST';
-  // 타임라인 전 행이 검수 시각 하나로 찍히던 문제 - HITL 결재로 뒤늦게
-  // 생성되는 Report Agent 행은 결재 시점(agent_logs.report_generated_at)을 별도 표시한다.
-  // 재검수로 HITL에 재이관되면 이전 결재의 report_generated_at이 로그에 남아 있을 수 있으므로,
-  // Report Agent가 실제 실행된 경우에만 결재 시각을 쓴다 (미실행 행은 검수 시각 유지).
-  const reportGeneratedAt: string | null = logs.report_generated_at || null;
-  const stepTime = (node: string) =>
-    node === 'report_agent' && reportGeneratedAt && executedAgents.includes('report_agent')
-      ? reportGeneratedAt.split(' ')[1] || reportGeneratedAt
-      : inspectionTime;
+  const yoloCandidates: RawBBox[] = Array.isArray(logs.yolo_candidates) ? logs.yolo_candidates : [];
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6 font-sans bg-gray-50 dark:bg-gray-950 min-h-dvh text-gray-900 dark:text-gray-100 transition-colors">
@@ -565,412 +515,26 @@ export default function InventoryDetailPage() {
                 </div>
               ) : (
                 <>
-                  {/* AI 판독 오버레이 on/off (HITL 모달의 "AI 결함 영역 숨기기"와 동일 개념) */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setShowVisionBoxes((v) => !v)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                        showVisionBoxes
-                          ? 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
-                          : 'bg-gray-50 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700'
-                      }`}
-                      title="UBCI 감점에 실제로 반영된 확정 결함. AI 증거 대조 검증·HITL 관리자가 오탐으로 제외한 건은 빠져 있다."
-                    >
-                      {showVisionBoxes ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      {showVisionBoxes ? '확정 결함 숨기기' : '확정 결함 표시'} ({totalDefects}건)
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowYoloBoxes((v) => !v)}
-                      disabled={yoloCandidates.length === 0}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
-                        yoloCandidates.length === 0
-                          ? 'bg-gray-50 dark:bg-gray-800/50 text-gray-300 dark:text-gray-600 border-gray-200 dark:border-gray-800 cursor-not-allowed'
-                          : showYoloBoxes
-                          ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 cursor-pointer'
-                          : 'bg-gray-50 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700 cursor-pointer'
-                      }`}
-                      title="WBF 3-YOLO 앙상블 사전탐지 후보 (Vision이 채택하지 않은 것 포함)"
-                    >
-                      <ScanSearch className="w-3.5 h-3.5" />
-                      YOLO 사전탐지 후보 ({yoloCandidates.length}건)
-                    </button>
-
-                    {showYoloBoxes && yoloCandidates.length > 0 && totalDefects === 0 && (
-                      <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
-                        YOLO가 {yoloCandidates.length}건을 잡았으나 Vision이 전부 기각했습니다 (인쇄물 오탐 가능성).
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Thumbnail Bar - 라벨은 결함 유무에 따라 실제 데이터로 생성한다 */}
-                  <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                    {images.map((imgUrl, idx) => {
-                      const coords = defectCoords.find((c) => c.image_index === idx);
-                      const defectCnt = coords?.bboxes.length || 0;
-                      const isSelected = selectedImgIdx === idx;
-                      // Vision Agent가 "도서가 식별되지 않는 컷"으로 판정한 이미지.
-                      // 이 구분이 없으면 작업자 얼굴만 찍힌 사진도 "정상(결함 0건)"으로 보인다.
-                      const isInvalid = invalidImageIndexes.includes(idx);
-                      return (
-                        <button
-                          key={idx}
-                          onClick={() => setSelectedImgIdx(idx)}
-                          className={`flex flex-col items-center p-1.5 rounded-xl border text-[11px] font-bold transition-all shrink-0 min-w-[95px] cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-600 text-indigo-700 dark:text-indigo-300 shadow-xs ring-2 ring-indigo-500/20'
-                              : isInvalid
-                              ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300'
-                              : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          <img
-                            src={imgUrl}
-                            alt={`검수 이미지 ${idx}`}
-                            className={`w-16 h-20 object-cover rounded-lg mb-1 border border-gray-200 dark:border-gray-700 bg-gray-200 ${
-                              isInvalid ? 'opacity-60' : ''
-                            }`}
-                          />
-                          <span className="truncate max-w-[90px]">
-                            {/* "정상"은 도서 상태 보증처럼 읽혀 "결함 미검출"로 표기 */}
-                            #{idx} {isInvalid ? '👤 도서 미식별' : defectCnt > 0 ? `결함 ${defectCnt}` : '결함 미검출'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* BBox Display */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start pt-2">
-                    <div className="md:col-span-2 relative bg-gray-900 rounded-xl overflow-hidden shadow-inner border border-gray-800 flex justify-center items-center p-2 min-h-[480px]">
-                      <div className="relative inline-block max-w-full rounded-lg overflow-hidden border border-gray-800 shadow-2xl">
-                        <img
-                          src={images[selectedImgIdx] || images[0]}
-                          alt={`검수 이미지 ${selectedImgIdx}`}
-                          className="max-h-[520px] w-auto object-contain block"
-                        />
-
-                        {/* YOLO 사전탐지 후보 - 주황 점선 (Vision 확정보다 아래 레이어) */}
-                        {showYoloBoxes &&
-                          currentYoloBoxes.map((box, i) => {
-                            const { left, top, width, height } = bboxToPercent(box);
-                            // 라벨이 무조건 박스 바깥(-bottom-6/-top-6)에 그려져
-                            // 이미지 가장자리 결함은 overflow-hidden 컨테이너에 잘려 안 보였다.
-                            // 가장자리 근처(세로 8% 이내)면 박스 안쪽으로, 우측 절반이면 오른쪽
-                            // 앵커로 뒤집어 라벨이 항상 이미지 프레임 안에 있게 한다.
-                            const yoloLabelPos = top + height > 92 ? 'bottom-1' : '-bottom-6';
-                            const yoloLabelAnchor = left > 50 ? 'right-0' : 'left-0';
-                            return (
-                              <div
-                                key={`y-${i}`}
-                                className="absolute border-2 border-dashed border-amber-400 bg-amber-400/10 rounded z-10 group"
-                                style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
-                              >
-                                <span className={`absolute ${yoloLabelPos} ${yoloLabelAnchor} bg-amber-500 text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-30`}>
-                                  YOLO 후보: {box.type}
-                                  {box.confidence ? ` (${Math.round(box.confidence * 100)}%)` : ''}
-                                </span>
-                              </div>
-                            );
-                          })}
-
-                        {/* 오탐 제외 - 회색 점선. AI 증거 대조 검증(또는 HITL 관리자)이
-                            "감점 반영 안 함"으로 걷어낸 박스. 규정상 목록에서 지우지 않고
-                            표식만 남기므로, 확정(빨강)과 반드시 구분해 그린다. */}
-                        {showVisionBoxes &&
-                          currentExcludedBBoxes.map((box, i) => {
-                            const { left, top, width, height } = bboxToPercent(box);
-                            const exLabelPos = top < 8 ? 'top-1' : '-top-6';
-                            const exLabelAnchor = left > 50 ? 'right-0' : 'left-0';
-                            return (
-                              <div
-                                key={`ex-${i}`}
-                                className="absolute border-2 border-dashed border-gray-400 bg-gray-400/10 rounded z-10 group"
-                                style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
-                              >
-                                <span className={`absolute ${exLabelPos} ${exLabelAnchor} bg-gray-500 text-white text-[10px] px-2 py-0.5 font-bold rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-30`}>
-                                  오탐 제외: {box.label} (감점 미반영)
-                                </span>
-                              </div>
-                            );
-                          })}
-
-                        {/*
-                          Vision 확정 결함 - 빨강 실선.
-                          [수정 이력] 예전에는 좌표계를 값 크기로 추측(xmin>1이면 1000, ...)했고,
-                          BBox 데이터가 없으면 하드코딩된 가짜 좌표를 그렸다. 이제 백엔드가
-                          coord_space를 명시해 내려주며, 데이터가 없으면 아무것도 그리지 않는다.
-                        */}
-                        {showVisionBoxes &&
-                          currentBBoxes.map((box, bIdx) => {
-                            const { left, top, width, height } = bboxToPercent(box);
-                            // 상단 8% 이내 박스는 라벨을 박스 안쪽(top-1)으로 내려 잘림 방지
-                            const visionLabelPos = top < 8 ? 'top-1' : '-top-6';
-                            const visionLabelAnchor = left > 50 ? 'right-0' : 'left-0';
-                            return (
-                              <div
-                                key={bIdx}
-                                className="absolute border-2 border-red-500 bg-red-500/25 rounded shadow-lg z-20"
-                                style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
-                              >
-                                <span className={`absolute ${visionLabelPos} ${visionLabelAnchor} bg-red-600 text-white text-[10px] px-2 py-0.5 font-extrabold rounded shadow-md whitespace-nowrap z-30`}>
-                                  {box.label}
-                                  {box.deduction ? ` -${box.deduction}점` : ''}
-                                  {box.confidence ? ` (${Math.round(box.confidence * 100)}%)` : ''}
-                                </span>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    </div>
-
-                    {/* Defect Metadata Panel - 인덱스 하드코딩이 아니라 실제 결함 데이터 기반 */}
-                    <div className="space-y-3 bg-gray-50 dark:bg-gray-800/60 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
-                      <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide flex items-center justify-between">
-                        <span>선택한 이미지 결함 분석</span>
-                        <span className="text-[10px] font-mono bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-700 dark:text-gray-300">
-                          Image #{selectedImgIdx}
-                        </span>
-                      </h4>
-
-                      {invalidImageIndexes.includes(selectedImgIdx) ? (
-                        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 rounded-lg text-xs space-y-1">
-                          <p className="font-bold">[INVALID] 도서가 식별되지 않는 촬영 컷</p>
-                          <p className="text-[11px] leading-relaxed">
-                            결함이 없어서가 아니라 이 사진에서 도서를 찾지 못했습니다. 재촬영이 필요할 수 있습니다.
-                          </p>
-                        </div>
-                      ) : currentBBoxes.length === 0 ? (
-                        currentExcludedBBoxes.length > 0 ? (
-                          <div className="p-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg text-xs space-y-1">
-                            <p className="font-bold">확정 결함 없음 — 오탐 제외 {currentExcludedBBoxes.length}건</p>
-                            <p className="text-[11px] leading-relaxed">
-                              AI가 1차 보고한 결함이 증거 대조 검증에서 오탐으로 지목되어 감점에 반영되지 않았습니다.
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded-lg text-xs font-bold">
-                            [CLEAN] 이 이미지에서 검출된 결함 없음
-                          </div>
-                        )
-                      ) : (
-                        <div className="space-y-2 text-xs">
-                          <div className="p-2.5 bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-300 border border-red-200 dark:border-red-900 rounded-lg">
-                            <p className="font-bold">[DEFECT_DETECTED] 결함 {currentBBoxes.length}건 검출</p>
-                          </div>
-                          {currentBBoxes.map((box, i) => (
-                            <div key={i} className="p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg space-y-1">
-                              <p className="text-gray-900 dark:text-white font-bold">{box.label}</p>
-                              <p className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">
-                                {box.type}
-                                {box.deduction ? ` · -${box.deduction}점` : ''}
-                                {box.confidence ? ` · conf ${box.confidence.toFixed(2)}` : ''}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {showYoloBoxes && currentYoloBoxes.length > 0 && (
-                        <div className="space-y-1.5 pt-1">
-                          <p className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
-                            YOLO 후보 {currentYoloBoxes.length}건 (미채택 포함)
-                          </p>
-                          {currentYoloBoxes.map((box, i) => (
-                            <div key={i} className="text-[11px] text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded px-2 py-1 font-mono">
-                              {box.type}
-                              {box.confidence ? ` · ${Math.round(box.confidence * 100)}%` : ''}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {logs.special_notes && (
-                        <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg text-[11px] text-amber-900 dark:text-amber-200">
-                          <span className="font-bold">특이사항: </span>
-                          {logs.special_notes}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <InspectionEvidenceViewer
+                    images={images}
+                    defectCoords={defectCoords}
+                    excludedCoords={excludedCoords}
+                    yoloCandidates={yoloCandidates}
+                    invalidImageIndexes={invalidImageIndexes}
+                    totalDefects={totalDefects}
+                    specialNotes={logs.special_notes}
+                  />
                 </>
               )}
             </div>
 
-            {/*
-              Multi-Agent Pipeline Trace
-              페이지에서 이 섹션만 다크 터미널(bg-gray-950) 고정이라
-              라이트 모드에서 붕 떠 보였다. 주변과 동일한 화이트 카드 + dark: 변형으로 통일.
-            */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-4 transition-colors">
-              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3 gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-purple-50 dark:bg-purple-950 rounded-lg text-purple-600 dark:text-purple-400">
-                    <Bot className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
-                      LangGraph Multi-Agent 파이프라인 진단 기록
-                      {/*
-                        [수정 이력] 예전에는 DB에 없는 값을 프론트에서 지어내면서
-                        "PostgreSQL DB Verified" 뱃지를 붙였다. 실제로 DB에 Agent 서술이
-                        저장된 경우에만 검증 뱃지를 표시한다.
-                      */}
-                      {executedAgents.length > 0 ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                          PostgreSQL DB Verified
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                          로그 미기록 (재검수 필요)
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Detector(YOLO) ➔ Vision(GPT-4o) ➔ Policy ➔ Critic ➔ Supervisor ➔ Report
-                      {(logs.retry_count ?? 0) > 0 && (
-                        <span className="text-amber-600 dark:text-amber-400 font-bold"> · 재검수 {logs.retry_count}회</span>
-                      )}
-                      {logs.auto_refund_eligible && (
-                        <span className="text-emerald-600 dark:text-emerald-400 font-bold"> · ⚡ MINT 자동 매입 승인</span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {executedAgents.length === 0 ? (
-                <div className="bg-amber-50/60 dark:bg-amber-950/40 p-4 rounded-xl border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
-                  이 건에는 저장된 Agent 실행 기록이 없습니다. 파이프라인 로그 영속화 이전에 검수된
-                  건이므로, 상단의 <span className="text-rose-600 dark:text-rose-300 font-bold">AI 재검수 요청</span>을 실행하면
-                  각 Agent의 실제 판정 근거가 DB에 기록됩니다.
-                </div>
-              ) : (
-                <div className="bg-gray-50/70 dark:bg-gray-800/60 p-4 rounded-xl text-xs space-y-2.5 border border-gray-200 dark:border-gray-700">
-                  {PIPELINE_STEPS.map((step) => {
-                    const ran = executedAgents.includes(step.node);
-                    const text = ran ? logs[step.logKey] : null;
-                    // [2026-08-06 모바일 대응] 종전에는 시각(min-w-65px) + 노드명(min-w-150px) +
-                    // 서술을 한 줄 flex로 배치했다. 좁은 화면에서는 앞 두 칸이 215px를 먼저
-                    // 점유해 서술 칸이 한 글자 폭까지 짜부라졌고, 긴 한국어 문장이 세로로
-                    // 한 자씩 흘러내렸다(실측). 모바일은 세로 스택, sm 이상에서만 가로 정렬한다.
-                    // min-w-0을 주지 않으면 flex 자식이 콘텐츠 최소폭 아래로 줄지 않아 여전히 넘친다.
-                    return (
-                      <div key={step.node} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 py-1.5 border-b border-gray-200/70 dark:border-gray-700/60 last:border-0">
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-gray-400 dark:text-gray-500 font-mono text-[11px] sm:min-w-[65px]">[{stepTime(step.node)}]</span>
-                          <span className={`font-bold sm:min-w-[150px] ${ran ? 'text-purple-700 dark:text-purple-400' : 'text-gray-400 dark:text-gray-600'}`}>
-                            {step.label} {step.icon}
-                          </span>
-                        </div>
-                        {ran ? (
-                          <span className={`leading-relaxed min-w-0 break-words ${step.tone}`}>{text || '(서술 미기록)'}</span>
-                        ) : (
-                          // HITL로 조기 종료된 건은 Report Agent에 도달하지 않는다.
-                          <span className="text-gray-400 dark:text-gray-600 italic min-w-0 break-words">
-                            미실행 — 이 건은 해당 단계에 도달하지 않았습니다 (HITL 이관 또는 조기 종료)
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/*
-                [2026-08-09 신설] 1차 파이프라인 판독과 HITL 재검증을 같은 타임라인에 섞으면
-                안 된다 - policy_text를 재산정 결과로 덮어쓰면 1차 판독 근거가 사라진다.
-                logs.hitl_revalidation은 별도 필드라 여기 독립 섹션으로만 존재하며,
-                BBox 편집이 있었던 건에만 생긴다(편집 없는 단순 승인은 재검증 자체가 없음).
-              */}
-              {logs.hitl_revalidation && (
-                <div className="bg-sky-50/70 dark:bg-sky-950/30 p-4 rounded-xl text-xs space-y-2.5 border border-sky-200 dark:border-sky-800">
-                  <div className="flex items-center gap-2 font-bold text-sky-800 dark:text-sky-300">
-                    <span>🧑‍⚖️ HITL 재검증 (BBox 편집 후 2차)</span>
-                    <span className="font-mono text-[10px] text-sky-600 dark:text-sky-400">
-                      {logs.hitl_revalidation.revalidated_at?.split('T')[1]?.slice(0, 8) || ''} · {logs.hitl_revalidation.revalidated_by}
-                    </span>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 py-1 border-b border-sky-200/70 dark:border-sky-800/60">
-                    <span className="font-bold sm:min-w-[150px] text-amber-700 dark:text-amber-300">Policy Agent 📜</span>
-                    <span className="leading-relaxed min-w-0 break-words text-amber-700 dark:text-amber-300">
-                      {logs.hitl_revalidation.policy_text
-                        ? `${logs.hitl_revalidation.policy_text} (재산정 ${logs.hitl_revalidation.policy_score}점)`
-                        : logs.hitl_revalidation.policy_error
-                          ? `재산정 실패: ${logs.hitl_revalidation.policy_error}`
-                          : '(서술 미기록)'}
-                    </span>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 py-1">
-                    <span className="font-bold sm:min-w-[150px] text-emerald-700 dark:text-emerald-400">Critic Stage A 🛡️</span>
-                    {logs.hitl_revalidation.critic_stage_a_passed === true ? (
-                      <span className="leading-relaxed min-w-0 break-words text-emerald-700 dark:text-emerald-400">
-                        정합성 대조 통과 - 결함 수·감점·BBox·image_index 모순 없음
-                      </span>
-                    ) : logs.hitl_revalidation.critic_stage_a_passed === false ? (
-                      <span className="leading-relaxed min-w-0 break-words text-rose-700 dark:text-rose-400">
-                        정합성 위반 감지: {(logs.hitl_revalidation.critic_stage_a_issues || []).join(' / ')}
-                      </span>
-                    ) : (
-                      <span className="leading-relaxed min-w-0 break-words text-gray-500 dark:text-gray-400">
-                        재검증 실패: {logs.hitl_revalidation.critic_stage_a_error}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <PipelineTracePanel logs={logs} inspectionDate={data.date} />
           </>
         )}
       </div>
 
-      {/* LPN Print Label Modal — 실제 인쇄는 백엔드 /labels/print를 거쳐 LAN 라벨 프린터로 직접 전송된다 */}
-      {activePrintData && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-xl space-y-4 border border-transparent dark:border-gray-800">
-            <LpnPrintLabel data={activePrintData} />
-            <div className="flex items-center gap-2">
-              <button
-                onClick={async () => {
-                  if (!activePrintData) return;
-                  setIsPrinting(true);
-                  try {
-                    const result = await labelsAPI.printLpn(
-                      activePrintData.lpn_barcode,
-                      activePrintData.book.title,
-                      activePrintData.book.isbn,
-                      activePrintData.worker_id
-                    );
-                    if (result.skipped) {
-                      alert('라벨 프린터가 비활성화되어 있습니다 (LABEL_PRINTER_ENABLED).');
-                    } else if (!result.sent && !result.queued) {
-                      alert('라벨 전송에 실패했습니다.');
-                    }
-                  } catch (e) {
-                    console.error(e);
-                    alert('라벨 프린터 통신 중 오류가 발생했습니다. 프린터 전원/LAN 연결을 확인해주세요.');
-                  } finally {
-                    setIsPrinting(false);
-                  }
-                }}
-                disabled={isPrinting}
-                className="flex-1 flex items-center justify-center py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold rounded-xl text-xs cursor-pointer"
-              >
-                <Printer className="w-4 h-4 mr-1.5" />
-                {isPrinting ? '전송 중...' : '라벨 프린터로 인쇄'}
-              </button>
-              <button
-                onClick={() => setActivePrintData(null)}
-                className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold rounded-xl text-xs cursor-pointer"
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* LPN 라벨 인쇄 - 목록 화면들과 동일한 공용 모달 재사용 */}
+      <LpnPrintModal data={activePrintData} onClose={() => setActivePrintData(null)} />
 
       {/* HITL 회수 확인. 판매 가능 재고에서 빠지는 동작이라 한 번 더 묻는다. */}
       {recallOpen && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useHydratedUser } from "@/features/auth/hooks/useHydratedUser";
+import { useHydratedUser } from "@/entities/user/model/useHydratedUser";
 import { useBoardPostQuery } from "@/features/board/hooks/useBoardPostQuery";
 import {
   useCreateBoardPostMutation,

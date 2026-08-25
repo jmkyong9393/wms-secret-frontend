@@ -1,4 +1,4 @@
-import HistoryDataGrid from "@/features/queue/components/HistoryDataGrid";
+import HistoryDataGrid from "@/features/inbound/components/HistoryDataGrid";
 
 export default function QueuePage() {
   return (

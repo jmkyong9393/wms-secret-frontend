@@ -2,17 +2,17 @@
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { maskName } from "@/lib/privacy-mask";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
+import { maskName } from "@/shared/lib/privacy-mask";
+import { Switch } from "@/shared/ui/switch";
+import { Button } from "@/shared/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import type { CurrentUser, UserStatus } from "@/features/auth/types/authTypes";
+} from "@/shared/ui/select";
+import type { CurrentUser, UserStatus } from "@/entities/user/model/types";
 import type { EmployeeListItem, AssignableRole } from "@/features/employees/types/employee";
 import { canManageEmployees, getAssignableRoles } from "@/features/employees/utils/permissions";
 import {
@@ -73,7 +73,7 @@ export function EmployeeTable({ employees, currentUser }: EmployeeTableProps) {
     } else if (pendingAction.type === "delete") {
       deleteMutation.mutate(pendingAction.employeeId, {
         onSuccess: () => setPendingAction(null),
-        onError: (error: any) => {
+        onError: (error: Error) => {
           alert(error.message || "삭제에 실패했습니다.");
           setPendingAction(null);
         },

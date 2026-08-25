@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import MainLayout from '@/components/layout/MainLayout';
-import WorkerMobileShell from '@/components/layout/WorkerMobileShell';
+import MainLayout from '@/widgets/layout/MainLayout';
+import WorkerMobileShell from '@/widgets/layout/WorkerMobileShell';
 
 /**
  * LPN 내부 조회 — 역할 적응형 레이아웃.

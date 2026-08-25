@@ -1,8 +1,10 @@
 "use client";
-import { API_BASE_URL } from '@/lib/api-client';
+import { useQuery } from '@tanstack/react-query';
+import type { OutboundBook } from '@/features/outbound/model/types';
+import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import MasterPagination from '@/components/common/MasterPagination';
+import MasterPagination from '@/shared/ui/MasterPagination';
 import Link from 'next/link';
 import {
   ShoppingCart,
@@ -69,14 +71,12 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
 };
 
 export default function OrdersPickingPage() {
-  const [instructions, setInstructions] = useState<PickingInstruction[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // 수동 주문 생성 패널 상태
   const [showManualPanel, setShowManualPanel] = useState<boolean>(false);
-  const [availableBooks, setAvailableBooks] = useState<any[]>([]);
+  const [availableBooks, setAvailableBooks] = useState<OutboundBook[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [cart, setCart] = useState<Record<string, number>>({}); // id -> qty
   const [customerName, setCustomerName] = useState<string>('교보문고 B2B 지점');
@@ -86,19 +86,19 @@ export default function OrdersPickingPage() {
   const [insPage, setInsPage] = useState<number>(1);
   const [insPageSize, setInsPageSize] = useState<number>(10);
 
-  const fetchInstructions = useCallback(async () => {
-    try {
-      setIsLoading(true);
+  // 마운트 fetch 이펙트 대신 useQuery. 재조회 중에도 로딩 표시가 필요해 isFetching을 쓴다.
+  const { data: instructions = [], isFetching: isLoading, refetch } = useQuery({
+    queryKey: ['admin-picking-instructions'],
+    retry: false,
+    queryFn: async (): Promise<PickingInstruction[]> => {
       const res = await fetch(`${API_BASE}/orders/picking-instructions?limit=30`, { cache: 'no-store' });
-      if (res.ok) setInstructions(await res.json());
-    } catch (e) {
-      console.error("Failed to fetch picking instructions:", e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchInstructions(); }, [fetchInstructions]);
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+  const fetchInstructions = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const deleteInstruction = async (id: string, instructionNo: string) => {
@@ -112,7 +112,7 @@ export default function OrdersPickingPage() {
         const data = await res.json().catch(() => ({}));
         alert(`삭제 실패: ${data.detail || data.message || res.statusText}`);
       }
-    } catch (e) {
+    } catch {
       alert('백엔드 연결에 실패했습니다.');
     } finally {
       setCancellingId(null);
@@ -143,7 +143,7 @@ export default function OrdersPickingPage() {
       } else {
         alert(`시뮬레이션 실패: ${data.detail || data.message}`);
       }
-    } catch (e) {
+    } catch {
       alert('백엔드 연결에 실패했습니다.');
     } finally {
       setIsSimulating(false);
@@ -179,7 +179,7 @@ export default function OrdersPickingPage() {
       } else {
         alert(`주문 실패: ${data.detail || data.message}`);
       }
-    } catch (e) {
+    } catch {
       alert('백엔드 연결에 실패했습니다.');
     } finally {
       setIsSubmitting(false);
@@ -223,7 +223,7 @@ export default function OrdersPickingPage() {
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 font-sans text-gray-900 dark:text-gray-100">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
         <div>
           <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-full text-xs font-bold font-mono inline-flex items-center gap-1 mb-1">
             <Bot className="w-3.5 h-3.5" /> ORDER → AI PICKING INSTRUCTION
@@ -234,10 +234,10 @@ export default function OrdersPickingPage() {
             발행된 지시서는 출고 최적화 화면과 현장 피킹 스캐너에 실시간 연동됩니다.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
             onClick={() => setShowManualPanel(v => !v)}
-            className="bg-white dark:bg-gray-800 border-2 border-indigo-500 text-indigo-700 dark:text-indigo-300 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all hover:bg-indigo-50 dark:hover:bg-indigo-950 cursor-pointer"
+            className="bg-white dark:bg-gray-800 border-2 border-indigo-500 text-indigo-700 dark:text-indigo-300 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 whitespace-nowrap transition-all hover:bg-indigo-50 dark:hover:bg-indigo-950 cursor-pointer"
           >
             <ShoppingCart className="w-4 h-4" />
             {showManualPanel ? '수동 주문 닫기' : '수동 주문 등록'}
@@ -245,7 +245,7 @@ export default function OrdersPickingPage() {
           <button
             onClick={handleSimulate}
             disabled={isSimulating}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 whitespace-nowrap transition-all shadow-xs disabled:opacity-50 cursor-pointer"
           >
             <RefreshCcw className={`w-4 h-4 ${isSimulating ? 'animate-spin' : ''}`} />
             {isSimulating ? '주문 생성 중...' : '🎲 B2B 주문 시뮬레이션'}

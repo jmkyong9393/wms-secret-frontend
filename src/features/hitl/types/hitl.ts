@@ -1,3 +1,6 @@
+import type { RawBBox, DefectCoordinateGroup, AgentLogs } from '@/entities/inspection/model/types';
+export type { RawBBox, DefectCoordinateGroup, AgentLogs };
+
 export interface DefectCoordinate {
   type?: string;
   x: number;
@@ -18,12 +21,7 @@ export interface HitlTask {
   special_notes?: string;
   human_issue_notes?: string;
   inspection_type?: "RETURN" | "BUYBACK";
-  agent_logs?: {
-    defect_coordinates?: DefectCoordinate[];
-    reason?: string;
-    suggested_grade?: string;
-    [key: string]: any;
-  };
+  agent_logs?: AgentLogs;
   created_at: string;
   /** 상태가 마지막으로 바뀐 시각(HITL 이관·회수 시점). 결재 대기 목록의 정렬 기준이다. */
   updated_at?: string;
@@ -36,7 +34,7 @@ export interface HitlOverrideRequest {
   targetGrade: string; // S | A | B | REJECT
   primaryReasonCode: string;
   reasonComment: string;
-  defectCoordinates: DefectCoordinate[];
+  defectCoordinates: DefectCoordinate[] | DefectCoordinateGroup[];
   reviewDurationMs: number;
   /** 검수자가 화면에서 감점 제외한 결함 (agent_logs.defects 인덱스) */
   excludedDefectIndexes?: number[];

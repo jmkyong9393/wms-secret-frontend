@@ -1,19 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { X, Copy, CheckCircle2, Download } from "lucide-react";
 import * as XLSX from "xlsx";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import type { CurrentUser } from "@/features/auth/types/authTypes";
+} from "@/shared/ui/select";
+import type { CurrentUser } from "@/entities/user/model/types";
 import type { AssignableRole } from "@/features/employees/types/employee";
 import { getAssignableRoles } from "@/features/employees/utils/permissions";
 import { ROLE_LABEL } from "@/features/employees/utils/badges";
@@ -36,7 +36,7 @@ function generateRandomPassword(length = 10): string {
 }
 
 export function SingleCreateEmployeeModal({ open, onClose, currentUser }: SingleCreateEmployeeModalProps) {
-  const assignableRoles = getAssignableRoles(currentUser);
+  const assignableRoles = useMemo(() => getAssignableRoles(currentUser), [currentUser]);
   const defaultRole = assignableRoles[0] ?? "WORKER";
 
   const [employeeId, setEmployeeId] = useState("");
@@ -50,7 +50,7 @@ export function SingleCreateEmployeeModal({ open, onClose, currentUser }: Single
 
   const mutation = useBulkCreateEmployeesMutation();
 
-  const resetState = () => {
+  const resetState = useCallback(() => {
     setEmployeeId("");
     setName("");
     setRole(defaultRole);
@@ -58,12 +58,12 @@ export function SingleCreateEmployeeModal({ open, onClose, currentUser }: Single
     setGeneratedPassword("");
     setIsCopied(false);
     setError(null);
-  };
+  }, [defaultRole, setEmployeeId, setName, setRole, setIsSuccess, setGeneratedPassword, setIsCopied, setError]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     resetState();
     onClose();
-  };
+  }, [resetState, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -84,7 +84,7 @@ export function SingleCreateEmployeeModal({ open, onClose, currentUser }: Single
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
+  }, [open, handleClose]);
 
   if (!open) return null;
 

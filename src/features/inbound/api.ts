@@ -1,4 +1,4 @@
-import { apiClient } from '@/lib/api-client';
+import { apiClient } from '@/shared/api/api-client';
 import { PrintStickerRequest, HistoryLog } from '@/features/inbound/types';
 
 // AI 검수 요청(POST /api/v1/inbound/evaluate)은 app/inbound/page.tsx의 evaluateMutation이
@@ -18,7 +18,7 @@ export const inboundService = {
     }
   },
 
-  printLPNSticker: async (data: PrintStickerRequest): Promise<boolean> => {
+  printLPNSticker: async (_data: PrintStickerRequest): Promise<boolean> => {
     // await apiClient.post('/api/v1/inbound/print', data);
     return new Promise(resolve => setTimeout(() => resolve(true), 500));
   },
@@ -27,22 +27,27 @@ export const inboundService = {
     // const response = await apiClient.get<HistoryLog[]>('/api/v1/inbound/history');
     // return response.data;
     
-    let localData: any[] = [];
+    interface LocalEvalRow {
+      lpn?: string; job_id?: string; isbn?: string; title?: string; author?: string;
+      category?: string; publisher?: string; grade?: string; score?: number;
+      reasonCode?: string; message?: string; timestamp?: string | number;
+    }
+    let localData: LocalEvalRow[] = [];
     try {
       localData = JSON.parse(localStorage.getItem('local_evaluations') || '[]');
-    } catch (e) {}
+    } catch {}
 
     // 중복된 LPN이 있으면 가장 최신(뒤에 있는) 데이터만 남기기
     const uniqueLocalDataMap = new Map();
-    localData.forEach((item: any) => {
+    localData.forEach((item) => {
       uniqueLocalDataMap.set(item.lpn?.trim(), item);
     });
     const uniqueLocalData = Array.from(uniqueLocalDataMap.values());
     
-    const realLogs: HistoryLog[] = uniqueLocalData.reverse().map((item: any, idx: number) => {
+    const realLogs: HistoryLog[] = uniqueLocalData.reverse().map((item: LocalEvalRow, idx: number) => {
       // Map 'S', 'A', 'B', 'normal' to display statuses
       let displayStatus = 'S등급'; // 기본값
-      let gradeStr = String(item.grade || '').toUpperCase();
+      const gradeStr = String(item.grade || '').toUpperCase();
       let reasonCode = item.reasonCode || 'PERFECT_CONDITION';
       let score = item.score !== undefined ? item.score : 98;
       
@@ -83,14 +88,14 @@ export const inboundService = {
       return {
         id: `local_${idx}`,
         job_id: item.job_id,
-        lpn: item.lpn,
+        lpn: item.lpn || '',
         isbn: item.isbn || '스캔 도서',
         title: item.title || item.message || 'AI 실시간 판독 건',
         author: item.author || '-',
         category: item.category || '실시간 판독',
         publisher: item.publisher || '-',
         status: displayStatus,
-        date: new Date(item.timestamp).toLocaleString(),
+        date: new Date(item.timestamp ?? Date.now()).toLocaleString(),
         aiConfidence: '99%',
         reviewer: 'AI 자동 (LangGraph)',
         ubciScore: score,

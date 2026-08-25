@@ -1,5 +1,6 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCcw, PackageCheck, AlertTriangle, CheckCircle2, XCircle,
@@ -8,9 +9,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import axios from 'axios';
-import { exportToCSV } from '@/lib/exportCsv';
-import { poAPI, OrderProposalCard, ProposalStatus } from '@/lib/api';
-import { apiClient } from '@/lib/api-client';
+import { exportToCSV } from '@/shared/lib/exportCsv';
+import { poAPI, OrderProposalCard, ProposalStatus } from '@/shared/api/api';
+import { apiClient } from '@/shared/api/api-client';
 
 const URGENCY_STYLE: Record<string, string> = {
   CRITICAL: 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
@@ -26,8 +27,6 @@ const COLUMNS: { key: ProposalStatus; label: string; hint: string }[] = [
 ];
 
 export default function PurchaseOrderPage() {
-  const [proposals, setProposals] = useState<OrderProposalCard[]>([]);
-  const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   // 표시 전용 - 안전재고 값은 /admin/settings에서만 바꾼다 (2026-08-09)
@@ -63,21 +62,18 @@ export default function PurchaseOrderPage() {
       return next;
     });
 
-  const fetchProposals = useCallback(async () => {
-    setLoading(true);
-    try {
+  // 마운트 fetch 이펙트 대신 useQuery. 재조회 중에도 로딩 표시가 필요해 isFetching을 쓴다.
+  const { data: proposals = [], isFetching: loading, refetch } = useQuery({
+    queryKey: ['po-proposals'],
+    retry: false,
+    queryFn: async (): Promise<OrderProposalCard[]> => {
       const data = await poAPI.getProposals();
-      setProposals(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.warn('발주 제안 목록 조회 실패:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchProposals();
-  }, [fetchProposals]);
+      return Array.isArray(data) ? data : [];
+    },
+  });
+  const fetchProposals = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   const handleScan = async () => {
     setScanning(true);

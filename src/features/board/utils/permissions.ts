@@ -1,4 +1,4 @@
-import type { CurrentUser } from "@/features/auth/types/authTypes";
+import type { CurrentUser } from "@/entities/user/model/types";
 import type { BoardCategory } from "@/features/board/types/board";
 
 /**

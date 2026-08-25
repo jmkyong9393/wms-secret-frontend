@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api-client";
+import { apiClient } from "@/shared/api/api-client";
 import {
   CHANGE_PASSWORD_ENDPOINT,
   LOGIN_ENDPOINT,

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api-client";
+import { apiClient } from "@/shared/api/api-client";
 
 // board_posts.attachment_paths에는 첨부 전용 버킷의 object_key만 저장된다
 // ("attachments/{uuid}_{원본파일명}", src/lib/s3_helper.ts uploadBoardAttachment() 반환값).

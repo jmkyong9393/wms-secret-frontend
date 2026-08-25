@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { X, Download, Upload, CheckCircle2, FileSpreadsheet } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/shared/ui/button";
 import * as XLSX from "xlsx";
-import type { CurrentUser } from "@/features/auth/types/authTypes";
+import type { CurrentUser } from "@/entities/user/model/types";
 import type { AssignableRole, BulkCreateEmployeeResult } from "@/features/employees/types/employee";
 import { getAssignableRoles } from "@/features/employees/utils/permissions";
 import { useBulkCreateEmployeesMutation } from "@/features/employees/hooks/useEmployeeMutations";
@@ -45,18 +45,18 @@ export function BulkCreateEmployeeModal({ open, onClose, currentUser }: BulkCrea
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mutation = useBulkCreateEmployeesMutation();
 
-  const resetState = () => {
+  const resetState = useCallback(() => {
     setRows([]);
     setValidationError(null);
     setConfirmOpen(false);
     setResults(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  };
+  }, []);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     resetState();
     onClose();
-  };
+  }, [resetState, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -65,7 +65,7 @@ export function BulkCreateEmployeeModal({ open, onClose, currentUser }: BulkCrea
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
+  }, [open, handleClose]);
 
   if (!open) return null;
 
@@ -101,7 +101,7 @@ export function BulkCreateEmployeeModal({ open, onClose, currentUser }: BulkCrea
           return;
         }
 
-        const headers = data[0];
+        
         const parsedRows: DraftRow[] = [];
         let missingNamesCount = 0;
         let invalidRolesCount = 0;
@@ -166,7 +166,7 @@ export function BulkCreateEmployeeModal({ open, onClose, currentUser }: BulkCrea
 
         setRows(parsedRows);
         if (fileInputRef.current) fileInputRef.current.value = ""; // 초기화
-      } catch (err) {
+      } catch {
         setValidationError("엑셀 파일을 읽는 중 오류가 발생했습니다.");
       }
     };

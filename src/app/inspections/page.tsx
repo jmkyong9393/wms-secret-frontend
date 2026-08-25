@@ -7,10 +7,10 @@
  * WORKER는 scope 미지정·scope=all 요청 시에도 강제 MINE (권한 하향 고정).
  */
 import { Suspense } from 'react';
-import { useHydratedUser } from '@/features/auth/hooks/useHydratedUser';
+import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 import { useSearchParams } from 'next/navigation';
 
-import { InspectionDataTable } from '@/features/stock/components/InspectionDataTable';
+import { InspectionDataTable } from '@/widgets/inspection-table/ui/InspectionDataTable';
 
 function InspectionsShell() {
   const params = useSearchParams();

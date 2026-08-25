@@ -2,17 +2,17 @@
 
 import { useRef, useState } from "react";
 import { X, Paperclip, FileText } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Textarea } from "@/shared/ui/textarea";
+import { Button } from "@/shared/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import type { CurrentUser } from "@/features/auth/types/authTypes";
+} from "@/shared/ui/select";
+import type { CurrentUser } from "@/entities/user/model/types";
 import type { BoardCategory } from "@/features/board/types/board";
 import { canWriteCategory } from "@/features/board/utils/permissions";
 import { CATEGORY_LABEL } from "@/features/board/components/categoryLabels";
@@ -24,7 +24,7 @@ import {
   MAX_ATTACHMENT_SIZE_BYTES,
   validateAttachmentFile,
 } from "@/features/board/utils/attachmentValidation";
-import { boardUploadErrorMessage, uploadBoardAttachment } from "@/lib/s3_helper";
+import { boardUploadErrorMessage, uploadBoardAttachment } from "@/shared/api/s3_helper";
 
 export interface BoardPostFormValues {
   category: BoardCategory;
@@ -159,6 +159,7 @@ export function BoardPostForm({
                 key={path}
                 className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element -- 서명 URL·외부 CDN·blob 원본은 next/image 서버 최적화를 태울 수 없다 */}
                 <img
                   src={attachmentUrl(path)}
                   alt={`첨부 ${idx + 1}`}

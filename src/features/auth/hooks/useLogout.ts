@@ -1,5 +1,5 @@
 import { useSetAtom } from "jotai";
-import { logoutAtom } from "@/features/auth/store/authAtoms";
+import { logoutAtom } from "@/entities/user/model/authAtoms";
 import { logout as logoutRequest } from "@/features/auth/api/authService";
 
 // 로그아웃 = 백엔드 쿠키 만료(POST /api/v1/auth/logout) + 클라이언트 세션 정리를
