@@ -13,8 +13,9 @@ import { useSystemSettingValue } from "@/shared/lib/systemSettings";
 import type { HitlTask, HitlOverrideRequest } from "@/features/hitl/types/hitl";
 import { HitlImageModal, EMPTY_BBOX_EDITS, type BBoxEdits } from "@/features/hitl/components/HitlImageModal";
 // 관리자 설정의 읽기 전용 정책 뷰와 같은 정의를 쓴다 (features/hitl/policy.ts)
-import { gradeFromUbciScore, defaultDecisionForGrade } from "@/features/hitl/policy";
+import { gradeFromUbciScore, defaultDecisionForGrade, GRADE_SCORE_FLOOR } from "@/features/hitl/policy";
 import { getPrimaryDefectReason } from "@/features/hitl/utils";
+import { useScorePreview } from "@/features/hitl/hooks/useScorePreview";
 import { useAiReinspection } from "@/features/hitl/hooks/useAiReinspection";
 import { PipelineLogPanel } from "@/features/hitl/components/PipelineLogPanel";
 import { ReinspectionLiveModal } from "@/features/hitl/components/ReinspectionLiveModal";
@@ -189,10 +190,57 @@ export default function AdminHitlDashboard() {
   };
 
   // 개별/일괄 승인 제출 (테이블에 설정된 실제 row 데이터 최종 제출)
+  // ── BBox 편집 재산정 점수 ─────────────────────────────────────────────
+  // 미리보기를 모달이 아니라 여기서 소유한다. 결재 폼의 목표등급이 재산정 결과를
+  // 따라가지 않으면, 서버의 clamp_ubci_score_to_grade가 점수를 선택 등급 구간으로
+  // 되돌려 편집이 무효가 된다(예: 재산정 87점인데 MINT로 제출 → 95점으로 상향).
+  const modalId = modalTask ? String(modalTask.id) : undefined;
+  const modalEdits = modalId ? bboxEdits[modalId] : undefined;
+  const modalHasEdits = !!modalEdits && (
+    modalEdits.excluded.length + modalEdits.adopted.length +
+    Object.keys(modalEdits.edited).length + modalEdits.added.length
+  ) > 0;
+  const scorePreview = useScorePreview(modalId, modalEdits, modalHasEdits);
+
+  // 편집분 재산정 점수를 건별로 보관한다 - 모달을 닫아도 제출 시점에 대조해야 한다.
+  const [recomputedScores, setRecomputedScores] = useState<Record<string, number>>({});
+  const previewScore = scorePreview.preview?.ubci_score;
+  if (modalId && typeof previewScore === "number" && recomputedScores[modalId] !== previewScore) {
+    setRecomputedScores((prev) => ({ ...prev, [modalId]: previewScore }));
+    // 재산정 결과에 맞춰 등급·처분 기본값을 갱신한다. 이후 관리자가 직접 바꾸면
+    // 그 선택이 남는다(같은 점수로는 다시 덮어쓰지 않는다).
+    const g = gradeFromUbciScore(previewScore);
+    if (g) {
+      setGrades((prev) => ({ ...prev, [modalId]: g }));
+      setDecisions((prev) => ({ ...prev, [modalId]: defaultDecisionForGrade(g) }));
+    }
+  }
+
   const handleSubmit = async () => {
     if (selectedIds.size === 0) {
       alert("최종 처리할 항목을 하나 이상 선택해 주세요.");
       return;
+    }
+
+    // 재산정 점수와 선택 등급이 어긋나면 서버 clamp가 점수를 등급 구간으로 옮긴다.
+    // 의도한 하향/상향일 수 있으므로 막지 않고, 무엇이 저장되는지 알리고 확인만 받는다.
+    for (const id of Array.from(selectedIds)) {
+      const recomputed = recomputedScores[id];
+      if (typeof recomputed !== "number") continue;
+      const picked = grades[id];
+      const recomputedGrade = gradeFromUbciScore(recomputed);
+      if (!picked || !recomputedGrade || picked === recomputedGrade) continue;
+      const floor = GRADE_SCORE_FLOOR[picked];
+      const adjusted = typeof floor === "number" && recomputed < floor ? floor : recomputed;
+      const ok = window.confirm(
+        `[${id}] BBox 편집 재산정 결과는 ${recomputed}점(${recomputedGrade})입니다.
+` +
+        `목표 등급을 ${picked}로 확정하면 점수가 ${adjusted}점으로 조정되어 저장됩니다.
+
+` +
+        `이대로 진행할까요?`
+      );
+      if (!ok) return;
     }
 
     const payloadList: HitlOverrideRequest[] = [];
@@ -371,6 +419,7 @@ export default function AdminHitlDashboard() {
           task={modalTask}
           onClose={() => setModalTask(null)}
           edits={bboxEdits[String(modalTask.id)] ?? EMPTY_BBOX_EDITS}
+          scorePreview={scorePreview}
           onEditsChange={(next) =>
             setBboxEdits((prev) => ({ ...prev, [String(modalTask.id)]: next }))
           }

@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { bboxToPercent } from "@/entities/inspection/api/inspectionImageService";
 import type { HitlTask } from "@/features/hitl/types/hitl";
 import { DEFECT_TYPE_OPTIONS } from "@/features/hitl/policy";
-import { useScorePreview } from "@/features/hitl/hooks/useScorePreview";
+import type { HitlScorePreview } from "@/features/hitl/api/adminApi";
 import { ScorePreviewPanel } from "@/features/hitl/components/ScorePreviewPanel";
 
 export interface EditedBbox {
@@ -51,6 +51,8 @@ interface HitlImageModalProps {
   /** 편집 기능을 쓰려면 두 prop을 함께 넘긴다. 없으면 읽기 전용으로 동작한다. */
   edits?: BBoxEdits;
   onEditsChange?: (next: BBoxEdits) => void;
+  /** 편집분 재산정 결과. 부모가 소유한다 - 결재 폼의 등급 갱신과 제출 경고가 같은 값을 봐야 하기 때문. */
+  scorePreview?: { preview: HitlScorePreview | null; loading: boolean; error: string | null };
 }
 
 /** 파이프라인 노드별 서술 표시 정의 (agent_logs 키와 1:1) */
@@ -86,10 +88,13 @@ function bboxesForIndex(rawList: FlatOrGroup[], idx: number, imageUrl: string): 
   return out;
 }
 
+/** 미리보기 미제공(읽기 전용) 시 폴백. 모듈 상수라 렌더마다 새 객체가 생기지 않는다. */
+const EMPTY_SCORE_PREVIEW = { preview: null, loading: false, error: null } as const;
+
 const defectTypeLabel = (type: string) =>
   DEFECT_TYPE_OPTIONS.find((o) => o.value === type)?.label || type;
 
-export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImageModalProps) {
+export function HitlImageModal({ task, onClose, edits, onEditsChange, scorePreview: scorePreviewProp }: HitlImageModalProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [showOverlay, setShowOverlay] = useState(true);
   const [showYolo, setShowYolo] = useState(false);
@@ -108,7 +113,7 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
   const hasEdits = pendingEditCount > 0;
   // 편집분의 점수는 서버 Policy Agent가 계산한다 (LLM 미사용이라 호출 비용 없음).
   // 프론트가 UBCI 산식을 흉내 내면 화면과 실제 저장값이 갈린다.
-  const scorePreview = useScorePreview(task?.id, edits, editable && hasEdits);
+  const scorePreview = scorePreviewProp ?? EMPTY_SCORE_PREVIEW;
 
   const toggle = (list: number[], i: number) =>
     list.includes(i) ? list.filter((x) => x !== i) : [...list, i];
