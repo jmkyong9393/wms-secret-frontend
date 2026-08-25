@@ -1,4 +1,5 @@
 "use client";
+import { useQuery } from '@tanstack/react-query';
 import type { OutboundBook } from '@/features/outbound/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
@@ -70,8 +71,6 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
 };
 
 export default function OrdersPickingPage() {
-  const [instructions, setInstructions] = useState<PickingInstruction[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -87,19 +86,19 @@ export default function OrdersPickingPage() {
   const [insPage, setInsPage] = useState<number>(1);
   const [insPageSize, setInsPageSize] = useState<number>(10);
 
-  const fetchInstructions = useCallback(async () => {
-    try {
-      setIsLoading(true);
+  // 마운트 fetch 이펙트 대신 useQuery. 재조회 중에도 로딩 표시가 필요해 isFetching을 쓴다.
+  const { data: instructions = [], isFetching: isLoading, refetch } = useQuery({
+    queryKey: ['admin-picking-instructions'],
+    retry: false,
+    queryFn: async (): Promise<PickingInstruction[]> => {
       const res = await fetch(`${API_BASE}/orders/picking-instructions?limit=30`, { cache: 'no-store' });
-      if (res.ok) setInstructions(await res.json());
-    } catch (e) {
-      console.error("Failed to fetch picking instructions:", e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchInstructions(); }, [fetchInstructions]);
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+  const fetchInstructions = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const deleteInstruction = async (id: string, instructionNo: string) => {

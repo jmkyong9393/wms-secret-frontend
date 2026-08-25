@@ -1,8 +1,9 @@
 'use client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentLogs, CertificateDoc, RawBBox } from '@/entities/inspection/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import Link from 'next/link';
@@ -76,9 +77,6 @@ export default function InventoryDetailPage() {
   const router = useRouter();
   const inventoryId = params?.id as string;
 
-  const [data, setData] = useState<InventoryDetailData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [activePrintData, setActivePrintData] = useState<LpnPrintData | null>(null);
   const [isReinspecting, setIsReinspecting] = useState<boolean>(false);
   // HITL 회수. 되돌리기는 판매 가능 재고에서 빼는 동작이라 확인 절차를 거친다.
@@ -86,29 +84,26 @@ export default function InventoryDetailPage() {
   const [recallReason, setRecallReason] = useState<string>('');
   const [isRecalling, setIsRecalling] = useState<boolean>(false);
 
-  const fetchDetail = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  // [수정 이력] 예전에는 조회 실패 시 SQL 수험서 목업 데이터를 대신 렌더했다.
+  // 실패를 성공처럼 보여줘 어떤 재고를 보고 있는지 알 수 없었으므로 에러를 그대로 표시한다.
+  // 마운트 fetch 이펙트 대신 useQuery - 로딩·에러·재조회를 쿼리가 담당한다 (재시도 없음).
+  const queryClient = useQueryClient();
+  const { data: queryData, isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: ['inventory-detail', inventoryId],
+    enabled: !!inventoryId,
+    retry: false,
+    queryFn: async (): Promise<InventoryDetailData> => {
       const res = await fetch(`${API_BASE}/api/v1/inventory/${inventoryId}`);
       if (res.status === 404) throw new Error('해당 재고를 찾을 수 없습니다.');
       if (!res.ok) throw new Error('재고 상세 정보를 불러오는데 실패했습니다.');
-      setData(await res.json());
-    } catch (err) {
-      // [수정 이력] 예전에는 조회 실패 시 SQL 수험서 목업 데이터를 대신 렌더했다.
-      // 실패를 성공처럼 보여줘 어떤 재고를 보고 있는지 알 수 없었으므로 에러를 그대로 표시한다.
-      console.error(err);
-      setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.');
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [inventoryId]);
-
-  useEffect(() => {
-    if (!inventoryId) return;
-    fetchDetail();
-  }, [inventoryId, fetchDetail]);
+      return res.json();
+    },
+  });
+  const data = queryData ?? null;
+  const error = queryError ? (queryError instanceof Error ? queryError.message : '알 수 없는 오류가 발생했습니다.') : null;
+  const fetchDetail = React.useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
   const handleReinspect = async () => {
     if (!data) return;
@@ -138,7 +133,7 @@ export default function InventoryDetailPage() {
         if (!poll.ok) continue;
         const fresh: InventoryDetailData = await poll.json();
         if (stampOf(fresh) !== before) {
-          setData(fresh);
+          queryClient.setQueryData(['inventory-detail', inventoryId], fresh);
           done = true;
           break;
         }
