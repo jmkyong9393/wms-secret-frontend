@@ -134,6 +134,14 @@ function open() {
     }
   };
 
+  // 하트비트는 `event: heartbeat`로 온다. 이름 붙은 이벤트는 onmessage를 발화시키지
+  // 않으므로, 이 줄을 지우면 살아있음을 확인할 길이 사라져 60초마다 재연결하게 된다.
+  //
+  // 하트비트를 굳이 이름 있는 이벤트로 받는 이유: 기본 message로 보내면 이 파일을
+  // 모르는 클라이언트(캐시된 구버전 번들 포함)가 하트비트를 일반 알림으로 취급해
+  // 화면에 빈 알림이 25초마다 쌓인다(2026-08-26 운영에서 실제로 발생).
+  source.addEventListener('heartbeat', () => armWatchdog());
+
   source.onmessage = (e) => {
     armWatchdog();                  // 무슨 메시지든 서버가 살아있다는 증거다
     let evt: RealtimeEvent;
@@ -143,6 +151,7 @@ function open() {
       return;                       // 파싱 실패는 무시 - 연결은 유지한다
     }
     // 핸드쉐이크와 하트비트는 연결 유지용이다. 화면에 전달하지 않는다.
+    // HEARTBEAT 검사는 서버가 아직 구 방식(기본 message)으로 보내는 동안의 호환용이다.
     if (!evt || evt.type === 'CONNECTED' || evt.type === 'HEARTBEAT') return;
     dispatch(evt);
   };
