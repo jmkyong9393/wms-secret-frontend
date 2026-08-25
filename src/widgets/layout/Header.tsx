@@ -7,6 +7,7 @@ import { maskName } from '@/shared/lib/privacy-mask';
 
 import Link from 'next/link';
 import React, { useState } from 'react';
+import { subscribeRealtime } from '@/shared/lib/realtimeEvents';
 import { useOfflineEvaluationSync } from '@/features/inbound/hooks/useOfflineEvaluationSync';
 import { useAtomValue } from 'jotai';
 import { inFlightUploadCountAtom } from '@/entities/upload-task/model/uploadQueueAtoms';
@@ -137,36 +138,24 @@ export default function Header() {
     };
   }, [user]);
 
-  // 실시간 WMS 전역 알림 SSE 구독 (app/domains/notifications/router.py의
-  // notifications:global Redis Pub/Sub 채널을 EventSource로 중계받는다)
+  // 실시간 알림 표시. SSE 연결 자체는 공용 구독(shared/lib/realtimeEvents)이 하나만 유지한다 -
+  // 화면마다 EventSource를 열면 연결이 중복되고, 그 화면을 떠나면 이벤트를 놓친다.
   useEffect(() => {
-    if (isMuted || !user) return;
-
-    const es = new EventSource(`${API_BASE_URL}/api/v1/notifications/stream`);
-
-    es.onmessage = (event) => {
+    if (!user) return;
+    return subscribeRealtime((evt) => {
+      // 이 사용자에게 공개되지 않은 역할 전용 알림은 표시하지 않는다.
+      if (evt.target_role && user.role && evt.target_role !== user.role) return;
+      // 음소거는 "띄우지 않는다"는 뜻이다. 구독을 끊으면 데이터 동기화까지 멈춘다.
+      if (isMuted) return;
       try {
-        const evt = JSON.parse(event.data);
-        if (!evt || evt.type === 'CONNECTED') return;
-
-        // 이 사용자에게 공개되지 않은 역할 전용 알림은 무시한다.
-        if (evt.target_role && user.role && evt.target_role !== user.role) return;
-
-        const newEvt = toNotificationItem(evt);
+        const newEvt = toNotificationItem(evt as Parameters<typeof toNotificationItem>[0]);
         setNotifications(prev => [newEvt, ...prev.filter(n => n.id !== newEvt.id).slice(0, 19)]);
         setUnreadCount(prev => prev + 1);
         setActiveToast(newEvt);
       } catch (e) {
-        console.error('알림 SSE 이벤트 파싱 실패:', e);
+        console.error('알림 이벤트 변환 실패:', e);
       }
-    };
-
-    es.onerror = () => {
-      // EventSource는 연결이 끊기면 자동 재연결을 시도하므로 여기서는 로깅만 한다.
-      console.warn('알림 SSE 연결 오류 - 자동 재연결 대기 중');
-    };
-
-    return () => es.close();
+    });
   }, [isMuted, user]);
 
   // 알림 1건 읽음 처리 (DB에 반영해 새로고침 후에도 유지)
