@@ -21,6 +21,11 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 
+# CSP(next.config.ts)의 img-src·connect-src에 들어가는 실제 CDN 오리진.
+# 미주입 시 기본값이 실존하지 않는 도메인이라, 차단 모드로 전환하면 검수 사진이 막힌다.
+ARG NEXT_PUBLIC_CDN_DOMAIN
+ENV NEXT_PUBLIC_CDN_DOMAIN=$NEXT_PUBLIC_CDN_DOMAIN
+
 # [2026-08-09 추가] next.config.ts의 rewrites()가 반환하는 프록시 대상은 standalone
 # 빌드 시 .next/routes-manifest.json에 문자열로 고정(bake)된다 - 컨테이너 런타임에
 # environment:로 BACKEND_ORIGIN을 줘도 이미 굳어진 값이라 반영되지 않는다. 빌드
