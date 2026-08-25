@@ -1,6 +1,7 @@
 "use client";
 import { useQuery } from '@tanstack/react-query';
 import type { PickingInstruction, PickScanResult } from '@/features/outbound/model/types';
+import { subscribeRealtime } from '@/shared/lib/realtimeEvents';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -88,7 +89,14 @@ export default function WorkerOutboundPage() {
   const { data: instructions = [], isFetching: isLoading, refetch } = useQuery({
     queryKey: ['worker-picking-instructions'],
     retry: false,
-    refetchInterval: 20000,
+    // 현장 작업 화면이라 전역 staleTime(60초)을 따르지 않는다. 관리자 화면에서 송장을
+    // 발급하고 넘어오면 캐시가 fresh하다는 이유로 재조회하지 않아 이전 단계가 그대로 보였다.
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,   // 탭을 오가며 작업하므로 돌아오면 확인한다
+    // 실시간 갱신은 전역 SSE(app/realtimeQuerySync)가 담당한다. 이 폴링은 그 경로가
+    // 끊겼을 때를 위한 백업이라 짧을 필요가 없다.
+    refetchInterval: 60000,
     queryFn: async (): Promise<PickingInstruction[]> => {
       const res = await fetch(`${API_BASE}/orders/picking-instructions?active_only=true&limit=20`, { cache: 'no-store' });
       if (!res.ok) return [];
@@ -109,24 +117,16 @@ export default function WorkerOutboundPage() {
       : (instructions[0]?.id ?? null);
   const activeInstruction = instructions.find(i => i.id === effectiveSelectedId) || null;
 
-  // notifications:global SSE 구독 - 신규 지시서/송장 발급 실시간 toast + 목록 갱신
-  useEffect(() => {
-    const es = new EventSource(`${API_BASE}/notifications/stream`);
-    es.onmessage = (event) => {
-      try {
-        const evt = JSON.parse(event.data);
-        if (!evt || evt.type === 'CONNECTED') return;
-        if (['PICKING_INSTRUCTION_ISSUED', 'WAYBILL_ISSUED'].includes(evt.type)) {
-          setToast({ title: evt.title, desc: evt.description || '' });
-          fetchInstructions();
-          if (evt.type === 'PICKING_INSTRUCTION_ISSUED' && evt.instruction_id) {
-            setSelectedId(evt.instruction_id);
-          }
-        }
-      } catch { /* 파싱 실패 무시 */ }
-    };
-    return () => es.close();
-  }, [fetchInstructions]);
+  // 지시서·송장 이벤트 토스트. 목록 갱신은 전역 SSE(app/realtimeQuerySync)가 캐시를
+  // 무효화해 처리하므로 여기서 fetch하지 않는다 - 화면마다 EventSource를 열면 연결이
+  // 중복되고, 그 화면을 떠난 사이의 이벤트는 어차피 받지 못한다.
+  useEffect(() => subscribeRealtime((evt) => {
+    if (!['PICKING_INSTRUCTION_ISSUED', 'WAYBILL_ISSUED'].includes(evt.type)) return;
+    setToast({ title: evt.title ?? '', desc: evt.description ?? '' });
+    if (evt.type === 'PICKING_INSTRUCTION_ISSUED' && typeof evt.instruction_id === 'string') {
+      setSelectedId(evt.instruction_id);
+    }
+  }), []);
 
   // toast 5초 후 자동 숨김
   useEffect(() => {
