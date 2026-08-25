@@ -9,7 +9,8 @@
  * 적발 즉시 notifications:global 채널로 발행되어 상단 알림 종에도 실시간 노출된다.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import React, { useState } from 'react';
 import {
   ShieldAlert, RefreshCw, Radar, AlertTriangle, UserX, Moon, Undo2, Bot, Sparkles,
 } from 'lucide-react';
@@ -68,30 +69,23 @@ function scoreBadge(score: number): string {
 }
 
 export default function AdminFdsPage() {
-  const [reports, setReports] = useState<FdsReportItem[]>([]);
-  const [summary, setSummary] = useState<FdsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
 
-  const fetchAll = useCallback(async () => {
-    try {
+  // 마운트 fetch 이펙트 대신 useQuery (재시도 없음 - 기존 동작 유지)
+  const { data: fdsData, isLoading: loading, refetch: refetchAll } = useQuery({
+    queryKey: ['fds-console'],
+    retry: false,
+    queryFn: async () => {
       const [r, s] = await Promise.all([
         apiClient.get<FdsReportItem[]>('/api/v1/fds/reports?limit=50'),
         apiClient.get<FdsSummary>('/api/v1/fds/summary'),
       ]);
-      setReports(r.data || []);
-      setSummary(s.data || null);
-    } catch (e) {
-      console.error('FDS 데이터 조회 실패:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+      return { reports: r.data || [], summary: s.data || null };
+    },
+  });
+  const reports = fdsData?.reports ?? [];
+  const summary = fdsData?.summary ?? null;
 
   const handleScan = async () => {
     setScanning(true);
@@ -102,7 +96,7 @@ export default function AdminFdsPage() {
       setScanResult(
         `룰 ${d.scanned_rules}종 스캔 완료 — 원시 탐지 ${d.raw_detections}건 / 신규 적발 ${d.new_reports}건 / 중복 억제 ${d.deduplicated}건`
       );
-      await fetchAll();
+      await refetchAll();
     } catch (e: unknown) {
       console.error(e);
       setScanResult('스캔 실행에 실패했습니다. 서버 로그를 확인하세요.');
@@ -197,7 +191,7 @@ export default function AdminFdsPage() {
             적발 이력 및 AI Analyst 권고 조치
           </h2>
           <button
-            onClick={fetchAll}
+            onClick={() => refetchAll()}
             className="text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center gap-1 cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" /> 새로고침

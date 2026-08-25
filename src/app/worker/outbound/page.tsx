@@ -1,4 +1,5 @@
 "use client";
+import { useQuery } from '@tanstack/react-query';
 import type { PickingInstruction, PickScanResult } from '@/features/outbound/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
@@ -72,10 +73,7 @@ export default function WorkerOutboundPage() {
   const [showScanner, setShowScanner] = useState<boolean>(false);
 
   // 피킹 지시서 실시간 연동 상태
-  const [instructions, setInstructions] = useState<PickingInstruction[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const activeInstruction = instructions.find(i => i.id === selectedId) || null;
 
   const [manualLpn, setManualLpn] = useState<string>('');
   const [scanResult, setScanResult] = useState<PickScanResult | null>(null);
@@ -86,28 +84,30 @@ export default function WorkerOutboundPage() {
   // 실시간 알림 toast (SSE 수신)
   const [toast, setToast] = useState<{ title: string; desc: string } | null>(null);
 
-  const fetchInstructions = useCallback(async () => {
-    try {
-      setIsLoading(true);
+  // 마운트 fetch 이펙트 대신 useQuery. SSE 유실 대비 20초 폴백도 refetchInterval이 담당한다.
+  const { data: instructions = [], isFetching: isLoading, refetch } = useQuery({
+    queryKey: ['worker-picking-instructions'],
+    retry: false,
+    refetchInterval: 20000,
+    queryFn: async (): Promise<PickingInstruction[]> => {
       const res = await fetch(`${API_BASE}/orders/picking-instructions?active_only=true&limit=20`, { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        // worker 작업 대상: 수락 대기 ~ 포장 대기(PACKED)까지 (SHIPPED/CANCELLED 제외)
-        const workable: PickingInstruction[] = data.filter((i: PickingInstruction) => ['PENDING', 'ACCEPTED', 'IN_PROGRESS', 'PICKED', 'PACKED'].includes(i.status));
-        setInstructions(workable);
-        setSelectedId(prev => {
-          if (prev && workable.some((i) => i.id === prev)) return prev;
-          return workable.length > 0 ? workable[0].id : null;
-        });
-      }
-    } catch (e) {
-      console.error("Failed to fetch picking instructions:", e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      if (!res.ok) return [];
+      const data = await res.json();
+      // worker 작업 대상: 수락 대기 ~ 포장 대기(PACKED)까지 (SHIPPED/CANCELLED 제외)
+      return data.filter((i: PickingInstruction) => ['PENDING', 'ACCEPTED', 'IN_PROGRESS', 'PICKED', 'PACKED'].includes(i.status));
+    },
+  });
+  const fetchInstructions = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
 
-  useEffect(() => { fetchInstructions(); }, [fetchInstructions]);
+  // 선택 보정은 파생값으로 - 선택한 지시서가 목록에서 빠지면(완료·취소) 첫 항목으로 대체한다.
+  // 종전에는 fetch 콜백에서 setSelectedId로 보정했지만, 파생이면 상태 조정 이펙트가 필요 없다.
+  const effectiveSelectedId =
+    selectedId && instructions.some((i) => i.id === selectedId)
+      ? selectedId
+      : (instructions[0]?.id ?? null);
+  const activeInstruction = instructions.find(i => i.id === effectiveSelectedId) || null;
 
   // notifications:global SSE 구독 - 신규 지시서/송장 발급 실시간 toast + 목록 갱신
   useEffect(() => {
@@ -125,9 +125,7 @@ export default function WorkerOutboundPage() {
         }
       } catch { /* 파싱 실패 무시 */ }
     };
-    // 폴백: SSE 유실 대비 20초 주기 목록 동기화
-    const interval = setInterval(fetchInstructions, 20000);
-    return () => { es.close(); clearInterval(interval); };
+    return () => es.close();
   }, [fetchInstructions]);
 
   // toast 5초 후 자동 숨김
@@ -295,7 +293,7 @@ export default function WorkerOutboundPage() {
         ) : (
           <>
             <select
-              value={selectedId || ''}
+              value={effectiveSelectedId || ''}
               onChange={e => { setSelectedId(e.target.value); setScanResult(null); setScanError(null); }}
               className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border-2 border-indigo-300 dark:border-indigo-700 rounded-xl text-xs font-black font-mono outline-none focus:border-indigo-600 cursor-pointer"
             >

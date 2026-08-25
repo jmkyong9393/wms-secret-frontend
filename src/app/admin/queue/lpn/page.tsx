@@ -1,7 +1,8 @@
 'use client';
+import { useQuery } from '@tanstack/react-query';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Printer, RefreshCcw, Barcode, CheckCircle } from 'lucide-react';
 import { labelsAPI } from '@/shared/api/api';
 
@@ -12,34 +13,26 @@ type LpnRecord = {
 };
 
 export default function LpnDashboardPage() {
-  const [lpns, setLpns] = useState<LpnRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isPrinting, setIsPrinting] = useState<string | null>(null);
 
-  const fetchLpns = async () => {
-    setIsLoading(true);
-    try {
-      // API call to the backend router we created
-      const res = await fetch(`${API_BASE_URL}/api/v1/inventory/lpn`);
-      if (res.ok) {
-        const data = await res.json();
-        setLpns(data);
+  // 마운트 fetch 이펙트 대신 useQuery - 로딩·에러·재조회를 쿼리가 담당한다.
+  const { data: lpns = [], isFetching: isLoading, refetch: fetchLpns } = useQuery({
+    queryKey: ['lpn-records'],
+    retry: false,
+    queryFn: async (): Promise<LpnRecord[]> => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/inventory/lpn`);
+        if (res.ok) return res.json();
+      } catch (error) {
+        console.error("LPN 목록을 가져오는데 실패했습니다.", error);
       }
-    } catch (error) {
-      console.error("LPN 목록을 가져오는데 실패했습니다.", error);
-      // Fallback Mock Data for UI demonstration
-      setLpns([
+      // Fallback Mock Data for UI demonstration (기존 동작 유지)
+      return [
         { lpn_barcode: 'LPN-20260721-ABCD1234', book_id: 'uuid-book-1', status: 'PENDING_INSPECTION' },
-        { lpn_barcode: 'LPN-20260721-EFGH5678', book_id: 'uuid-book-2', status: 'IN_STOCK' }
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchLpns();
-  }, []);
+        { lpn_barcode: 'LPN-20260721-EFGH5678', book_id: 'uuid-book-2', status: 'IN_STOCK' },
+      ];
+    },
+  });
 
   const handlePrint = async (lpn: string) => {
     setIsPrinting(lpn);
@@ -69,7 +62,7 @@ export default function LpnDashboardPage() {
           <p className="text-slate-500 dark:text-gray-400 mt-1">발급된 전체 LPN 이력을 조회하고 누락된 라벨을 재출력할 수 있습니다.</p>
         </div>
         <button
-          onClick={fetchLpns}
+          onClick={() => fetchLpns()}
           disabled={isLoading}
           className="shrink-0 whitespace-nowrap bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 px-4 py-2 rounded-xl flex items-center font-bold transition-colors"
         >
