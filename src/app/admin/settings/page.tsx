@@ -13,6 +13,8 @@
  * - 실시간 팝업 알림 음소거는 Header와 동일 키(nexus-notif-muted)를 공유한다.
  */
 
+import { useLocalStorageItem, writeLocalStorageItem } from '@/shared/lib/clientStore';
+import { useDarkMode } from '@/shared/lib/useDarkMode';
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
@@ -20,7 +22,7 @@ import { Button } from '@/shared/ui/button';
 import {
   Settings, Cpu, Printer, Sun, Moon, BellRing, Save, CheckCircle2, ShieldAlert, Lock, Package,
 } from 'lucide-react';
-import { getSystemSettings, saveSystemSettings } from '@/shared/lib/systemSettings';
+import { saveSystemSettings, useSystemSettingValue } from '@/shared/lib/systemSettings';
 import { apiClient } from '@/shared/api/api-client';
 // 정책 상수는 HITL 화면과 공유한다 (features/hitl/policy.ts 단일 정의)
 import { UBCI_GRADE_POLICY, HITL_ROUTING_POLICY } from '@/features/hitl/policy';
@@ -28,12 +30,19 @@ import { UBCI_GRADE_POLICY, HITL_ROUTING_POLICY } from '@/features/hitl/policy';
 
 export default function SystemSettingsPage() {
   // 실연동 설정 (lib/systemSettings 영속화)
-  const [autoPrintTrigger, setAutoPrintTrigger] = useState<boolean>(true);
-  const [hitlAlertCount, setHitlAlertCount] = useState<number>(10);
-  // Header와 공유하는 실시간 팝업 알림 음소거 (nexus-notif-muted)
-  const [notifMuted, setNotifMuted] = useState<boolean>(false);
-  // 테마 (기존 실연동 유지)
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  // 저장값은 구독으로 읽고, 편집 중 값은 draft로 겹친다 - 저장 전까지 저장소를 건드리지 않고,
+  // 이펙트로 초기값을 복사하지도 않는다 (SSR 중에는 기본값이 그려져 hydration도 안전).
+  const storedAutoPrint = useSystemSettingValue('autoPrintTrigger');
+  const storedAlertCount = useSystemSettingValue('hitlAlertThreshold');
+  const [draftAutoPrint, setDraftAutoPrint] = useState<boolean | null>(null);
+  const [draftAlertCount, setDraftAlertCount] = useState<number | null>(null);
+  const autoPrintTrigger = draftAutoPrint ?? storedAutoPrint;
+  const hitlAlertCount = draftAlertCount ?? storedAlertCount;
+
+  // Header와 공유하는 실시간 팝업 알림 음소거 (nexus-notif-muted) - 즉시 저장 토글이라 draft 불필요
+  const notifMuted = useLocalStorageItem('nexus-notif-muted', 'nexus-notif-mute-change') === 'true';
+  // 테마 - Header와 같은 공용 훅
+  const { isDarkMode, setDarkMode } = useDarkMode();
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
@@ -43,12 +52,6 @@ export default function SystemSettingsPage() {
   const [safetyStockLoaded, setSafetyStockLoaded] = useState<boolean>(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const s = getSystemSettings();
-    setAutoPrintTrigger(s.autoPrintTrigger);
-    setHitlAlertCount(s.hitlAlertThreshold);
-    setNotifMuted(localStorage.getItem('nexus-notif-muted') === 'true');
-
     apiClient
       .get('/api/v1/admin/settings')
       .then((res) => {
@@ -59,44 +62,13 @@ export default function SystemSettingsPage() {
         // 조회 실패 시 기본값(3) 표시만 하고 loaded는 세우지 않는다 - 저장을 눌러도
         // 확인 안 된 값으로 서버 상태를 덮어쓰지 않기 위함 (handleSave에서 재확인).
       });
-
-    const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('nexus-theme') === 'dark';
-    setIsDarkMode(isDark);
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      document.body.classList.add('dark');
-    }
-
-    const handleThemeEvent = (e: Event) => {
-      const customEvt = e as CustomEvent<{ isDark: boolean }>;
-      if (customEvt.detail && typeof customEvt.detail.isDark === 'boolean') {
-        setIsDarkMode(customEvt.detail.isDark);
-      }
-    };
-    window.addEventListener('nexus-theme-change', handleThemeEvent);
-    return () => window.removeEventListener('nexus-theme-change', handleThemeEvent);
   }, []);
 
-  const toggleTheme = (dark: boolean) => {
-    setIsDarkMode(dark);
-    if (dark) {
-      document.documentElement.classList.add('dark');
-      document.body.classList.add('dark');
-      localStorage.setItem('nexus-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.body.classList.remove('dark');
-      localStorage.setItem('nexus-theme', 'light');
-    }
-    window.dispatchEvent(new CustomEvent('nexus-theme-change', { detail: { isDark: dark } }));
-  };
+  const toggleTheme = (dark: boolean) => setDarkMode(dark);
 
   const toggleNotifMute = () => {
-    const next = !notifMuted;
-    setNotifMuted(next);
-    localStorage.setItem('nexus-notif-muted', String(next));
-    // Header가 즉시 반영하도록 브로드캐스트 (Header에 동일 이벤트 리스너 존재)
-    window.dispatchEvent(new CustomEvent('nexus-notif-mute-change', { detail: { isMuted: next } }));
+    // Header와 같은 저장소 키를 구독하므로 쓰기만 하면 양쪽 화면이 함께 갱신된다.
+    writeLocalStorageItem('nexus-notif-muted', String(!notifMuted), 'nexus-notif-mute-change');
   };
 
   const handleSave = async () => {
@@ -104,6 +76,9 @@ export default function SystemSettingsPage() {
       autoPrintTrigger,
       hitlAlertThreshold: Math.max(1, Math.floor(hitlAlertCount) || 10),
     });
+    // 저장값이 구독으로 반영되므로 편집 draft는 비운다 (다음 편집 전까지 저장값 표시).
+    setDraftAutoPrint(null);
+    setDraftAlertCount(null);
 
     if (safetyStockLoaded) {
       setIsSaving(true);
@@ -309,7 +284,7 @@ export default function SystemSettingsPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setAutoPrintTrigger(!autoPrintTrigger)}
+                onClick={() => setDraftAutoPrint(!autoPrintTrigger)}
                 className={`w-12 h-6 rounded-full transition-colors relative p-0.5 shrink-0 ml-3 ${
                   autoPrintTrigger ? 'bg-emerald-600' : 'bg-gray-300 dark:bg-gray-600'
                 }`}
@@ -352,7 +327,7 @@ export default function SystemSettingsPage() {
                 type="number"
                 min={1}
                 value={hitlAlertCount}
-                onChange={(e) => setHitlAlertCount(Number(e.target.value))}
+                onChange={(e) => setDraftAlertCount(Number(e.target.value))}
                 className="w-16 p-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-xs font-mono font-bold text-center"
               />
             </div>

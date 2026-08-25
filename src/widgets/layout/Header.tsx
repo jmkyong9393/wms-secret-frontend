@@ -1,4 +1,6 @@
 'use client';
+import { useDarkMode } from '@/shared/lib/useDarkMode';
+import { useLocalStorageItem, writeLocalStorageItem } from '@/shared/lib/clientStore';
 import Image from "next/image";
 import { API_BASE_URL } from '@/shared/api/api-client';
 import { maskName } from '@/shared/lib/privacy-mask';
@@ -81,34 +83,15 @@ export default function Header() {
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isMuted, setIsMuted] = useState<boolean>(false); // Notification Mute State
   const isOnline = true; // PWA Network Connectivity Status
 
-  // Sync isMuted state with localStorage so Mute mode stays active across page transitions & sidebar navigation
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedMute = localStorage.getItem('nexus-notif-muted') === 'true';
-      setIsMuted(savedMute);
-
-      // 시스템 설정(/admin/settings) 페이지의 음소거 토글과 실시간 동기화
-      const handleMuteEvent = (e: Event) => {
-        const evt = e as CustomEvent<{ isMuted: boolean }>;
-        if (evt.detail && typeof evt.detail.isMuted === 'boolean') {
-          setIsMuted(evt.detail.isMuted);
-        }
-      };
-      window.addEventListener('nexus-notif-mute-change', handleMuteEvent);
-      return () => window.removeEventListener('nexus-notif-mute-change', handleMuteEvent);
-    }
-  }, []);
+  // 음소거는 localStorage가 원천(페이지 전환·설정 페이지와 공유) - 복사 대신 구독한다.
+  // 같은 탭 변경은 'nexus-notif-mute-change'로 통지받는다 (settings 페이지 토글 포함).
+  const isMuted = useLocalStorageItem('nexus-notif-muted', 'nexus-notif-mute-change') === 'true';
 
   const toggleMute = (mutedState?: boolean) => {
     const nextMute = mutedState !== undefined ? mutedState : !isMuted;
-    setIsMuted(nextMute);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nexus-notif-muted', String(nextMute));
-    }
+    writeLocalStorageItem('nexus-notif-muted', String(nextMute), 'nexus-notif-mute-change');
     if (nextMute) setActiveToast(null);
   };
   // 실시간 AI Agent / FDS 알림.
@@ -235,44 +218,9 @@ export default function Header() {
     }
   };
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const isDark = document.documentElement.classList.contains('dark') || localStorage.getItem('nexus-theme') === 'dark';
-      setIsDarkMode(isDark);
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-        document.body.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.body.classList.remove('dark');
-      }
-
-      const handleThemeEvent = (e: Event) => {
-        const customEvt = e as CustomEvent<{ isDark: boolean }>;
-        if (customEvt.detail && typeof customEvt.detail.isDark === 'boolean') {
-          setIsDarkMode(customEvt.detail.isDark);
-        }
-      };
-
-      window.addEventListener('nexus-theme-change', handleThemeEvent);
-      return () => window.removeEventListener('nexus-theme-change', handleThemeEvent);
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const nextDark = !isDarkMode;
-    setIsDarkMode(nextDark);
-    if (nextDark) {
-      document.documentElement.classList.add('dark');
-      document.body.classList.add('dark');
-      localStorage.setItem('nexus-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.body.classList.remove('dark');
-      localStorage.setItem('nexus-theme', 'light');
-    }
-    window.dispatchEvent(new CustomEvent('nexus-theme-change', { detail: { isDark: nextDark } }));
-  };
+  // 테마 원천(DOM 클래스·localStorage) 구독은 공용 훅이 담당한다 (설정 페이지와 공유).
+  const { isDarkMode, setDarkMode } = useDarkMode();
+  const toggleTheme = () => setDarkMode(!isDarkMode);
 
   const pathname = usePathname();
   const getPageTitle = (path: string) => {

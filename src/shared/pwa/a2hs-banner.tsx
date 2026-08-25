@@ -1,21 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useA2HS } from '@/shared/pwa/use-a2hs';
 import { Button } from '@/shared/ui/button';
 import { Download, X } from 'lucide-react';
 
 export function A2HSBanner() {
   const { isInstallable, promptToInstall } = useA2HS();
-  const [isVisible, setIsVisible] = useState(false);
+  // 표시 여부는 "설치 가능 && 사용자가 닫지 않음"의 파생값 - 이펙트로 복사할 상태가 아니다.
+  const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    if (isInstallable) {
-      setIsVisible(true);
-    }
-  }, [isInstallable]);
-
-  if (!isVisible || !isInstallable) {
+  if (!isInstallable || dismissed) {
     return null;
   }
 
@@ -36,7 +31,7 @@ export function A2HSBanner() {
           설치하기
         </Button>
         <button 
-          onClick={() => setIsVisible(false)}
+          onClick={() => setDismissed(true)}
           className="rounded-md p-1.5 text-blue-400 hover:bg-blue-100 hover:text-blue-600 focus:outline-none"
           aria-label="닫기"
         >

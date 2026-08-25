@@ -1,4 +1,5 @@
 'use client';
+import { useLocalStorageItem, writeLocalStorageItem } from '@/shared/lib/clientStore';
 import React from 'react';
 import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 import dynamic from 'next/dynamic';
@@ -125,11 +126,8 @@ export default function AdvancedDashboardPage() {
   // 검수 로그의 원장은 return_jobs이고 이는 매입가 산정 근거이자 감사 대상이라 지우지 않는다.
   // "비우기"는 이 브라우저에서 언제 이후 것만 볼지를 정하는 화면 설정이며, 서버에는
   // `since`로만 전달된다.
-  const [logsClearedAt, setLogsClearedAt] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    setLogsClearedAt(localStorage.getItem('dashboard_logs_cleared_at'));
-  }, []);
+  // 저장소가 원천인 값 - useState 복사 대신 구독한다(SSR 중에는 null).
+  const logsClearedAt = useLocalStorageItem('dashboard_logs_cleared_at', 'nexus-dashboard-logs-cleared');
 
   const { data: recentLogs } = useQuery({
     queryKey: ['dashboard-logs', logsClearedAt],
@@ -143,8 +141,7 @@ export default function AdvancedDashboardPage() {
 
   const clearLogs = () => {
     const now = new Date().toISOString();
-    localStorage.setItem('dashboard_logs_cleared_at', now);
-    setLogsClearedAt(now);
+    writeLocalStorageItem('dashboard_logs_cleared_at', now, 'nexus-dashboard-logs-cleared');
   };
 
   return (
@@ -405,8 +402,7 @@ export default function AdvancedDashboardPage() {
               <button
                 type="button"
                 onClick={() => {
-                  localStorage.removeItem('dashboard_logs_cleared_at');
-                  setLogsClearedAt(null);
+                  writeLocalStorageItem('dashboard_logs_cleared_at', null, 'nexus-dashboard-logs-cleared');
                 }}
                 className="text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
               >

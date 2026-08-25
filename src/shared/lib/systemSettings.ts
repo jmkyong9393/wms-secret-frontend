@@ -9,6 +9,8 @@
  * 소유한 기존 키를 그대로 쓴다 - 여기서 중복 정의하지 않는다.
  */
 
+import { useCallback, useSyncExternalStore } from 'react';
+
 export interface SystemSettings {
   /** LPN 발급 시 열전사 프린터(WebUSB) 연결을 시도할지 여부. 끄면 인쇄 단계를 건너뛴다. */
   autoPrintTrigger: boolean;
@@ -52,4 +54,26 @@ export function saveSystemSettings(patch: Partial<SystemSettings>): SystemSettin
     window.dispatchEvent(new CustomEvent(SETTINGS_CHANGE_EVENT, { detail: next }));
   }
   return next;
+}
+
+
+/**
+ * 시스템 설정 한 항목을 구독한다 (SSR 안전).
+ * 값이 원시형(boolean/number)이라 getSnapshot이 매번 계산해도 Object.is 비교로 안정적이다.
+ * 같은 탭 변경은 saveSystemSettings가 쏘는 SETTINGS_CHANGE_EVENT, 다른 탭은 storage 이벤트로 통지받는다.
+ */
+export function useSystemSettingValue<K extends keyof SystemSettings>(key: K): SystemSettings[K] {
+  const subscribe = useCallback((onChange: () => void) => {
+    window.addEventListener(SETTINGS_CHANGE_EVENT, onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+      window.removeEventListener(SETTINGS_CHANGE_EVENT, onChange);
+      window.removeEventListener('storage', onChange);
+    };
+  }, []);
+  return useSyncExternalStore(
+    subscribe,
+    () => getSystemSettings()[key],
+    () => DEFAULT_SETTINGS[key],
+  );
 }

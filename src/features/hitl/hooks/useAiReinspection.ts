@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useAtom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
 import { adminAPI } from '@/features/hitl/api/adminApi';
 import type { HitlTask } from '../types/hitl';
 
@@ -13,6 +15,10 @@ export interface ReinspectionView {
 }
 
 export interface PipelineLogEntry { time: string; agent: string; text: string; type: string }
+
+// 파이프라인 로그 영속화. 종전 useState+이펙트 2개(복원/저장)를 atomWithStorage 하나로 통합 -
+// getOnInit 기본(false)이라 첫 렌더는 빈 배열(서버 HTML과 일치), 마운트 후 저장분이 반영된다.
+const pipelineLogsAtom = atomWithStorage<PipelineLogEntry[]>("hitl_pipeline_logs", []);
 
 /**
  * AI 재검수 트리거·결과 폴링·라이브 로그 상태.
@@ -36,33 +42,16 @@ export function useAiReinspection(opts: {
 
   // 로그 패널은 실제 파이프라인 노드 명칭(Detector→Vision→Policy→Critic→Supervisor→Report)
   // 기준. 구 명칭("Explainer Agent") 저장 키는 마운트 시 청소한다.
-  const [pipelineLogs, setPipelineLogs] = useState<PipelineLogEntry[]>([]);
-  const [isMounted, setIsMounted] = useState(false);
+  const [pipelineLogs, setPipelineLogs] = useAtom(pipelineLogsAtom);
 
+  // 구 명칭("Explainer Agent") 저장 키 청소 - 부수효과만 있고 상태는 건드리지 않는다.
   useEffect(() => {
-    setIsMounted(true);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("hitl_explainer_logs");
-      const saved = localStorage.getItem("hitl_pipeline_logs");
-      if (saved) {
-        try {
-          setPipelineLogs(JSON.parse(saved));
-        } catch {}
-      }
-    }
+    localStorage.removeItem("hitl_explainer_logs");
   }, []);
 
-  useEffect(() => {
-    if (isMounted && typeof window !== "undefined") {
-      localStorage.setItem("hitl_pipeline_logs", JSON.stringify(pipelineLogs));
-    }
-  }, [pipelineLogs, isMounted]);
-
   const handleClearLogs = () => {
+    // atomWithStorage가 저장까지 담당하므로 상태만 비우면 된다.
     setPipelineLogs([]);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("hitl_pipeline_logs");
-    }
   };
 
   const handleTriggerAiReinspect = async (jobId: string) => {
