@@ -67,6 +67,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 규정상 보관하는 수정 전 원본이다(.gitignore 대상, CI에는 없다). 읽기 전용이므로
+    // 고칠 수 없는 코드인데, 검사하면 로컬에서만 게이트가 빨갛게 보인다.
+    "archive/**",
   ]),
 ]);
 
