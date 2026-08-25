@@ -1,9 +1,15 @@
 /**
- * 실시간 구독이 연결을 하나만 유지하는지 검증한다.
+ * 실시간 구독이 연결을 하나만 유지하고, 끊기면 되살아나는지 검증한다.
  *
- * 이 파일의 핵심 주장은 "화면이 여럿이어도 SSE 연결은 하나"다. 종전에는 화면마다
- * `new EventSource(...)`를 열어 Header와 작업 화면이 연결을 둘 유지했고, 서버는 연결마다
- * Redis pubsub을 하나씩 만들었다. 구조로만 보장하면 다음 사람이 쉽게 되돌리므로 고정한다.
+ * 이 파일의 핵심 주장은 둘이다.
+ * ① "화면이 여럿이어도 SSE 연결은 하나" — 종전에는 화면마다 `new EventSource(...)`를 열어
+ *    Header와 작업 화면이 연결을 둘 유지했고, 서버는 연결마다 Redis pubsub을 만들었다.
+ * ② "서버가 끊어도 다시 붙는다" — 브라우저의 자동 재연결에 맡겨 뒀더니 백엔드를 재시작한
+ *    뒤 45초를 관찰해도 되살아나지 않았다(2026-08-26 실측). 그대로 두면 배포할 때마다
+ *    접속 중인 모든 화면의 실시간이 새로고침 전까지 죽는다. 이제는 오류가 나면 상태와
+ *    무관하게 우리가 백오프로 다시 연다.
+ *
+ * 구조로만 보장하면 다음 사람이 쉽게 되돌리므로 고정한다.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -11,12 +17,21 @@ class FakeEventSource {
   static instances: FakeEventSource[] = [];
   onmessage: ((e: { data: string }) => void) | null = null;
   onerror: (() => void) | null = null;
+  onopen: (() => void) | null = null;
+  readyState = 0;
   closed = false;
   constructor(public url: string) {
     FakeEventSource.instances.push(this);
   }
-  close() { this.closed = true; }
+  close() { this.closed = true; this.readyState = 2; }
   emit(payload: unknown) { this.onmessage?.({ data: JSON.stringify(payload) }); }
+
+  /** 서버가 연결을 받아들였다. */
+  accept() { this.readyState = 1; this.onopen?.(); }
+  /** 서버가 연결을 종료해 브라우저가 재연결을 포기했다(CLOSED). */
+  die() { this.readyState = 2; this.onerror?.(); }
+  /** 일시적 끊김 — 브라우저가 스스로 재시도 중이다(CONNECTING). */
+  blip() { this.readyState = 0; this.onerror?.(); }
 }
 
 vi.stubGlobal('EventSource', FakeEventSource as unknown as typeof EventSource);
@@ -109,5 +124,124 @@ describe('subscribeRealtime', () => {
     expect(got).toEqual([]);
     expect(FakeEventSource.instances[0].closed).toBe(false);
     un();
+  });
+});
+
+describe('연결 복구', () => {
+  beforeEach(() => { FakeEventSource.instances = []; });
+
+  it('서버가 연결을 끊으면(CLOSED) 백오프 뒤에 다시 연결한다', async () => {
+    vi.useFakeTimers();
+    const { subscribeRealtime } = await freshModule();
+    const un = subscribeRealtime(() => {});
+    const first = FakeEventSource.instances[0];
+    first.accept();
+    first.die();
+    expect(FakeEventSource.instances).toHaveLength(1);   // 즉시 다시 열지는 않는다
+    vi.advanceTimersByTime(1100);
+    expect(FakeEventSource.instances).toHaveLength(2);   // 백오프 뒤 새 연결
+    un();
+    vi.useRealTimers();
+  });
+
+  it('일시적 끊김(CONNECTING)에서도 우리가 다시 연다', async () => {
+    // 브라우저 재시도에 맡겼더니 그 상태로 남은 채 영영 붙지 않았다(실측).
+    // 우리가 close()하면 브라우저의 예약된 재시도도 취소되므로 연결이 둘로 늘지 않는다.
+    vi.useFakeTimers();
+    const { subscribeRealtime } = await freshModule();
+    const un = subscribeRealtime(() => {});
+    FakeEventSource.instances[0].blip();
+    expect(FakeEventSource.instances[0].closed).toBe(true);   // 낡은 연결을 정리하고
+    vi.advanceTimersByTime(1100);
+    expect(FakeEventSource.instances).toHaveLength(2);        // 새로 연다
+    un();
+    vi.useRealTimers();
+  });
+
+  it('재연결이 실패하면 대기 시간을 늘려간다', async () => {
+    vi.useFakeTimers();
+    const { subscribeRealtime } = await freshModule();
+    const un = subscribeRealtime(() => {});
+    FakeEventSource.instances[0].die();
+    vi.advanceTimersByTime(1100);
+    expect(FakeEventSource.instances).toHaveLength(2);
+
+    FakeEventSource.instances[1].die();
+    vi.advanceTimersByTime(1100);                        // 1초로는 아직 부족하다
+    expect(FakeEventSource.instances).toHaveLength(2);
+    vi.advanceTimersByTime(1000);                        // 2초를 넘기면 재시도
+    expect(FakeEventSource.instances).toHaveLength(3);
+    un();
+    vi.useRealTimers();
+  });
+
+  it('재연결에 성공하면 구독자에게 재조회 신호를 보낸다', async () => {
+    // 끊긴 동안의 이벤트는 되감을 수 없으므로, 구독자가 전부 다시 가져와야 한다.
+    vi.useFakeTimers();
+    const { subscribeRealtime, RECONNECTED_EVENT } = await freshModule();
+    const got: string[] = [];
+    const un = subscribeRealtime((e) => got.push(e.type));
+    const first = FakeEventSource.instances[0];
+    first.accept();
+    expect(got).toEqual([]);                  // 첫 연결은 재연결이 아니다
+    first.die();
+    vi.advanceTimersByTime(1100);
+    FakeEventSource.instances[1].accept();
+    expect(got).toEqual([RECONNECTED_EVENT]);
+    un();
+    vi.useRealTimers();
+  });
+
+  it('하트비트는 화면에 전달하지 않는다', async () => {
+    // 연결 유지용 신호를 구독자에게 넘기면 토스트가 25초마다 뜨거나
+    // 쓸데없는 재조회가 돌게 된다.
+    const { subscribeRealtime } = await freshModule();
+    const got: string[] = [];
+    const un = subscribeRealtime((e) => got.push(e.type));
+    FakeEventSource.instances[0].emit({ type: 'HEARTBEAT' });
+    expect(got).toEqual([]);
+    un();
+  });
+
+  it('서버가 오래 조용하면 오류가 없어도 연결을 버리고 다시 연다', async () => {
+    // 중간 프록시가 백엔드 쪽만 끊으면 브라우저 소켓은 열린 채 남아
+    // onerror가 오지 않는다(실측). 침묵만이 유일한 단서다.
+    vi.useFakeTimers();
+    const { subscribeRealtime } = await freshModule();
+    const un = subscribeRealtime(() => {});
+    FakeEventSource.instances[0].accept();
+    vi.advanceTimersByTime(61000);                       // 생존 신호가 끊긴 채 60초
+    expect(FakeEventSource.instances[0].closed).toBe(true);
+    vi.advanceTimersByTime(1100);
+    expect(FakeEventSource.instances).toHaveLength(2);   // 새로 연결했다
+    un();
+    vi.useRealTimers();
+  });
+
+  it('하트비트를 받으면 감시 시계가 되감긴다', async () => {
+    vi.useFakeTimers();
+    const { subscribeRealtime } = await freshModule();
+    const un = subscribeRealtime(() => {});
+    FakeEventSource.instances[0].accept();
+    for (let i = 0; i < 4; i += 1) {
+      vi.advanceTimersByTime(25000);                     // 주기마다 생존 신호가 온다
+      FakeEventSource.instances[0].emit({ type: 'HEARTBEAT' });
+    }
+    expect(FakeEventSource.instances[0].closed).toBe(false);   // 100초가 지나도 살아 있다
+    expect(FakeEventSource.instances).toHaveLength(1);
+    un();
+    vi.useRealTimers();
+  });
+
+  it('구독자가 없으면 재연결하지 않는다', async () => {
+    vi.useFakeTimers();
+    const { subscribeRealtime } = await freshModule();
+    const un = subscribeRealtime(() => {});
+    un();                                     // 구독자 0
+    vi.advanceTimersByTime(3100);             // 유예가 지나 연결이 닫힌다
+    expect(FakeEventSource.instances[0].closed).toBe(true);
+    vi.advanceTimersByTime(60000);
+    expect(FakeEventSource.instances).toHaveLength(1);   // 아무도 안 보는데 되살리지 않는다
+    vi.useRealTimers();
   });
 });
