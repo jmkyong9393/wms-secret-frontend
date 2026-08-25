@@ -18,8 +18,7 @@ import MasterPagination from '@/shared/ui/MasterPagination';
 import BookCover from '@/entities/book/ui/BookCover';
 import BookCoverModal from '@/entities/book/ui/BookCoverModal';
 import { exportToCSV } from '@/shared/lib/exportCsv';
-import { useAtomValue } from 'jotai';
-import { currentUserAtom } from '@/entities/user/model/authAtoms';
+import { useHydratedUser } from '@/entities/user/model/useHydratedUser';
 import {
   FileCheck, Search, Printer, Eye, Clock, Calendar, CheckCircle2, AlertTriangle,
   XCircle, User, ShieldCheck, Sparkles, Download, BookOpen, X, Filter,
@@ -95,7 +94,9 @@ function toInspectionDefects(raw: unknown): InspectionItem['defects_found'] {
 
 export function InspectionDataTable({ role, scope }: { role: StockRole; scope: 'ALL' | 'MINE' }) {
   const isMine = scope === 'MINE';
-  const currentUser = useAtomValue(currentUserAtom);
+  // 서버에는 localStorage가 없어 아톰을 직접 읽으면 첫 클라이언트 렌더가 서버 HTML과
+  // 어긋난다(사번이 헤더 문구에 그대로 찍히는 화면이라 실제로 hydration 불일치가 났다).
+  const { user: currentUser, hydrated } = useHydratedUser();
   // 세션이 아직 로드되지 않았을 때 특정 사번으로 폴백하면 그 계정의 검수 이력이
   // 조회된다. 값이 없으면 조회 자체를 하지 않는다.
   const workerId = currentUser?.employeeId ?? null;
@@ -339,7 +340,7 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
             {isMine ? (
-              <>작업자 <strong className="text-gray-900 dark:text-white font-extrabold font-mono">[{workerId}]</strong> 님이 현장에서 진행한 AI 검수 및 반품 입고 판독 히스토리입니다.</>
+              <>작업자 <strong className="text-gray-900 dark:text-white font-extrabold font-mono">[{hydrated ? (workerId ?? '미확인') : '…'}]</strong> 님이 현장에서 진행한 AI 검수 및 반품 입고 판독 히스토리입니다.</>
             ) : (
               '신품 Fast-Track 바이패스 건 및 중고 AI 멀티에이전트 검수 내역을 실시간으로 모니터링합니다.'
             )}
