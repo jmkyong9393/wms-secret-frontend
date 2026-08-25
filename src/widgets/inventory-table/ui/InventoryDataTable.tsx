@@ -362,7 +362,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 font-sans text-gray-900 dark:text-gray-100 transition-colors">
       {/* Top Banner Header (관제 표준 패턴) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
+      <div className="@container flex flex-col @2xl:flex-row @2xl:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Badge variant="secondary" className={badgeClass}>
@@ -372,7 +372,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
               <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">수정 기능 비활성화됨 (조회 전용)</span>
             )}
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight flex items-center gap-2 min-w-0">
             {isAdmin ? (
               <PackageSearch className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             ) : (
@@ -389,7 +389,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
 
         <Button
           onClick={handleExportAllCSV}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs shrink-0 self-start sm:self-auto"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs shrink-0 self-start @2xl:self-auto"
         >
           <Download className="w-4 h-4 mr-1.5" />
           전체 목록 엑셀 내보내기 ({sortedItems.length}건)
@@ -397,14 +397,16 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
       </div>
 
       {/* Filter & Search Toolbar */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
-          <div className="md:col-span-3 flex items-center gap-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-2.5">
+      {/* 뷰포트가 아니라 이 카드의 실제 폭에 반응한다(@container). 사이드바가 288px를
+          차지해, 뷰포트 기준 md:(768px)로는 좁은 본문에도 12컬럼이 깔려 라벨이 잘렸다. */}
+      <div className="@container bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs p-6 space-y-5">
+        <div className="grid grid-cols-1 @2xl:grid-cols-12 gap-3.5">
+          <div className="@2xl:col-span-3 flex items-center gap-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-2.5">
             <BookOpen className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
             <select
               value={searchField}
               onChange={(e) => setSearchField(e.target.value as SearchField)}
-              className="bg-transparent text-sm font-extrabold text-gray-800 dark:text-gray-200 outline-none w-full cursor-pointer"
+              className="bg-transparent text-sm font-extrabold text-gray-800 dark:text-gray-200 outline-none w-full min-w-0 cursor-pointer"
             >
               <option value="ALL" className="dark:bg-gray-800">🔍 전체 검색</option>
               <option value="BOOK_INFO" className="dark:bg-gray-800">📚 도서 정보 통합</option>
@@ -417,7 +419,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
             </select>
           </div>
 
-          <div className="md:col-span-5 relative">
+          <div className="@2xl:col-span-5 relative">
             <Search className="w-4 h-4 text-gray-400 dark:text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -428,13 +430,13 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
             />
           </div>
 
-          <div className="md:col-span-4 flex items-center gap-2.5 bg-blue-50/70 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2.5">
+          <div className="@2xl:col-span-4 flex items-center gap-2.5 bg-blue-50/70 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2.5">
             <ArrowUpDown className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
             <span className="text-sm font-extrabold text-blue-900 dark:text-blue-300 shrink-0">정렬:</span>
             <select
               value={sortBy}
               onChange={(e) => { setSortBy(e.target.value as SortKey); setCurrentPage(1); }}
-              className="bg-transparent text-sm font-black text-blue-900 dark:text-blue-300 outline-none w-full cursor-pointer"
+              className="bg-transparent text-sm font-black text-blue-900 dark:text-blue-300 outline-none w-full min-w-0 cursor-pointer"
             >
               <option value="LATEST" className="dark:bg-gray-800">🕒 최신 입고순 (기본)</option>
               <option value="OLDEST" className="dark:bg-gray-800">⏳ 오래된 입고순</option>
@@ -446,8 +448,8 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 pt-3.5 border-t border-gray-100 dark:border-gray-800 text-sm">
-          <div className="md:col-span-5 flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800/90 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+        <div className="grid grid-cols-1 @3xl:grid-cols-12 gap-3.5 pt-3.5 border-t border-gray-100 dark:border-gray-800 text-sm">
+          <div className="@3xl:col-span-5 flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800/90 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
             {([
               ['ALL', '📚 전체 재고'],
               ['NEW', '✨ 신품도서만'],
@@ -456,7 +458,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
               <button
                 key={val}
                 onClick={() => { setBookTypeFilter(val); setCurrentPage(1); }}
-                className={`flex-1 py-1.5 px-3 rounded-lg font-black text-xs transition-all ${
+                className={`flex-1 min-w-0 truncate whitespace-nowrap py-1.5 px-3 rounded-lg font-black text-xs transition-all ${
                   bookTypeFilter === val
                     ? val === 'NEW'
                       ? 'bg-blue-600 text-white shadow-2xs'
@@ -471,13 +473,13 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
             ))}
           </div>
 
-          <div className="md:col-span-4 flex items-center gap-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-3.5 py-2">
+          <div className="@3xl:col-span-4 flex items-center gap-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-3.5 py-2">
             <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
             <span className="font-extrabold text-gray-700 dark:text-gray-300 shrink-0">UBCI:</span>
             <select
               value={ubciScoreFilter}
               onChange={(e) => { setUbciScoreFilter(e.target.value); setCurrentPage(1); }}
-              className="bg-transparent text-sm font-extrabold text-gray-800 dark:text-gray-200 outline-none w-full cursor-pointer"
+              className="bg-transparent text-sm font-extrabold text-gray-800 dark:text-gray-200 outline-none w-full min-w-0 cursor-pointer"
             >
               <option value="ALL" className="dark:bg-gray-800">전체 점수대</option>
               <option value="90_PLUS" className="dark:bg-gray-800">S급 / MINT (95~100점)</option>
@@ -487,13 +489,13 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
             </select>
           </div>
 
-          <div className="md:col-span-3 flex items-center gap-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-3.5 py-2">
+          <div className="@3xl:col-span-3 flex items-center gap-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-3.5 py-2">
             <Calendar className="w-4 h-4 text-indigo-500 shrink-0" />
             <span className="font-extrabold text-gray-700 dark:text-gray-300 shrink-0">입고일:</span>
             <select
               value={dateFilter}
               onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
-              className="bg-transparent text-sm font-extrabold text-gray-800 dark:text-gray-200 outline-none w-full cursor-pointer"
+              className="bg-transparent text-sm font-extrabold text-gray-800 dark:text-gray-200 outline-none w-full min-w-0 cursor-pointer"
             >
               <option value="ALL" className="dark:bg-gray-800">전체 기간</option>
               <option value="TODAY" className="dark:bg-gray-800">오늘 입고</option>
