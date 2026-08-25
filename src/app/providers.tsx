@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Provider as JotaiProvider } from "jotai";
 import { useState } from "react";
+import { RealtimeQuerySync } from "./realtimeQuerySync";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   // QueryClient는 각 세션마다 독립적으로 인스턴스를 유지해야 하므로 useState 안에 선언
@@ -23,6 +24,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <JotaiProvider>
+        {/* 실시간 이벤트를 받아 관련 캐시를 무효화한다 (화면 이동과 무관하게 동작) */}
+        <RealtimeQuerySync />
         {children}
       </JotaiProvider>
       <ReactQueryDevtools initialIsOpen={false} />
