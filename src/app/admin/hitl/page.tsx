@@ -66,7 +66,12 @@ export default function AdminHitlDashboard() {
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
 
-  const pageEnterTime = useRef(Date.now());
+  // 렌더 중 시계를 읽으면 같은 입력에 다른 결과가 나온다(react-hooks/purity).
+  // 체류 시간 기준점은 마운트 직후에 한 번만 찍는다.
+  const pageEnterTime = useRef(0);
+  useEffect(() => {
+    pageEnterTime.current = Date.now();
+  }, []);
 
   const fetchTasks = async () => {
     setLoading(true);

@@ -191,7 +191,8 @@ export default function Header() {
     } catch {
       // 낙관적 갱신 유지 - 다음 로드 때 서버 상태로 다시 맞춰진다.
     }
-  }, []);
+    // setState 함수는 항상 안정적이지만, 명시해야 컴파일러 추론과 일치해 메모이제이션이 보존된다.
+  }, [setNotifications, setUnreadCount]);
 
   // Auto-hide Toast Banner after 5 seconds
   useEffect(() => {

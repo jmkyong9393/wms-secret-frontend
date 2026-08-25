@@ -130,17 +130,22 @@ export function HitlImageModal({ task, onClose, edits, onEditsChange }: HitlImag
     startPy: number;
   } | null>(null);
   const liveDragRef = useRef(liveDrag);
-  liveDragRef.current = liveDrag;
   const curRef = useRef(cur);
-  curRef.current = cur;
   const onEditsChangeRef = useRef(onEditsChange);
-  onEditsChangeRef.current = onEditsChange;
 
   // 새 결함 그리기: 빈 영역을 드래그하면 사각형이 자라난다.
   const drawStateRef = useRef<{ startPx: number; startPy: number; imageIndex: number } | null>(null);
   const [liveDrawBox, setLiveDrawBox] = useState<EditedBbox | null>(null);
   const liveDrawBoxRef = useRef(liveDrawBox);
-  liveDrawBoxRef.current = liveDrawBox;
+
+  // 최신값 보관 ref는 렌더 중에 쓰지 않는다(react-hooks/refs). 커밋 뒤 이펙트에서 갱신한다 —
+  // 읽는 쪽이 전부 포인터 이벤트·rAF 콜백이라 항상 커밋 이후에 실행된다.
+  useEffect(() => {
+    liveDragRef.current = liveDrag;
+    curRef.current = cur;
+    onEditsChangeRef.current = onEditsChange;
+    liveDrawBoxRef.current = liveDrawBox;
+  });
   const [pendingNewBox, setPendingNewBox] = useState<{ bbox: EditedBbox; imageIndex: number } | null>(null);
   const [pendingType, setPendingType] = useState<string>(DEFECT_TYPE_OPTIONS[0].value);
 

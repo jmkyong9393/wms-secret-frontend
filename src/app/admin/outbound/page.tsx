@@ -23,6 +23,9 @@ export default function OutboundDashboard() {
 
   const [inventoryBooks, setInventoryBooks] = useState<OutboundBook[]>([]);
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>([]);
+  // 아래 이펙트들이 이 setter를 참조하므로 선언이 먼저 와야 한다(react-hooks/immutability).
+  const [bookQuantities, setBookQuantities] = useState<Record<string, number>>({});
+  const [selectedBoxId, setSelectedBoxId] = useState<string>("BOOK-S2");
   const [selectedCushion] = useState<CushionOption>({ thick_mm: 9.0, mode: 'top' });
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [, setIsBooksLoading] = useState<boolean>(true);
@@ -157,7 +160,6 @@ export default function OutboundDashboard() {
 
   // Quantity Stepper State per book (id -> quantity, default 1)
   const [outboundBookTypeFilter, setOutboundBookTypeFilter] = useState<'ALL' | 'NEW' | 'USED'>('ALL');
-  const [bookQuantities, setBookQuantities] = useState<Record<string, number>>({});
 
   const getBookQty = (id: string) => bookQuantities[id] || 1;
 
@@ -299,7 +301,6 @@ export default function OutboundDashboard() {
       setPricingResult(null);
     }
   }, [selectedBookIds, bookQuantities]);
-  const [selectedBoxId, setSelectedBoxId] = useState<string>("BOOK-S2");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [confirmed, setConfirmed] = useState<boolean>(false);
   const [aiReasoningLog] = useState<string>('');
