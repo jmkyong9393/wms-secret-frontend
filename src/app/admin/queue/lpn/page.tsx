@@ -60,7 +60,7 @@ export default function LpnDashboardPage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">
-      <div className="flex justify-between items-center bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800">
+      <div className="flex flex-wrap justify-between items-center gap-3 bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-gray-800">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-800 dark:text-gray-100 flex items-center">
             <Barcode className="w-8 h-8 mr-3 text-blue-600" />
@@ -71,7 +71,7 @@ export default function LpnDashboardPage() {
         <button
           onClick={fetchLpns}
           disabled={isLoading}
-          className="bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 px-4 py-2 rounded-xl flex items-center font-bold transition-colors"
+          className="shrink-0 whitespace-nowrap bg-slate-100 dark:bg-gray-800 hover:bg-slate-200 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 px-4 py-2 rounded-xl flex items-center font-bold transition-colors"
         >
           <RefreshCcw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
           새로고침

@@ -589,7 +589,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
           어려웠다(작업자가 실제로 쓰는 화면인데도). md 미만에서는 카드 리스트로, md 이상에서는
           기존 테이블로 전환한다 - 데스크톱 동작은 그대로 두고 좁은 화면에서만 레이아웃을 바꾼다.
         */}
-        <div className="md:hidden space-y-3">
+        <div className="xl:hidden space-y-3">
           {loading ? (
             <p className="py-16 text-center text-gray-400 font-bold text-sm">재고 데이터를 불러오는 중...</p>
           ) : paginatedItems.length === 0 ? (
@@ -717,16 +717,16 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                     )}
                     {isAdmin && !isNew && (
                       <>
-                        <button onClick={() => handleSingleAiRetry(item)} className="p-2 bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-lg active:scale-95 shrink-0" title="AI 재검수 요청">
+                        <button onClick={() => handleSingleAiRetry(item)} className="p-1.5 bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-lg active:scale-95 shrink-0" title="AI 재검수 요청">
                           <RotateCcw className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => handleSingleReshoot(item)} className="p-2 bg-cyan-50 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 rounded-lg active:scale-95 shrink-0" title="현장 재촬영 요청">
+                        <button onClick={() => handleSingleReshoot(item)} className="p-1.5 bg-cyan-50 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 rounded-lg active:scale-95 shrink-0" title="현장 재촬영 요청">
                           <Camera className="w-3.5 h-3.5" />
                         </button>
                       </>
                     )}
                     {isAdmin && (
-                      <button onClick={() => handleSingleDelete(item.id, item.lpn_barcode)} className="p-2 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg active:scale-95 shrink-0" title="재고 삭제">
+                      <button onClick={() => handleSingleDelete(item.id, item.lpn_barcode)} className="p-1.5 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-lg active:scale-95 shrink-0" title="재고 삭제">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -737,36 +737,34 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
           )}
         </div>
 
-        <div className="hidden md:block overflow-x-auto w-full">
+        <div className="hidden xl:block overflow-x-auto w-full">
           <table className="w-full text-left border-collapse">
             <thead className="bg-gray-50/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 uppercase border-y border-gray-200 dark:border-gray-800 font-bold text-xs tracking-wider">
               <tr>
                 {isAdmin && (
-                  <th className="py-3.5 px-4 w-12 text-center">
+                  <th className="py-3.5 px-3 w-12 text-center">
                     <input type="checkbox" checked={isAllPaginatedSelected} onChange={toggleSelectAll} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" />
                   </th>
                 )}
-                <th className="py-3.5 px-4 whitespace-nowrap">LPN 바코드</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">ISBN-13</th>
-                <th className="py-3.5 px-4 min-w-[280px]">도서 정보 (제목 / 저자 / 출판사 / 정가)</th>
-                <th className="py-3.5 px-4 text-center whitespace-nowrap">UBCI 등급 (점수)</th>
-                <th className="py-3.5 px-4 text-center whitespace-nowrap">보관 위치</th>
-                <th className="py-3.5 px-4 text-center whitespace-nowrap">재고 수량</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">작업자 / 입고 일시</th>
-                <th className="py-3.5 px-4 text-center whitespace-nowrap">조회 및 라벨</th>
-                {isAdmin && <th className="py-3.5 px-4 text-center whitespace-nowrap">검수 및 삭제</th>}
+                <th className="py-3.5 px-3 whitespace-nowrap">식별자 (LPN / ISBN)</th>
+                <th className="py-3.5 px-3 min-w-[190px]">도서 정보 (제목 / 저자 / 출판사 / 정가)</th>
+                <th className="py-3.5 px-3 text-center whitespace-nowrap">UBCI 등급 (점수)</th>
+                <th className="py-3.5 px-3 text-center whitespace-nowrap">보관 위치</th>
+                <th className="py-3.5 px-3 text-center whitespace-nowrap">재고 수량</th>
+                <th className="py-3.5 px-3 whitespace-nowrap hidden 2xl:table-cell">작업자 / 입고 일시</th>
+                <th className="py-3.5 px-2 text-center whitespace-nowrap min-w-[116px] 2xl:min-w-[210px]">작업</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-sans">
               {loading ? (
                 <tr>
-                  <td colSpan={isAdmin ? 10 : 8} className="py-16 text-center text-gray-400 font-bold text-sm">
+                  <td colSpan={8} className="py-16 text-center text-gray-400 font-bold text-sm">
                     재고 데이터를 불러오는 중...
                   </td>
                 </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 10 : 8} className="py-16 text-center text-gray-400 dark:text-gray-500">
+                  <td colSpan={8} className="py-16 text-center text-gray-400 dark:text-gray-500">
                     <p className="text-sm font-bold">조회 조건에 해당하는 재고 데이터가 없습니다.</p>
                     <p className="text-xs mt-1">검색 키워드나 UBCI 점수대 필터를 초기화해 보세요.</p>
                   </td>
@@ -787,20 +785,25 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                       className={`hover:bg-gray-50/80 dark:hover:bg-gray-800/50 transition-colors ${isSelected ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''}`}
                     >
                       {isAdmin && (
-                        <td className="py-4 px-4 text-center" data-row-stop>
+                        <td className="py-4 px-3 text-center" data-row-stop>
                           <input type="checkbox" checked={isSelected} onChange={() => toggleSelectItem(item.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" />
                         </td>
                       )}
 
-                      {/* LPN */}
-                      <td className="py-4 px-4 whitespace-nowrap">
+                      {/*
+                        식별자 — 신품과 중고는 쓰는 식별자가 다르다(신품은 LPN 미발급,
+                        중고는 ISBN보다 LPN이 기준). 두 컬럼으로 두면 행마다 한쪽이 반드시
+                        빈칸이라 폭만 먹는다. 한 컬럼으로 합치고 행 종류에 따라 바꿔 보여준다.
+                      */}
+                      <td className="py-4 px-3 whitespace-nowrap">
                         {!isNew ? (
                           <div className="flex items-center gap-2.5">
                             <div className="bg-gray-100 dark:bg-gray-800 p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 shrink-0 shadow-2xs">
                               {/* QR 진입점은 /lpn/[lpn] (행 클릭 링크와 동일 경로) */}
                               <QRCodeSVG value={`${typeof window !== 'undefined' ? window.location.origin : ''}/lpn/${item.lpn_barcode}`} size={42} />
                             </div>
-                            <div>
+                            {/* 좁은 폭에서는 QR만 남기고 번호·뱃지는 접는다 */}
+                            <div className="hidden 2xl:block">
                               <p className="font-mono font-black text-gray-900 dark:text-white text-sm">{item.lpn_barcode}</p>
                               <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 inline-block mt-0.5">
                                 Verified LPN
@@ -808,22 +811,14 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                             </div>
                           </div>
                         ) : (
-                          <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-mono font-bold shadow-2xs inline-flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                            LPN 미발급 (신품)
+                          <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-mono font-black">
+                            {item.book.isbn}
                           </span>
                         )}
                       </td>
 
-                      {/* ISBN */}
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-mono font-black">
-                          {item.book.isbn}
-                        </span>
-                      </td>
-
                       {/* 도서 정보 */}
-                      <td className="py-4 px-4">
+                      <td className="py-4 px-3">
                         <div className="flex items-center gap-3">
                           <span data-row-stop className="contents">
                           <BookCover
@@ -869,7 +864,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                       </td>
 
                       {/* 등급 */}
-                      <td className="py-4 px-4 text-center whitespace-nowrap">
+                      <td className="py-4 px-3 text-center whitespace-nowrap">
                         {isNew ? (
                           <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-2xs">
                             미표기 (신품 Fast-Track)
@@ -884,7 +879,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                       </td>
 
                       {/* Zone */}
-                      <td className="py-4 px-4 text-center whitespace-nowrap">
+                      <td className="py-4 px-3 text-center whitespace-nowrap">
                         <span className="inline-flex items-center font-mono font-black text-indigo-950 dark:text-indigo-200 bg-indigo-50/80 dark:bg-indigo-950/80 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 text-xs sm:text-sm shadow-2xs">
                           <MapPin className="w-4 h-4 mr-1 text-indigo-600 dark:text-indigo-400 shrink-0" />
                           {formatZone(item.zone)}
@@ -892,7 +887,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                       </td>
 
                       {/* 수량 */}
-                      <td className="py-4 px-4 text-center whitespace-nowrap">
+                      <td className="py-4 px-3 text-center whitespace-nowrap">
                         <span className="font-mono font-black text-gray-900 dark:text-white text-base block">{item.quantity}권</span>
                         {isNew ? (
                           <span className="text-[11px] font-extrabold text-blue-700 dark:text-blue-300 block bg-blue-100 dark:bg-blue-950 px-2 py-0.5 rounded-md border border-blue-300 dark:border-blue-800 mt-1">✨ 신품도서</span>
@@ -901,8 +896,8 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                         )}
                       </td>
 
-                      {/* 작업자/트랙 · 일시 (긴 서술 대신 `사번(이름) / 트랙` 한 줄) */}
-                      <td className="py-4 px-4 whitespace-nowrap">
+                      {/* 작업자/트랙 · 일시 (긴 서술 대신 `사번(이름) / 트랙` 한 줄) — 참조 정보라 가장 먼저 접는다 */}
+                      <td className="py-4 px-3 whitespace-nowrap hidden 2xl:table-cell">
                         <p className="text-gray-900 dark:text-white font-mono text-sm font-black">
                           {item.worker_label}
                           <span className="text-gray-400 dark:text-gray-500 font-bold"> / </span>
@@ -914,62 +909,61 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                         </p>
                       </td>
 
-                      {/* 조회 및 라벨 */}
-                      <td className="py-4 px-4 text-center whitespace-nowrap">
-                        <div className="flex justify-center items-center gap-1.5">
+                      {/* 작업 — 조회·라벨·검수·삭제를 한 칸에 모은다. 두 칸으로 나누면 폭만 먹고,
+                          좁은 화면에서 뒤쪽 칸이 잘려 접근 자체가 막혔다. */}
+                      <td className="py-4 px-2 text-center">
+                        <div className="flex flex-wrap justify-center items-center gap-1">
                           {href ? (
                             <Link
                               href={href}
-                              className="px-3.5 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-extrabold rounded-xl transition-all text-sm flex items-center gap-1 border border-gray-200 dark:border-gray-700 shadow-2xs active:scale-95 whitespace-nowrap shrink-0"
+                              className="px-1.5 2xl:px-3.5 py-1.5 2xl:py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-extrabold rounded-xl transition-all text-sm flex items-center gap-1 border border-gray-200 dark:border-gray-700 shadow-2xs active:scale-95 whitespace-nowrap shrink-0"
                               title="상세 정보 조회"
                             >
                               <Eye className="w-4 h-4 text-gray-600 dark:text-gray-400 shrink-0" />
-                              <span>상세</span>
+                              <span className="hidden 2xl:inline">상세</span>
                             </Link>
                           ) : (
                             <button
                               onClick={() => openZoom(item)}
-                              className="px-3.5 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-extrabold rounded-xl transition-all text-sm flex items-center gap-1 border border-gray-200 dark:border-gray-700 shadow-2xs active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+                              className="px-1.5 2xl:px-3.5 py-1.5 2xl:py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-extrabold rounded-xl transition-all text-sm flex items-center gap-1 border border-gray-200 dark:border-gray-700 shadow-2xs active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
                               title="도서 상세정보 (표지 확대)"
                             >
                               <Eye className="w-4 h-4 text-gray-600 dark:text-gray-400 shrink-0" />
-                              <span>상세</span>
+                              <span className="hidden 2xl:inline">상세</span>
                             </button>
                           )}
 
                           {!isNew && (
                             <button
                               onClick={() => handlePrintLabel(item)}
-                              className="px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-extrabold rounded-xl transition-all text-sm flex items-center gap-1 shadow-2xs active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+                              className="px-1.5 2xl:px-3.5 py-1.5 2xl:py-2 bg-indigo-50 dark:bg-indigo-950 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-extrabold rounded-xl transition-all text-sm flex items-center gap-1 shadow-2xs active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
                               title="LPN 열전사 라벨 인쇄"
                             >
                               <Printer className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                              <span>인쇄</span>
+                              <span className="hidden 2xl:inline">인쇄</span>
                             </button>
                           )}
-                        </div>
-                      </td>
 
-                      {/* 관리자 전용: 검수/삭제 */}
-                      {isAdmin && (
-                        <td className="py-4 px-4 text-center whitespace-nowrap">
-                          <div className="flex justify-center items-center gap-1.5">
+                          {/* 관리자 전용: 검수/삭제 */}
+                          {isAdmin && (
+                            <>
                             {!isNew && (
                               <>
-                                <button onClick={() => handleSingleAiRetry(item)} className="p-2 bg-purple-50 dark:bg-purple-950 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold rounded-xl transition-all shadow-2xs active:scale-95 shrink-0" title="AI Vision Agent 재검수 요청">
+                                <button onClick={() => handleSingleAiRetry(item)} className="p-1.5 bg-purple-50 dark:bg-purple-950 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold rounded-xl transition-all shadow-2xs active:scale-95 shrink-0" title="AI Vision Agent 재검수 요청">
                                   <RotateCcw className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                                 </button>
-                                <button onClick={() => handleSingleReshoot(item)} className="p-2 bg-cyan-50 dark:bg-cyan-950 hover:bg-cyan-100 dark:hover:bg-cyan-900 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 font-bold rounded-xl transition-all shadow-2xs active:scale-95 shrink-0" title="현장 작업자 재촬영 요청">
+                                <button onClick={() => handleSingleReshoot(item)} className="p-1.5 bg-cyan-50 dark:bg-cyan-950 hover:bg-cyan-100 dark:hover:bg-cyan-900 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 font-bold rounded-xl transition-all shadow-2xs active:scale-95 shrink-0" title="현장 작업자 재촬영 요청">
                                   <Camera className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                                 </button>
                               </>
                             )}
-                            <button onClick={() => handleSingleDelete(item.id, item.lpn_barcode)} className="p-2 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold rounded-xl transition-all shadow-2xs active:scale-95 shrink-0" title="재고 삭제 (폐기)">
+                            <button onClick={() => handleSingleDelete(item.id, item.lpn_barcode)} className="p-1.5 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold rounded-xl transition-all shadow-2xs active:scale-95 shrink-0" title="재고 삭제 (폐기)">
                               <Trash2 className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                             </button>
-                          </div>
-                        </td>
-                      )}
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
