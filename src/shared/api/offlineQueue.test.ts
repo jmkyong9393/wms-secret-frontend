@@ -32,8 +32,9 @@ describe('OfflineQueue', () => {
     expect(task.attempts).toBe(0);
     expect(task.images).toHaveLength(1);
     // Blob 자체의 보존은 여기서 확인하지 못한다 - fake-indexeddb가 jsdom Blob을
-    // 구조화 복제하지 못해 빈 객체로 돌아온다(환경 한계, 실제 브라우저는 Blob을 그대로 담는다).
-    // 브라우저에서의 왕복은 현장 검증 항목으로 남긴다.
+    // 구조화 복제하지 못해 빈 객체로 돌아온다(환경 한계).
+    // 실제 브라우저 왕복은 2026-08-25 운영 환경에서 직접 확인했다:
+    // Blob 인스턴스·MIME 타입·크기·바이트열이 모두 원본과 일치했다.
   });
 
   it('오래된 건부터 전송한다', async () => {
