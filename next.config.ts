@@ -66,6 +66,8 @@ const nextConfig: NextConfig = {
       "style-src 'self' 'unsafe-inline'",
       `img-src 'self' data: blob: ${cdn}`,   // 촬영 미리보기(blob) · 검수 사진(CDN)
       "font-src 'self' data:",
+      // Sentry가 blob: 워커를 만든다. worker-src를 두지 않으면 script-src로 폴백돼 위반이 뜬다.
+      "worker-src 'self' blob:",
       `connect-src 'self' ${cdn}`,           // API·SSE는 동일 출처, Sentry는 tunnelRoute 경유
       "frame-ancestors 'none'",
       "base-uri 'self'",
