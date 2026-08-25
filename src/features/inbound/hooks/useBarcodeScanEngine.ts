@@ -30,6 +30,12 @@ export function useBarcodeScanEngine(opts: {
   // 스캔 거절 사유를 화면에 띄운다. 아무 반응 없이 계속 스캔만 되면 작업자는
   // "왜 안 잡히지"만 반복하게 되므로, 무엇이 잘못됐는지 그 자리에서 알려준다.
   const [scanWarning, setScanWarning] = useState<string | null>(null);
+  // 스캔 화면 재진입 시 직전 경고를 지운다 - 이펙트가 아니라 렌더 중 조정으로 처리.
+  const [prevActive, setPrevActive] = useState(opts.active);
+  if (opts.active !== prevActive) {
+    setPrevActive(opts.active);
+    if (opts.active) setScanWarning(null);
+  }
   // 같은 코드가 두 번 나와야 채택한다. ZXing과 BarcodeDetector가 이미 동시에 돌고 있어
   // 추가 비용 없이 교차 확인이 된다. 광학 오독은 접두어·체크디지트를 통과하더라도
   // 똑같은 값으로 재현되는 일이 드물어, 접두어 검사가 놓친 오독까지 여기서 걸린다.
@@ -45,7 +51,6 @@ export function useBarcodeScanEngine(opts: {
       // 스캔 화면에 들어올 때만 잠금을 푼다. 직전 스캔 처리가 끝났다는 뜻이다.
       isHandlingScanRef.current = false;
       scanCandidateRef.current = null;
-      setScanWarning(null);
 
       if (!codeReader.current) {
         const hints = new Map();

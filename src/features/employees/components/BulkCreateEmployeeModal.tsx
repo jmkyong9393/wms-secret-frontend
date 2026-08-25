@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { X, Download, Upload, CheckCircle2, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import * as XLSX from "xlsx";
@@ -45,18 +45,18 @@ export function BulkCreateEmployeeModal({ open, onClose, currentUser }: BulkCrea
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mutation = useBulkCreateEmployeesMutation();
 
-  const resetState = () => {
+  const resetState = useCallback(() => {
     setRows([]);
     setValidationError(null);
     setConfirmOpen(false);
     setResults(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  };
+  }, []);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     resetState();
     onClose();
-  };
+  }, [resetState, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -65,7 +65,7 @@ export function BulkCreateEmployeeModal({ open, onClose, currentUser }: BulkCrea
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
+  }, [open, handleClose]);
 
   if (!open) return null;
 

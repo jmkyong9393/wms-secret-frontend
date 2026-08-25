@@ -1,4 +1,5 @@
 'use client';
+import { useQuery } from '@tanstack/react-query';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
 /**
@@ -13,7 +14,7 @@ import { API_BASE_URL } from '@/shared/api/api-client';
  * - localhost:8000 하드코딩 대신 API_BASE_URL 환경변수 기반으로 교체.
  */
 
-import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import MasterPagination from '@/shared/ui/MasterPagination';
 import BookCover from '@/entities/book/ui/BookCover';
 import BookCoverModal from '@/entities/book/ui/BookCoverModal';
@@ -92,6 +93,9 @@ function toInspectionDefects(raw: unknown): InspectionItem['defects_found'] {
   });
 }
 
+// 미조회 상태의 안정 폴백 - 렌더마다 새 배열을 만들면 파생 useMemo가 매번 재계산된다.
+const EMPTY_INSPECTIONS: InspectionItem[] = [];
+
 export function InspectionDataTable({ role, scope }: { role: StockRole; scope: 'ALL' | 'MINE' }) {
   const isMine = scope === 'MINE';
   // 서버에는 localStorage가 없어 아톰을 직접 읽으면 첫 클라이언트 렌더가 서버 HTML과
@@ -101,7 +105,6 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
   // 조회된다. 값이 없으면 조회 자체를 하지 않는다.
   const workerId = currentUser?.employeeId ?? null;
 
-  const [inspections, setInspections] = useState<InspectionItem[]>([]);
   const [selectedReportItem, setSelectedReportItem] = useState<InspectionItem | null>(null);
   const [activeImgIdx, setActiveImgIdx] = useState(0);
   const [reportLoading, setReportLoading] = useState(false);
@@ -122,63 +125,56 @@ export function InspectionDataTable({ role, scope }: { role: StockRole; scope: '
   // 판매 가능 재고(available-books)는 "지금 팔 수 있는 물건" 목록이지 검수 이력이 아니므로
   // 이 화면의 소스가 될 수 없다. 백엔드가 점수·등급·담당자를 null로 내려주면 null 그대로
   // 두고 화면에서 미산출로 표기한다.
-  useEffect(() => {
-    // 세션이 아직 없으면 조회하지 않는다. 이전 사용자의 목록이 남지 않도록 비운다.
-    if (isMine && !workerId) {
-      setInspections([]);
-      return;
-    }
-    (async () => {
-      try {
-        const qs = new URLSearchParams({ limit: '200' });
-        // 서버가 세션에서 대상자를 정한다. 이 값은 화면 표시용 힌트일 뿐이며,
-        // 남의 사번을 넣어도 서버가 무시한다(returns/router.py의 인가 참조).
-        if (isMine) qs.set('scope', 'mine');
+  const { data: fetchedInspections } = useQuery<InspectionItem[]>({
+    // 세션이 아직 없으면 조회하지 않는다. 키에 조회 조건이 들어가므로
+    // 이전 사용자의 목록이 남지 않는다.
+    queryKey: ['inspections', isMine, workerId],
+    enabled: !isMine || !!workerId,
+    queryFn: async () => {
+      const qs = new URLSearchParams({ limit: '200' });
+      // 서버가 세션에서 대상자를 정한다. 이 값은 화면 표시용 힌트일 뿐이며,
+      // 남의 사번을 넣어도 서버가 무시한다(returns/router.py의 인가 참조).
+      if (isMine) qs.set('scope', 'mine');
 
-        const res = await fetch(`${API_BASE_URL}/api/v1/returns/inspections?${qs}`, {
-          credentials: 'include',   // 쿠키 세션을 실어야 서버가 조회자를 식별한다
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache' },
-        });
-        if (!res.ok) return;
-        const payload = await res.json();
-        const items: (Partial<InspectionItem> & { id: string; job_id?: string; inspector_label?: string; updated_at?: string; created_at?: string; avg_defect_confidence?: number | null })[] = payload?.items ?? [];
+      const res = await fetch(`${API_BASE_URL}/api/v1/returns/inspections?${qs}`, {
+        credentials: 'include',   // 쿠키 세션을 실어야 서버가 조회자를 식별한다
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (!res.ok) throw new Error('검수 처리 이력 조회 실패');
+      const payload = await res.json();
+      const items: (Partial<InspectionItem> & { id: string; job_id?: string; inspector_label?: string; updated_at?: string; created_at?: string; avg_defect_confidence?: number | null })[] = payload?.items ?? [];
 
-        setInspections(
-          items.map((it) => ({
-            id: it.job_id ?? it.id,
-            lpn_barcode: it.lpn_barcode || LPN_UNISSUED_LABEL,
-            book: {
-              title: it.book?.title || '도서 정보 없음',
-              author: it.book?.author || '-',
-              publisher: it.book?.publisher || '-',
-              isbn: it.book?.isbn || '-',
-              base_price: it.book?.base_price ?? 0,
-              cover_image_url: it.book?.cover_image_url || '',
-            },
-            ubci_score: it.ubci_score ?? null,
-            grade: it.grade ?? null,
-            confirmed_grade: it.confirmed_grade ?? null,
-            status: toInspectionStatus(it.status),
-            // 검수 담당자는 등급을 확정한 주체다. 조회자 사번(workerId)을 쓰면
-            // 누가 보느냐에 따라 담당자가 바뀐다.
-            worker_id: it.inspector_label || '등급 미확정',
-            worker_label: it.worker_label || '작업자 미기록',
-            inspected_at: it.updated_at || it.created_at || '',
-            // 결함별 판독 신뢰도의 평균. 결함이 없으면 근거가 없어 null이다.
-            ai_confidence: it.avg_defect_confidence != null ? Math.round(it.avg_defect_confidence * 1000) / 10 : null,
-            // 결함 상세와 실촬영 이미지는 목록 응답에 없다. 모달을 열 때
-            // /inventory/{id}로 실제 판독 결과를 받아 채운다(openReport 참조).
-            defects_found: [],
-            image_urls: [],
-          })),
-        );
-      } catch (err) {
-        console.warn('검수 처리 이력 조회 실패', err);
-      }
-    })();
-     
-  }, [isMine, workerId]);
+      return items.map((it) => ({
+        id: it.job_id ?? it.id,
+        lpn_barcode: it.lpn_barcode || LPN_UNISSUED_LABEL,
+        book: {
+          title: it.book?.title || '도서 정보 없음',
+          author: it.book?.author || '-',
+          publisher: it.book?.publisher || '-',
+          isbn: it.book?.isbn || '-',
+          base_price: it.book?.base_price ?? 0,
+          cover_image_url: it.book?.cover_image_url || '',
+        },
+        ubci_score: it.ubci_score ?? null,
+        grade: it.grade ?? null,
+        confirmed_grade: it.confirmed_grade ?? null,
+        status: toInspectionStatus(it.status),
+        // 검수 담당자는 등급을 확정한 주체다. 조회자 사번(workerId)을 쓰면
+        // 누가 보느냐에 따라 담당자가 바뀐다.
+        worker_id: it.inspector_label || '등급 미확정',
+        worker_label: it.worker_label || '작업자 미기록',
+        inspected_at: it.updated_at || it.created_at || '',
+        // 결함별 판독 신뢰도의 평균. 결함이 없으면 근거가 없어 null이다.
+        ai_confidence: it.avg_defect_confidence != null ? Math.round(it.avg_defect_confidence * 1000) / 10 : null,
+        // 결함 상세와 실촬영 이미지는 목록 응답에 없다. 모달을 열 때
+        // /inventory/{id}로 실제 판독 결과를 받아 채운다(openReport 참조).
+        defects_found: [],
+        image_urls: [],
+      }));
+    },
+  });
+  const inspections = fetchedInspections ?? EMPTY_INSPECTIONS;
 
   // KST 기준 오늘(YYYY-MM-DD). Intl 객체 생성은 비싸므로 마운트 시 한 번만 만든다.
   const kstToday = useMemo(

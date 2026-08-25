@@ -1,10 +1,11 @@
 'use client';
 
 import type { BrowserMultiFormatReader } from '@zxing/browser';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Flashlight, FlashlightOff, Loader2 } from 'lucide-react';
 import { useCamera } from '@/shared/lib/useCamera';
 import { mapGuideToVideoRoi } from '@/shared/lib/camera-roi';
+import { useIsHydrated } from '@/shared/lib/clientStore';
 
 // 표준 lib.dom에 없는 실험 API·제약 키의 최소 형태
 interface BarcodeDetectorLike { detect(source: CanvasImageSource | HTMLVideoElement): Promise<{ rawValue: string }[]> }
@@ -44,21 +45,42 @@ const ROI_MAX_WIDTH = 1280;
 // N회마다 한 번은 전체 프레임을 훑는다 (가이드 밖 코드 구제).
 const FULL_FRAME_EVERY = 6;
 
+// BarcodeDetector는 브라우저 내장이라 렌더 시점(useState 지연 초기화)에 즉시 만든다.
+// code_128 미지원 기기는 생성 자체가 throw하므로 축소 세트로 재시도한다.
+function createNativeDetector(): BarcodeDetectorLike | null {
+  if (typeof window === 'undefined' || !('BarcodeDetector' in window)) return null;
+  for (const formats of [
+    ['qr_code', 'ean_13', 'ean_8', 'code_128'],
+    ['qr_code', 'ean_13', 'ean_8'],
+  ]) {
+    try {
+      // @ts-expect-error BarcodeDetector는 표준 lib.dom에 없다
+      return new window.BarcodeDetector({ formats }) as BarcodeDetectorLike;
+    } catch {
+      // 다음 포맷 세트로 재시도
+    }
+  }
+  return null;
+}
+
 export default function PickingBarcodeScanner({ onDetected, paused = false, validate }: Props) {
   const { videoRef, startCamera, stopCamera, stream, error } = useCamera();
   const guideRef = useRef<HTMLDivElement | null>(null);
   const roiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
-  const detectorRef = useRef<BarcodeDetectorLike | null>(null);
   const lastHitRef = useRef<{ code: string; at: number } | null>(null);
   const tickRef = useRef(0);
 
-  const [engineReady, setEngineReady] = useState(false);
+  const [nativeDetector] = useState<BarcodeDetectorLike | null>(createNativeDetector);
+  const [zxingReady, setZxingReady] = useState(false);
+  // SSR 첫 렌더와 hydration 렌더가 같은 값을 보도록 게이트한다 - 서버에는 디텍터가 없다.
+  const hydrated = useIsHydrated();
+  const engineReady = hydrated && (!!nativeDetector || zxingReady);
   const [lastCode, setLastCode] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
-  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchBroken, setTorchBroken] = useState(false);
 
   // 콜백을 ref로 들고 디코딩 루프의 의존성에서 뺀다. 부모가 인라인 함수를 넘기면
   // 리렌더마다 루프가 재시작되어 스캔이 계속 끊긴다.
@@ -73,13 +95,20 @@ export default function PickingBarcodeScanner({ onDetected, paused = false, vali
     return () => stopCamera();
   }, [startCamera, stopCamera]);
 
-  // 손전등 지원 여부 확인 (창고 저조도 대응)
-  useEffect(() => {
+  // 손전등 지원 여부 (창고 저조도 대응) - 스트림의 파생값 + 제어 실패 오버레이.
+  const torchCapable = useMemo(() => {
     const track = stream?.getVideoTracks?.()[0];
-    if (!track) return;
+    if (!track) return false;
     const caps = (track.getCapabilities?.() ?? {}) as { torch?: boolean };
-    setTorchSupported(!!caps.torch);
+    return !!caps.torch;
   }, [stream]);
+  const [prevTorchStream, setPrevTorchStream] = useState(stream);
+  if (stream !== prevTorchStream) {
+    // 새 스트림에서는 제어 실패 이력을 리셋한다 (렌더 중 상태 조정)
+    setPrevTorchStream(stream);
+    setTorchBroken(false);
+  }
+  const torchSupported = torchCapable && !torchBroken;
 
   const toggleTorch = useCallback(async () => {
     const track = stream?.getVideoTracks?.()[0];
@@ -89,32 +118,15 @@ export default function PickingBarcodeScanner({ onDetected, paused = false, vali
       await track.applyConstraints({ advanced: [{ torch: next } as ExtendedTrackConstraint] });
       setTorchOn(next);
     } catch {
-      setTorchSupported(false);
+      setTorchBroken(true);
     }
   }, [stream, torchOn]);
 
   // --- 엔진 준비 ---
-  // BarcodeDetector는 브라우저 내장이라 즉시 쓴다. ZXing은 번들이 무거우므로
+  // BarcodeDetector는 지연 초기화로 이미 준비됐다. ZXing은 번들이 무거우므로
   // 동적 import로 뒤에서 받아온다 - 카메라가 켜지는 순간부터 스캔이 가능해야 한다.
   useEffect(() => {
     let cancelled = false;
-
-    if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
-      // code_128 미지원 기기는 생성 자체가 throw하므로 축소 세트로 재시도한다.
-      for (const formats of [
-        ['qr_code', 'ean_13', 'ean_8', 'code_128'],
-        ['qr_code', 'ean_13', 'ean_8'],
-      ]) {
-        try {
-          // @ts-expect-error BarcodeDetector는 표준 lib.dom에 없다
-          detectorRef.current = new window.BarcodeDetector({ formats });
-          setEngineReady(true);
-          break;
-        } catch {
-          detectorRef.current = null;
-        }
-      }
-    }
 
     (async () => {
       try {
@@ -135,7 +147,7 @@ export default function PickingBarcodeScanner({ onDetected, paused = false, vali
         ]);
         hints.set(DecodeHintType.TRY_HARDER, true);
         readerRef.current = new BrowserMultiFormatReader(hints);
-        setEngineReady(true);
+        setZxingReady(true);
       } catch (e) {
         console.warn('ZXing 로딩 실패 - 내장 디텍터로만 동작합니다:', e);
       }
@@ -205,9 +217,9 @@ export default function PickingBarcodeScanner({ onDetected, paused = false, vali
       const canvas = grabRoi();
       if (canvas) {
         // 1) 네이티브 디텍터 (하드웨어 가속)
-        if (detectorRef.current) {
+        if (nativeDetector) {
           try {
-            const found = await detectorRef.current.detect(canvas);
+            const found = await nativeDetector.detect(canvas);
             if (alive && found?.length) {
               const text = String(found[0].rawValue || '').trim();
               if (text.length >= 4) emit(text);
@@ -236,7 +248,7 @@ export default function PickingBarcodeScanner({ onDetected, paused = false, vali
       alive = false;
       clearTimeout(timer);
     };
-  }, [paused, videoRef]);
+  }, [paused, videoRef, nativeDetector]);
 
   return (
     <div className="relative w-full max-w-md mx-auto aspect-[4/3] bg-black rounded-xl overflow-hidden shadow-2xl">

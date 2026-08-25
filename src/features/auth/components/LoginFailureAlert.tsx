@@ -21,25 +21,26 @@ export default function LoginFailureAlert({
   failure: LoginFailure | null;
   onClose: () => void;
 }) {
-  const [visible, setVisible] = useState(false);
+  // 표시 여부는 failure 유무의 파생값이고, 자동 닫힘만 dismissed 오버레이로 얹는다.
+  // 새 failure가 오면 렌더 중 조정으로 dismissed를 리셋한다.
+  const [dismissed, setDismissed] = useState(false);
+  const [prevFailure, setPrevFailure] = useState<LoginFailure | null>(failure);
+  if (failure !== prevFailure) {
+    setPrevFailure(failure);
+    setDismissed(false);
+  }
 
+  // 단순 오타(warning)는 6초 뒤 자동으로 사라진다. error는 남겨서 조치를 유도한다.
   useEffect(() => {
-    if (!failure) {
-      setVisible(false);
-      return;
-    }
-    setVisible(true);
-
-    // 단순 오타(warning)는 6초 뒤 자동으로 사라진다. error는 남겨서 조치를 유도한다.
-    if (failure.severity !== 'warning') return;
+    if (!failure || failure.severity !== 'warning') return;
     const timer = setTimeout(() => {
-      setVisible(false);
+      setDismissed(true);
       onClose();
     }, 6000);
     return () => clearTimeout(timer);
   }, [failure, onClose]);
 
-  if (!failure || !visible) return null;
+  if (!failure || dismissed) return null;
 
   const isError = failure.severity === 'error';
   const Icon = isError ? ShieldAlert : AlertTriangle;
@@ -96,7 +97,7 @@ export default function LoginFailureAlert({
           <button
             type="button"
             onClick={() => {
-              setVisible(false);
+              setDismissed(true);
               onClose();
             }}
             aria-label="알림 닫기"
