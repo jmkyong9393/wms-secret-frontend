@@ -70,7 +70,7 @@ export default function PrivacyPolicyPage() {
                   </tr>
                   <tr>
                     <td className="p-3 border-r font-bold text-gray-900">물류 검수 감사 데이터</td>
-                    <td className="p-3 border-r">LPN 바코드, AI 5-Agent BBox 판독 이미지, UBCI 점수, 8대 reason_code</td>
+                    <td className="p-3 border-r">LPN 바코드, AI Multi-Agent BBox 판독 이미지, UBCI 점수, 8대 reason_code</td>
                     <td className="p-3 border-r font-medium">AI 품질 검수 이력 추적 및 HITL 오버라이드 감사 로그 보관</td>
                     <td className="p-3 font-mono">영구 보관 (물류 관제 이력)</td>
                   </tr>
