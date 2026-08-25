@@ -2,7 +2,7 @@
 import type { RawBBox } from '@/entities/inspection/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Search, Download, Filter, FileText, Loader2, AlertTriangle, Trash2, Camera, Printer, RefreshCcw, Check, Edit2, X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { inboundService } from '@/features/inbound/api';
@@ -21,9 +21,6 @@ export default function HistoryDataGrid() {
   const [selectedBook, setSelectedBook] = useState<HistoryLog | null>(null);
   const queryClient = useQueryClient();
   
-  // AI Detail Result Fetching
-  const [detailData, setDetailData] = useState<{ images?: string[]; result?: { defect_coordinates?: RawBBox[]; grade?: string; ubci_score?: number; defect_description?: string } } | null>(null);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   // 수동 ISBN 입력 관련 상태
@@ -31,21 +28,22 @@ export default function HistoryDataGrid() {
   const [editIsbnVal, setEditIsbnVal] = useState('');
   const [isUpdatingIsbn, setIsUpdatingIsbn] = useState(false);
 
-  useEffect(() => {
-    if (selectedBook && selectedBook.job_id) {
-      setIsDetailLoading(true);
-      setSelectedImageIndex(0); // Reset index when opening a new book
-      fetch(`${API_BASE_URL}/api/v1/inbound/result/${selectedBook.job_id}`)
-        .then(res => res.json())
-        .then(data => {
-          setDetailData(data);
-        })
-        .catch(err => console.error(err))
-        .finally(() => setIsDetailLoading(false));
-    } else {
-      setDetailData(null);
-    }
-  }, [selectedBook]);
+  // AI 판독 상세 - 선택된 작업 ID가 곧 쿼리 키. 선택 해제 시에는 파생값이 null이 된다.
+  const detailJobId = selectedBook?.job_id ?? null;
+  const detailQuery = useQuery<{ images?: string[]; result?: { defect_coordinates?: RawBBox[]; grade?: string; ubci_score?: number; defect_description?: string } }>({
+    queryKey: ['inboundDetail', detailJobId],
+    enabled: !!detailJobId,
+    queryFn: () => fetch(`${API_BASE_URL}/api/v1/inbound/result/${detailJobId}`).then(res => res.json()),
+  });
+  const detailData = detailJobId ? (detailQuery.data ?? null) : null;
+  const isDetailLoading = !!detailJobId && detailQuery.isFetching;
+
+  // 새 도서를 열면 이미지 인덱스를 첫 장으로 - 렌더 중 상태 조정.
+  const [prevDetailJobId, setPrevDetailJobId] = useState<string | null>(detailJobId);
+  if (detailJobId !== prevDetailJobId) {
+    setPrevDetailJobId(detailJobId);
+    setSelectedImageIndex(0);
+  }
 
   const handleUpdateIsbn = async (lpn: string) => {
     if (!editIsbnVal.trim()) {

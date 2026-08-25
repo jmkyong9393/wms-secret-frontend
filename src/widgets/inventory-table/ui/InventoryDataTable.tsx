@@ -14,7 +14,7 @@
  * - 페이지네이션은 관제 표준 MasterPagination으로 통일.
  */
 
-import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import BookCover from '@/entities/book/ui/BookCover';
@@ -139,9 +139,12 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
   });
 
   // 캐시 결과를 로컬 상태로 받아 일괄 구역 변경·삭제 같은 화면 내 변이를 지원한다.
-  useEffect(() => {
+  // 새 조회 결과가 온 렌더에서만 로컬 복사본을 재동기화한다 (렌더 중 상태 조정).
+  const [syncedFrom, setSyncedFrom] = useState<InventoryItem[] | undefined>(undefined);
+  if (fetchedItems !== syncedFrom) {
+    setSyncedFrom(fetchedItems);
     if (fetchedItems) setItems(fetchedItems);
-  }, [fetchedItems]);
+  }
 
   // 검색어는 지연 값으로 필터링한다 - 키 입력마다 전체 목록을 재계산해 입력이
   // 버벅이는 것을 막는다 (입력 반영은 즉시, 목록 갱신은 여유 프레임에).

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import {
   RefreshCw,
   CheckCircle2,
@@ -62,7 +62,7 @@ export default function AdminHitlDashboard() {
     pageEnterTime.current = Date.now();
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     setLoading(true);
     try {
       const data = await adminAPI.getPendingHitlTasks();
@@ -115,11 +115,16 @@ export default function AdminHitlDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [reinspectingIds, setLoading, setTasks, setDecisions, setGrades, setReasons, setComments]);
 
+  // 최초 1회만 조회한다. fetchTasks는 재검수 목록이 바뀌면 재생성되지만
+  // (pinned 병합이 그 값을 쓴다) 그때마다 재조회할 이유는 없다.
+  const didInitialFetch = useRef(false);
   useEffect(() => {
+    if (didInitialFetch.current) return;
+    didInitialFetch.current = true;
     fetchTasks();
-  }, []);
+  }, [fetchTasks]);
 
   // 검색어 필터링
   // PENDING = AI 파이프라인이 아직 도는 중(판정 전). 결재 대상(HITL_REQUIRED)이 아니므로

@@ -34,6 +34,18 @@ interface BinPacking3DViewerProps {
   aiRecommendationLog?: string;
 }
 
+// 8 Industrial Cushion Materials Catalog (See-Through Translucent Glass Packaging)
+const cushionCatalog = [
+  { id: "CUSH-08", name: "3D 폼 블록 코너 캡", mode: "side", thick_mm: 30.0, thick: "30.0mm", target: "B2B 코너 파손 방지 (보호 99점)", color: "rgba(147, 51, 234, 0.25)", stroke: "rgba(126, 34, 206, 0.95)", protection_score: 99 },
+  { id: "CUSH-05", name: "에어 튜브 3D 범퍼", mode: "both", thick_mm: 20.0, thick: "20.0mm", target: "전방위 낙하 방지 (보호 98점)", color: "rgba(99, 102, 241, 0.25)", stroke: "rgba(67, 56, 202, 0.95)", protection_score: 98 },
+  { id: "CUSH-06", name: "코너 에어 범퍼 가드", mode: "side", thick_mm: 15.0, thick: "15.0mm", target: "모서리 충격 흡수 (보호 95점)", color: "rgba(59, 130, 246, 0.25)", stroke: "rgba(29, 78, 216, 0.95)", protection_score: 95 },
+  { id: "CUSH-04", name: "PE폼/뽁뽁이 4면 측면 래핑", mode: "side", thick_mm: 25.0, thick: "25.0mm", target: "표준 4면 측면 래핑 (보호 92점)", color: "rgba(6, 182, 212, 0.25)", stroke: "rgba(14, 116, 144, 0.95)", protection_score: 92 },
+  { id: "CUSH-02", name: "친환경 벌집 종이", mode: "both", thick_mm: 12.0, thick: "12.0mm", target: "전방위 3D 래핑 패키징 (보호 88점)", color: "rgba(16, 185, 129, 0.25)", stroke: "rgba(4, 120, 87, 0.95)", protection_score: 88 },
+  { id: "CUSH-07", name: "크라프트 종이 4면 패킹", mode: "side", thick_mm: 10.0, thick: "10.0mm", target: "친환경 4면 측면 래핑 (보호 85점)", color: "rgba(217, 119, 6, 0.25)", stroke: "rgba(180, 83, 9, 0.95)", protection_score: 85 },
+  { id: "CUSH-03", name: "뽁뽁이 상단 25mm 채움", mode: "top", thick_mm: 25.0, thick: "25.0mm", target: "상단 완충 패딩 (보호 80점)", color: "rgba(245, 158, 11, 0.28)", stroke: "rgba(217, 119, 6, 0.95)", protection_score: 80 },
+  { id: "CUSH-01", name: "에어필로우 슬림패드", mode: "top", thick_mm: 9.0, thick: "9.0mm", target: "상단 완충 패딩 (보호 75점)", color: "rgba(245, 158, 11, 0.25)", stroke: "rgba(180, 83, 9, 0.95)", protection_score: 75 },
+];
+
 export default function BinPacking3DViewer({
   selectedBox,
   selectedBook,
@@ -50,17 +62,6 @@ export default function BinPacking3DViewer({
     eff: 94.5
   };
 
-  // 8 Industrial Cushion Materials Catalog (See-Through Translucent Glass Packaging)
-  const cushionCatalog = [
-    { id: "CUSH-08", name: "3D 폼 블록 코너 캡", mode: "side", thick_mm: 30.0, thick: "30.0mm", target: "B2B 코너 파손 방지 (보호 99점)", color: "rgba(147, 51, 234, 0.25)", stroke: "rgba(126, 34, 206, 0.95)", protection_score: 99 },
-    { id: "CUSH-05", name: "에어 튜브 3D 범퍼", mode: "both", thick_mm: 20.0, thick: "20.0mm", target: "전방위 낙하 방지 (보호 98점)", color: "rgba(99, 102, 241, 0.25)", stroke: "rgba(67, 56, 202, 0.95)", protection_score: 98 },
-    { id: "CUSH-06", name: "코너 에어 범퍼 가드", mode: "side", thick_mm: 15.0, thick: "15.0mm", target: "모서리 충격 흡수 (보호 95점)", color: "rgba(59, 130, 246, 0.25)", stroke: "rgba(29, 78, 216, 0.95)", protection_score: 95 },
-    { id: "CUSH-04", name: "PE폼/뽁뽁이 4면 측면 래핑", mode: "side", thick_mm: 25.0, thick: "25.0mm", target: "표준 4면 측면 래핑 (보호 92점)", color: "rgba(6, 182, 212, 0.25)", stroke: "rgba(14, 116, 144, 0.95)", protection_score: 92 },
-    { id: "CUSH-02", name: "친환경 벌집 종이", mode: "both", thick_mm: 12.0, thick: "12.0mm", target: "전방위 3D 래핑 패키징 (보호 88점)", color: "rgba(16, 185, 129, 0.25)", stroke: "rgba(4, 120, 87, 0.95)", protection_score: 88 },
-    { id: "CUSH-07", name: "크라프트 종이 4면 패킹", mode: "side", thick_mm: 10.0, thick: "10.0mm", target: "친환경 4면 측면 래핑 (보호 85점)", color: "rgba(217, 119, 6, 0.25)", stroke: "rgba(180, 83, 9, 0.95)", protection_score: 85 },
-    { id: "CUSH-03", name: "뽁뽁이 상단 25mm 채움", mode: "top", thick_mm: 25.0, thick: "25.0mm", target: "상단 완충 패딩 (보호 80점)", color: "rgba(245, 158, 11, 0.28)", stroke: "rgba(217, 119, 6, 0.95)", protection_score: 80 },
-    { id: "CUSH-01", name: "에어필로우 슬림패드", mode: "top", thick_mm: 9.0, thick: "9.0mm", target: "상단 완충 패딩 (보호 75점)", color: "rgba(245, 158, 11, 0.25)", stroke: "rgba(180, 83, 9, 0.95)", protection_score: 75 },
-  ];
 
   // Rotation angles (deg)
   const [rotX, setRotX] = useState<number>(25);
@@ -197,9 +198,12 @@ export default function BinPacking3DViewer({
   // 완충재 수동 선택이 초기화된다.
   const selectedBoxId = selectedBox?.id;
   const booksContentKey = (selectedBooks ?? []).map(b => `${b.id}:${(b as { quantity?: number }).quantity ?? 1}`).join('|');
-  useEffect(() => {
+  const cushionResetKey = `${selectedBoxId}|${booksContentKey}`;
+  const [appliedCushionResetKey, setAppliedCushionResetKey] = useState(cushionResetKey);
+  if (cushionResetKey !== appliedCushionResetKey) {
+    setAppliedCushionResetKey(cushionResetKey);
     setUserSelectedCushionId(null);
-  }, [selectedBoxId, booksContentKey]);
+  }
 
   const activeCushion = userSelectedCushionId
     ? (cushionCatalog.find(c => c.id === userSelectedCushionId) || recommendedCushion)
@@ -653,7 +657,7 @@ export default function BinPacking3DViewer({
     // 5. Painter's Algorithm 일괄 플러시: 도서/완충재 큐보이드를 depth 내림차순 렌더
     flushCuboidQueue();
 
-  }, [rotX, rotY, boxW, boxD, boxH, zoomLevel, userSelectedCushionId, activeCushion, sortedBooks, booksTotalH, maxBookW, maxBookD, airPad_H, showCutaway, cushionGhostMode]);
+  }, [rotX, rotY, boxW, boxD, boxH, zoomLevel, activeCushion, sortedBooks, airPad_H, showCutaway, cushionGhostMode]);
 
   useEffect(() => {
     if (canvasRef.current) {

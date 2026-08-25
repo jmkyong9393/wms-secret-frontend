@@ -1,8 +1,9 @@
 "use client";
+import { useQuery } from '@tanstack/react-query';
 import type { PickingInstruction, OutboundBook, CushionOption, PricingResult, DemoOrder } from '@/features/outbound/model/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { BOOK_SLIM_BOX_OPTIONS, BOX_OPTIONS, type BoxOption } from '@/features/outbound/constants/boxOptions';
 import { todayYYYYMMDD, randomB2bCustomerName } from '@/features/outbound/utils/simulation';
@@ -16,7 +17,6 @@ import { BoxSelectionPanel } from '@/features/outbound/components/BoxSelectionPa
 import { Camera, TrendingUp, Sparkles, RefreshCcw } from 'lucide-react';
 
 export default function OutboundDashboard() {
-  const [mockOrder, setMockOrder] = useState<DemoOrder | null>(null);
   const [boxCategoryTab, setBoxCategoryTab] = useState<'slim' | 'standard'>('slim');
 
   // 100% Real PostgreSQL DB REST API Data Binding (No Mock Objects)
@@ -40,7 +40,6 @@ export default function OutboundDashboard() {
   const [selectedInstructionId, setSelectedInstructionId] = useState<string | null>(null);
   const activeInstruction = pickingInstructions.find(pi => pi.id === selectedInstructionId) || null;
   // 백엔드 Two-Track 가격 응답 전문 (라인별 신품/중고 x 수량 확정가)
-  const [pricingResult, setPricingResult] = useState<PricingResult | null>(null);
 
   const fetchPickingInstructions = async (): Promise<PickingInstruction[]> => {
     try {
@@ -68,25 +67,32 @@ export default function OutboundDashboard() {
     })();
   }, []);
 
-  // 지시서 선택 시 해당 도서를 자동 체크 + 수량 세팅 (이후 수동 수정 가능)
-  useEffect(() => {
-    if (!activeInstruction || inventoryBooks.length === 0) return;
-    const ids: string[] = [];
-    const quantities: Record<string, number> = {};
-    activeInstruction.items.forEach((it) => {
-      const frontId = it.is_new ? `NEW-BOOK-${it.book_id}` : it.used_item_id;
-      if (frontId && inventoryBooks.some(b => b.id === frontId)) {
-        ids.push(frontId);
-        quantities[frontId] = it.quantity;
+  // 지시서 선택 시 해당 도서를 자동 체크 + 수량 세팅 (이후 수동 수정 가능).
+  // 이펙트 대신 렌더 중 상태 조정 패턴 - 지시서·재고 목록 조합이 바뀐 렌더에서만 1회 반영한다.
+  // 목록 재조회(할당 중고 포함)로 배열이 갈리면 다시 맞춘다 - length만 보면
+  // 지시서를 바꿨는데 권수가 같을 때 재매칭이 건너뛰어진다.
+  const autoSelectKey = activeInstruction && inventoryBooks.length > 0
+    ? `${selectedInstructionId}|${inventoryBooks.map(b => b.id).join(',')}`
+    : null;
+  const [appliedAutoSelectKey, setAppliedAutoSelectKey] = useState<string | null>(null);
+  if (autoSelectKey !== appliedAutoSelectKey) {
+    setAppliedAutoSelectKey(autoSelectKey);
+    if (autoSelectKey && activeInstruction) {
+      const ids: string[] = [];
+      const quantities: Record<string, number> = {};
+      activeInstruction.items.forEach((it) => {
+        const frontId = it.is_new ? `NEW-BOOK-${it.book_id}` : it.used_item_id;
+        if (frontId && inventoryBooks.some(b => b.id === frontId)) {
+          ids.push(frontId);
+          quantities[frontId] = it.quantity;
+        }
+      });
+      if (ids.length > 0) {
+        setSelectedBookIds(ids);
+        setBookQuantities(prev => ({ ...prev, ...quantities }));
       }
-    });
-    if (ids.length > 0) {
-      setSelectedBookIds(ids);
-      setBookQuantities(prev => ({ ...prev, ...quantities }));
     }
-    // 목록 재조회(할당 중고 포함)로 배열이 갈리면 다시 맞춘다 - length만 보면
-    // 지시서를 바꿨는데 권수가 같을 때 재매칭이 건너뛰어진다.
-  }, [selectedInstructionId, inventoryBooks]);
+  }
 
   // Fetch real DB outbound summary KPI
   useEffect(() => {
@@ -161,7 +167,7 @@ export default function OutboundDashboard() {
   // Quantity Stepper State per book (id -> quantity, default 1)
   const [outboundBookTypeFilter, setOutboundBookTypeFilter] = useState<'ALL' | 'NEW' | 'USED'>('ALL');
 
-  const getBookQty = (id: string) => bookQuantities[id] || 1;
+  const getBookQty = useCallback((id: string) => bookQuantities[id] || 1, [bookQuantities]);
 
   const setBookQty = (id: string, qty: number, maxStock?: number) => {
     const dbLimit = typeof maxStock === 'number' ? maxStock : 1;
@@ -189,8 +195,6 @@ export default function OutboundDashboard() {
     const rate = b.isNew ? 0.90 : 0.65;
     return acc + Math.round((b.listPrice || 30000) * rate) * qty;
   }, 0);
-  const displayTotalPrice = pricingResult?.final_price ?? localFallbackTotal;
-  const perUnitAvgPrice = totalBooksCount > 0 ? Math.round(displayTotalPrice / totalBooksCount) : 0;
 
   const handleSelectAllBooks = () => {
     setSelectedBookIds(filteredBooks.map(b => b.id));
@@ -201,34 +205,27 @@ export default function OutboundDashboard() {
   };
   const bestRecommendedBox = React.useMemo(
     () => computeBestBox(selectedBooks, getBookQty, selectedCushion),
-    [selectedBooks, selectedCushion],
+    [selectedBooks, getBookQty, selectedCushion],
   );
 
-  // Auto-selection Switching: Automatically switch selected box AND TAB to AI Best Recommended Box
-  useEffect(() => {
-    if (bestRecommendedBox && bestRecommendedBox.id) {
-      setSelectedBoxId(bestRecommendedBox.id);
-      const isSlim = BOOK_SLIM_BOX_OPTIONS.some(b => b.id === bestRecommendedBox.id);
-      if (isSlim && boxCategoryTab !== 'slim') {
-        setBoxCategoryTab('slim');
-      } else if (!isSlim && boxCategoryTab !== 'standard') {
-        setBoxCategoryTab('standard');
-      }
+  // Auto-selection Switching: 추천 박스가 바뀐 렌더에서 선택 박스·탭을 함께 전환한다.
+  // (렌더 중 상태 조정 패턴 - 이전에는 동일 조건의 useEffect 2개가 중복 수행하던 동작)
+  const bestBoxId = bestRecommendedBox?.id ?? null;
+  const [appliedBestBoxId, setAppliedBestBoxId] = useState<string | null>(null);
+  if (bestBoxId !== appliedBestBoxId) {
+    setAppliedBestBoxId(bestBoxId);
+    if (bestBoxId) {
+      setSelectedBoxId(bestBoxId);
+      const isSlim = BOOK_SLIM_BOX_OPTIONS.some(b => b.id === bestBoxId);
+      setBoxCategoryTab(isSlim ? 'slim' : 'standard');
     }
-  }, [bestRecommendedBox]);
+  }
 
   // Dynamic AI Cushion Material Name for 100% Dynamic KPI Card (Mode-aware & XY-Bounding Co-Optimization)
   const recommendedCushionName = React.useMemo(
     () => recommendCushion(bestRecommendedBox, selectedBooks, getBookQty),
-    [bestRecommendedBox, selectedBooks],
+    [bestRecommendedBox, selectedBooks, getBookQty],
   );
-
-  // Real-time Auto-Sync selected box ID to bestRecommendedBox ID on book selection change
-  useEffect(() => {
-    if (selectedBooks.length > 0 && bestRecommendedBox) {
-      setSelectedBoxId(bestRecommendedBox.id);
-    }
-  }, [bestRecommendedBox]);
 
   // User Tab Switch Freedom: Auto-tab lock useEffect removed to ensure user can freely toggle between Slim and Standard tabs without being trapped.
 
@@ -242,16 +239,20 @@ export default function OutboundDashboard() {
     });
   };
 
-  // Fetch real algorithmic price from backend API based on selected N books metadata
-  // Two-Track: 라인별 quantity(수량) + is_new(신품/중고) + ubci null-safe 전달
-  const fetchRealDynamicPrice = async (books: OutboundBook[]) => {
-    if (!books || books.length === 0) {
-      setPricingResult(null);
-      return;
-    }
-    try {
+  // Two-Track 동적 가격 산정 - 선택 내용(도서·수량)이 곧 쿼리 키다.
+  // 종전에는 이펙트에서 fetch 후 setPricingResult/setMockOrder로 심었지만(부수효과 함수),
+  // 지금은 응답을 그대로 반환하고 화면 값은 전부 파생으로 계산한다.
+  const priceKey = React.useMemo(
+    () => selectedBooks.map((b) => `${b.id}:${getBookQty(b.id)}`).join(','),
+    [selectedBooks, getBookQty],
+  );
+  const { data: priceData = null } = useQuery({
+    queryKey: ['dynamic-price', priceKey],
+    enabled: selectedBooks.length > 0,
+    retry: false,
+    queryFn: async () => {
       const payload = {
-        items: books.map(b => ({
+        items: selectedBooks.map(b => ({
           list_price: b.listPrice,
           ubci_score: b.ubciScore,
           days_in_inventory: b.daysInInventory,
@@ -267,40 +268,40 @@ export default function OutboundDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      if (res.ok) {
-        const data = await res.json();
-        setPricingResult(data);
-        const usedBooks = books.filter(b => !b.isNew);
-        setMockOrder({
-          order_id: activeInstruction ? activeInstruction.instruction_no : `ORD-${todayYYYYMMDD()}-B2B`,
-          customer_name: activeInstruction?.customer_name || books[0].customer || randomB2bCustomerName(),
-          title: books.length === 1 ? books[0].title : `${books[0].title} 외 ${books.length - 1}권 (묶음 출고)`,
-          isbn: books.length === 1 ? books[0].isbn : `${books[0].isbn} 등 N권`,
-          list_price: data.total_list_price || books.reduce((s, b) => s + (b.listPrice || 0), 0),
-          ubci_score: usedBooks.length > 0
-            ? Math.round(usedBooks.reduce((s, b) => s + (b.ubciScore || 85), 0) / usedBooks.length)
-            : null,
-          days_in_inventory: Math.max(...books.map(b => b.daysInInventory || 1)),
-          category: books[0].category,
-          final_price: data.final_price,
-          discount_rate: data.discount_percent,
-          trend_badge_text: data.dwell_badge_text || data.trend_badge_text || `B2B ${books.length}권 묶음 출고 할인`,
-          pricing_label: data.pricing_label,
-          optimization_model: data.optimization_model
-        });
-      }
-    } catch (e) {
-      console.error("Dynamic pricing calculation failed:", e);
-    }
-  };
+      if (!res.ok) throw new Error('dynamic pricing failed');
+      const data = await res.json();
+      // 랜덤 고객명·발행일은 응답 시점에 확정해 데이터에 싣는다 - 파생 useMemo는 순수해야 한다.
+      return { ...data, _fallbackCustomer: randomB2bCustomerName(), _issuedDate: todayYYYYMMDD() };
+    },
+  });
+  const pricingResult: PricingResult | null = selectedBooks.length > 0 ? priceData : null;
 
-  React.useEffect(() => {
-    if (selectedBooks.length > 0) {
-      fetchRealDynamicPrice(selectedBooks);
-    } else {
-      setPricingResult(null);
-    }
-  }, [selectedBookIds, bookQuantities]);
+  const mockOrder: DemoOrder | null = React.useMemo(() => {
+    if (!priceData || selectedBooks.length === 0) return null;
+    const books = selectedBooks;
+    const usedBooks = books.filter(b => !b.isNew);
+    return {
+      order_id: activeInstruction ? activeInstruction.instruction_no : `ORD-${priceData._issuedDate}-B2B`,
+      customer_name: activeInstruction?.customer_name || books[0].customer || priceData._fallbackCustomer,
+      title: books.length === 1 ? books[0].title : `${books[0].title} 외 ${books.length - 1}권 (묶음 출고)`,
+      isbn: books.length === 1 ? books[0].isbn : `${books[0].isbn} 등 N권`,
+      list_price: priceData.total_list_price || books.reduce((s, b) => s + (b.listPrice || 0), 0),
+      ubci_score: usedBooks.length > 0
+        ? Math.round(usedBooks.reduce((s, b) => s + (b.ubciScore || 85), 0) / usedBooks.length)
+        : null,
+      days_in_inventory: Math.max(...books.map(b => b.daysInInventory || 1)),
+      category: books[0].category,
+      final_price: priceData.final_price,
+      discount_rate: priceData.discount_percent,
+      trend_badge_text: priceData.dwell_badge_text || priceData.trend_badge_text || `B2B ${books.length}권 묶음 출고 할인`,
+      pricing_label: priceData.pricing_label,
+      optimization_model: priceData.optimization_model
+    };
+  }, [priceData, selectedBooks, activeInstruction]);
+
+  const displayTotalPrice = pricingResult?.final_price ?? localFallbackTotal;
+  const perUnitAvgPrice = totalBooksCount > 0 ? Math.round(displayTotalPrice / totalBooksCount) : 0;
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [confirmed, setConfirmed] = useState<boolean>(false);
   const [aiReasoningLog] = useState<string>('');
@@ -351,9 +352,6 @@ export default function OutboundDashboard() {
   // 송장 발급 일시. 렌더 중 new Date()를 쓰면 리렌더마다 값이 바뀌고 서버·클라 시각이
   // 달라 하이드레이션 불일치가 난다. 송장번호가 확정될 때 한 번만 기록한다.
   const [issuedAt, setIssuedAt] = useState('');
-  useEffect(() => {
-    setIssuedAt(issuedWaybillNo ? new Date().toLocaleString('ko-KR') : '');
-  }, [issuedWaybillNo]);
 
   const handleConfirmPacking = async () => {
     // 적재 품목이 없으면 확정 불가 — 0권짜리 운송장은 유효한 출고 문서가 아니다
@@ -393,6 +391,7 @@ export default function OutboundDashboard() {
         setConfirmed(true);
         setShowInvoiceLabel(true);
         setIssuedWaybillNo(data.cj_waybill_no);
+        setIssuedAt(new Date().toLocaleString('ko-KR'));
         setOutboundSummary(prev => ({ ...prev, shippedTodayCount: prev.shippedTodayCount + 1 }));
         alert(`[3D Bin Packing 확정 & CJ 송장 발급]\n${data.message}\n박스: ${activeBox.name} (${activeBox.specs})\n\n→ worker가 스캐너 화면의 적재 가이드에 따라 포장 완료하면 최종 출고됩니다.`);
         await fetchPickingInstructions();

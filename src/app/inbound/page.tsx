@@ -3,7 +3,7 @@ import { useLocalStorageItem, writeLocalStorageItem } from '@/shared/lib/clientS
 import type { BookMeta } from '@/features/inbound/types';
 import { API_BASE_URL } from '@/shared/api/api-client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Camera, RefreshCcw, Package, CheckCircle2, ScanLine, Printer, ChevronLeft } from 'lucide-react';
 import { labelsAPI } from '@/shared/api/api';
 import { useCamera } from '@/shared/lib/useCamera';
@@ -539,7 +539,7 @@ export default function InboundScannerPage() {
     }
   };
 
-  const takePhoto = async () => {
+  const takePhoto = useCallback(async () => {
     if (!videoRef.current || !guideBoxRef.current) {
       alert("카메라 또는 가이드 영역을 찾을 수 없습니다.");
       return;
@@ -563,7 +563,7 @@ export default function InboundScannerPage() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [videoRef]);
 
   // 블루투스 키보드/마우스 원버튼 셔터: 촬영 단계에서 Space/Enter로 takePhoto 트리거.
   // 거치대에 폰을 고정하고 화면을 만지지 않는 촬영 워크스테이션 운용의 전제 기능.
@@ -601,8 +601,7 @@ export default function InboundScannerPage() {
 
     window.addEventListener('keydown', onShutterKey);
     return () => window.removeEventListener('keydown', onShutterKey);
-    // takePhoto가 참조하는 최신 촬영 상태 클로저 유지를 위해 장수를 의존성에 포함
-  }, [step, capturedImages.length, isAnalyzing]);
+  }, [step, isAnalyzing, takePhoto]);
 
   return (
     /*
