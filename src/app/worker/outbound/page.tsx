@@ -94,7 +94,7 @@ export default function WorkerOutboundPage() {
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,   // 탭을 오가며 작업하므로 돌아오면 확인한다
-    // 실시간 갱신은 전역 SSE(app/realtimeQuerySync)가 담당한다. 이 폴링은 그 경로가
+    // 실시간 갱신은 전역 SSE(app/providers)가 담당한다. 이 폴링은 그 경로가
     // 끊겼을 때를 위한 백업이라 짧을 필요가 없다.
     refetchInterval: 60000,
     queryFn: async (): Promise<PickingInstruction[]> => {
@@ -117,7 +117,7 @@ export default function WorkerOutboundPage() {
       : (instructions[0]?.id ?? null);
   const activeInstruction = instructions.find(i => i.id === effectiveSelectedId) || null;
 
-  // 지시서·송장 이벤트 토스트. 목록 갱신은 전역 SSE(app/realtimeQuerySync)가 캐시를
+  // 지시서·송장 이벤트 토스트. 목록 갱신은 전역 SSE(app/providers)가 캐시를
   // 무효화해 처리하므로 여기서 fetch하지 않는다 - 화면마다 EventSource를 열면 연결이
   // 중복되고, 그 화면을 떠난 사이의 이벤트는 어차피 받지 못한다.
   useEffect(() => subscribeRealtime((evt) => {
