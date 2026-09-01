@@ -355,10 +355,13 @@ export default function BinPacking3DViewer({
                 ? 'bg-amber-500 text-white border-amber-600 shadow-xs animate-pulse' 
                 : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-700'
             }`}
-            title="전면 및 우측 완충 가드를 제거하여 내부 도서 적재 단면 정밀 검증"
+            title={showCutaway ? '단면 투시 중 (전·우 완충 가드 제거됨) - 눌러서 4면 전체 보기' : '전면 및 우측 완충 가드를 제거하여 내부 도서 적재 단면 정밀 검증'}
           >
-            <Eye className="w-3.5 h-3.5" />
-            <span>{showCutaway ? '✂️ 단면 투시 (전·우 제거됨)' : '👁️ 4면 전체 보기'}</span>
+            <Eye className="w-3.5 h-3.5 shrink-0" />
+            {/* 라벨 길이를 상태와 무관하게 고정한다 - 켤 때 "(전·우 제거됨)"이 붙으면
+                툴바 폭이 늘어 "확대 보기"가 다음 줄로 밀렸다(1366px 실측). 상태는
+                amber 배경+펄스가 이미 표시하고, 상세 설명은 title이 담당한다. */}
+            <span className="whitespace-nowrap">{showCutaway ? '✂️ 단면 투시' : '👁️ 4면 전체'}</span>
           </button>
 
           <div className="flex items-center bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
