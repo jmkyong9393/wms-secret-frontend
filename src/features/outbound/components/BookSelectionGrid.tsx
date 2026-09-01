@@ -45,7 +45,9 @@ export function BookSelectionGrid({
                 <span className="text-xs text-gray-500 font-mono">({inventoryCount}개 항목)</span>
               </div>
 
-              <div className="flex items-center gap-2">
+              {/* 필터 탭·선택 버튼·카운트 배지가 전부 nowrap이라 좁은 패널에서 우측이
+                  잘려나갔다(실측 121px 오버플로) - 줄바꿈을 허용한다 */}
+              <div className="flex flex-wrap items-center gap-2 gap-y-1.5">
                 {/* Book Type Filter Tabs (ALL / NEW / USED) */}
                 <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200 dark:border-gray-700 shrink-0">
                   <button
@@ -110,8 +112,10 @@ export function BookSelectionGrid({
               />
             </div>
 
-            {/* 3-Column Responsive Grid Container with Quantity Steppers */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1 max-h-[310px] overflow-y-auto pr-1">
+            {/* 수량 스테퍼 포함 반응형 그리드. 뷰포트 기준 고정 열수(lg:3)는 저해상도에서
+                카드가 ~200px까지 줄어 제목·스테퍼가 뭉개지므로, 실제 가용 폭 기준
+                auto-fill로 카드 최소폭(230px)을 보장한다 - 열수는 폭이 정한다. */}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-2.5 pt-1 max-h-[310px] overflow-y-auto pr-1">
               {filteredBooks
                 .filter(b => {
                   const isUsed = !b.isNew && !!b.lpn && !b.lpn.includes('미발급');
@@ -161,7 +165,8 @@ export function BookSelectionGrid({
                             className="w-9 h-12 shadow-2xs shrink-0"
                           />
                           <div className="min-w-0 flex-1">
-                            <span className="font-extrabold text-xs text-gray-900 dark:text-white line-clamp-1 leading-snug">
+                            {/* 1줄 클램프는 좁은 카드에서 3~4글자만 남아 식별 불가 - 2줄 + 툴팁 */}
+                            <span title={b.title} className="font-extrabold text-xs text-gray-900 dark:text-white line-clamp-2 leading-snug">
                               {b.title}
                             </span>
                             <span className="text-[10px] text-gray-400 font-mono block truncate">
@@ -189,9 +194,10 @@ export function BookSelectionGrid({
                         </span>
                       </div>
 
-                      {/* Row 3: Specs & Quantity Stepper */}
-                      <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 font-mono pt-1 border-t border-gray-100 dark:border-gray-700/60">
-                        <span>{width}×{depth}×{thick}mm</span>
+                      {/* Row 3: Specs & Quantity Stepper — 한 줄에 안 들어가면 스테퍼를
+                          아랫줄로 내린다 (nowrap 강제 시 저해상도에서 DB재고 표기가 잘렸다) */}
+                      <div className="flex flex-wrap items-center justify-between gap-y-1 text-[10px] text-gray-500 dark:text-gray-400 font-mono pt-1 border-t border-gray-100 dark:border-gray-700/60">
+                        <span className="whitespace-nowrap">{width}×{depth}×{thick}mm</span>
 
                         {/* Quantity Stepper (Enabled for NEW books, Locked 1-qty for USED LPN books) */}
                         {isUsed ? (

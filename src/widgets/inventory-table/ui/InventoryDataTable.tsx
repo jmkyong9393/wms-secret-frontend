@@ -651,7 +651,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                         <Link
                           href={href}
                           title="상세 정보 조회"
-                          className="block font-black text-gray-900 dark:text-white text-sm leading-snug truncate hover:text-blue-600 dark:hover:text-blue-400"
+                          className="font-black text-gray-900 dark:text-white text-sm leading-snug line-clamp-2 hover:text-blue-600 dark:hover:text-blue-400"
                         >
                           {item.book.title}
                         </Link>
@@ -660,7 +660,7 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                           type="button"
                           onClick={() => openZoom(item)}
                           title="도서 상세정보 (표지 확대)"
-                          className="block w-full text-left font-black text-gray-900 dark:text-white text-sm leading-snug truncate hover:text-blue-600 dark:hover:text-blue-400"
+                          className="w-full text-left font-black text-gray-900 dark:text-white text-sm leading-snug line-clamp-2 hover:text-blue-600 dark:hover:text-blue-400"
                         >
                           {item.book.title}
                         </button>
@@ -756,7 +756,10 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                   </th>
                 )}
                 <th className="py-3.5 px-3 whitespace-nowrap">식별자 (LPN / ISBN)</th>
-                <th className="py-3.5 px-3 min-w-[190px]">도서 정보 (제목 / 저자 / 출판사 / 정가)</th>
+                {/* 제목 컬럼은 유일한 가변 컬럼이라 min-w가 좁으면 나머지 nowrap 컬럼들에
+                    쥐어짜여 2~4글자씩 세로로 꺾인다(1366px 실측). 최소폭을 확보하고
+                    모자라는 폭은 컨테이너의 가로 스크롤이 흡수하게 한다. */}
+                <th className="py-3.5 px-3 min-w-[240px]">도서 정보 (제목 / 저자 / 출판사 / 정가)</th>
                 <th className="py-3.5 px-3 text-center whitespace-nowrap">UBCI 등급 (점수)</th>
                 <th className="py-3.5 px-3 text-center whitespace-nowrap">보관 위치</th>
                 <th className="py-3.5 px-3 text-center whitespace-nowrap">재고 수량</th>
@@ -836,19 +839,20 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                             title={item.book.title}
                             author={item.book.author}
                             isbn={item.book.isbn}
-                            className="w-12 h-16 shadow-sm"
+                            className="w-12 h-16 shadow-sm shrink-0"
                             onClick={() => openZoom(item)}
                           />
                           </span>
-                          <div className="space-y-1">
+                          <div className="space-y-1 min-w-0 flex-1">
                             {/* 제목은 상세 진입점으로 유지한다 — 행 전체 라우팅은 뺐지만
                                 (다중 선택 중 오클릭 방지), 의도적으로 제목을 누르는 동작은
-                                살려둔다. 링크라 새 탭 열기도 가능. */}
+                                살려둔다. 링크라 새 탭 열기도 가능.
+                                긴 제목은 2줄에서 자르고 전문은 툴팁으로 — 행 높이 폭주 방지. */}
                             {href ? (
                               <Link
                                 href={href}
-                                title="상세 정보 조회"
-                                className="block font-black text-gray-900 dark:text-white text-base leading-snug hover:text-blue-600 dark:hover:text-blue-400 hover:underline underline-offset-2 transition-colors"
+                                title={item.book.title}
+                                className="font-black text-gray-900 dark:text-white text-base leading-snug line-clamp-2 hover:text-blue-600 dark:hover:text-blue-400 hover:underline underline-offset-2 transition-colors"
                               >
                                 {item.book.title}
                               </Link>
@@ -856,13 +860,13 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                               <button
                                 type="button"
                                 onClick={() => openZoom(item)}
-                                title="도서 상세정보 (표지 확대)"
-                                className="block text-left font-black text-gray-900 dark:text-white text-base leading-snug hover:text-blue-600 dark:hover:text-blue-400 hover:underline underline-offset-2 transition-colors"
+                                title={item.book.title}
+                                className="text-left font-black text-gray-900 dark:text-white text-base leading-snug line-clamp-2 hover:text-blue-600 dark:hover:text-blue-400 hover:underline underline-offset-2 transition-colors"
                               >
                                 {item.book.title}
                               </button>
                             )}
-                            <p className="text-xs text-gray-500 dark:text-gray-400 font-extrabold">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 font-extrabold line-clamp-1">
                               {item.book.author} · {item.book.publisher}
                             </p>
                             <p className="text-[11px] font-mono text-gray-400 font-bold">
@@ -872,31 +876,37 @@ export function InventoryDataTable({ role }: { role: StockRole }) {
                         </div>
                       </td>
 
-                      {/* 등급 */}
-                      <td className="py-4 px-3 text-center whitespace-nowrap">
+                      {/* 등급 — 배지 패딩은 2xl 미만에서 압축해 제목 컬럼에 폭을 양보한다 */}
+                      <td className="py-4 px-2 2xl:px-3 text-center whitespace-nowrap">
                         {isNew ? (
-                          <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-2xs">
-                            미표기 (신품 Fast-Track)
+                          <span className="inline-flex items-center px-2.5 2xl:px-3.5 py-1.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                            <span className="hidden 2xl:inline">미표기 (신품 Fast-Track)</span>
+                            <span className="2xl:hidden">미표기</span>
                           </span>
                         ) : (
-                          <span className={`inline-flex items-center px-4 py-2 rounded-full text-xs font-black border shadow-2xs ${meta.badge}`}>
+                          <span className={`inline-flex items-center px-2.5 2xl:px-4 py-1.5 2xl:py-2 rounded-full text-xs font-black border shadow-2xs ${meta.badge}`}>
                             {/* 점수가 없으면 기본값을 채우지 않고 미산출로 표기한다. */}
-                            {meta.display} (UBCI: {item.ubci_score ?? '미산출'}
-                            {item.ubci_score != null ? '점' : ''})
+                            <span className="hidden 2xl:inline">
+                              {meta.display} (UBCI: {item.ubci_score ?? '미산출'}
+                              {item.ubci_score != null ? '점' : ''})
+                            </span>
+                            <span className="2xl:hidden">
+                              {meta.display} {item.ubci_score != null ? `${item.ubci_score}점` : '미산출'}
+                            </span>
                           </span>
                         )}
                       </td>
 
                       {/* Zone */}
-                      <td className="py-4 px-3 text-center whitespace-nowrap">
-                        <span className="inline-flex items-center font-mono font-black text-indigo-950 dark:text-indigo-200 bg-indigo-50/80 dark:bg-indigo-950/80 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 text-xs sm:text-sm shadow-2xs">
+                      <td className="py-4 px-2 2xl:px-3 text-center whitespace-nowrap">
+                        <span className="inline-flex items-center font-mono font-black text-indigo-950 dark:text-indigo-200 bg-indigo-50/80 dark:bg-indigo-950/80 px-2 2xl:px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 text-xs sm:text-sm shadow-2xs">
                           <MapPin className="w-4 h-4 mr-1 text-indigo-600 dark:text-indigo-400 shrink-0" />
                           {formatZone(item.zone)}
                         </span>
                       </td>
 
                       {/* 수량 */}
-                      <td className="py-4 px-3 text-center whitespace-nowrap">
+                      <td className="py-4 px-2 2xl:px-3 text-center whitespace-nowrap">
                         <span className="font-mono font-black text-gray-900 dark:text-white text-base block">{item.quantity}권</span>
                         {isNew ? (
                           <span className="text-[11px] font-extrabold text-blue-700 dark:text-blue-300 block bg-blue-100 dark:bg-blue-950 px-2 py-0.5 rounded-md border border-blue-300 dark:border-blue-800 mt-1">✨ 신품도서</span>
