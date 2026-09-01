@@ -153,7 +153,7 @@ export default function AdvancedDashboardPage() {
             <span className="px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full text-xs font-bold font-mono flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> EXECUTIVE MASTER DASHBOARD
             </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">v2.15.1.0 Recharts High-Tech Edition</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">v2.15.2.0 Recharts High-Tech Edition</span>
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">
             📊 최고 관리자 종합 통계 관제 대시보드

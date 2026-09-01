@@ -14,7 +14,7 @@ export function InboundIntroBanner({ activeStation, onStationChange, onResetType
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-full text-xs font-bold font-mono flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              INBOUND CONTROL CENTER v2.15.1.0
+              INBOUND CONTROL CENTER v2.15.2.0
             </span>
             <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">Real-time Vision AI & Fast-track Pipeline</span>
           </div>
