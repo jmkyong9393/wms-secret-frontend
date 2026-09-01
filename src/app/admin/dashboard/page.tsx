@@ -86,7 +86,7 @@ export default function AdvancedDashboardPage() {
     generated_at?: string;
     ai_narrative?: string;
     saved_labor_cost_krw?: number;
-    predicted_returns?: number;
+    predicted_outbound?: number;
     logistics?: { week_inspections?: number; week_orders?: number };
   }
   const [historyItems, setHistoryItems] = React.useState<WeeklyHistoryItem[]>([]);
@@ -289,8 +289,8 @@ export default function AdvancedDashboardPage() {
                   <p className="text-lg font-black text-gray-900 dark:text-white font-mono">{weekly.logistics?.week_orders ?? 0}건</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-800/60 rounded-xl p-3 border border-gray-100 dark:border-gray-800">
-                  <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500">차주 반품 예측</p>
-                  <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 font-mono">{weekly.predicted_returns ?? 0}건</p>
+                  <p className="text-[11px] font-bold text-gray-400 dark:text-gray-500">차주 출고 예측</p>
+                  <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 font-mono">{weekly.predicted_outbound ?? 0}건</p>
                 </div>
               </div>
               {/* 지난 주간 인사이트 - 최신순, "더보기"로 배치 로딩 (§전체 fetch 지양) */}
@@ -327,7 +327,7 @@ export default function AdvancedDashboardPage() {
                           <span>절감 {(h.saved_labor_cost_krw ?? 0).toLocaleString()}원</span>
                           <span>검수 {h.logistics?.week_inspections ?? 0}건</span>
                           <span>주문 {h.logistics?.week_orders ?? 0}건</span>
-                          <span>반품예측 {h.predicted_returns ?? 0}건</span>
+                          <span>출고예측 {h.predicted_outbound ?? 0}건</span>
                         </div>
                       </div>
                     ))}

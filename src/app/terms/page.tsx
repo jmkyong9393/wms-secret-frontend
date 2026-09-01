@@ -75,14 +75,14 @@ export default function TermsOfServicePage() {
             <div className="space-y-2">
               <h4 className="font-black text-gray-900">제3조 (LPN 선부착 후검수 및 50×31mm 열전사 출력)</h4>
               <p className="text-gray-700 font-medium text-xs">
-                모든 입고물은 50×31mm 열전사 롤 스티커 라벨(`LPN-YYMMDD-XXXX`)을 선부착 후 AI 뷰파인더 Multi-Agent 검수를 진행합니다.
+                중고 입고물은 50×31mm 열전사 롤 스티커 라벨(`LPN-YYMMDD-XXXX`)을 선부착 후 AI 뷰파인더 Multi-Agent 검수를 진행합니다. 신품 입고물은 LPN을 발급하지 않고 수량 단위로 관리합니다.
               </p>
             </div>
 
             <div className="space-y-2">
-              <h4 className="font-black text-gray-900">제4조 (MINT Fast Track 및 HITL 오버라이드)</h4>
+              <h4 className="font-black text-gray-900">제4조 (신품 Fast Track 및 HITL 오버라이드)</h4>
               <p className="text-gray-700 font-medium text-xs">
-                MINT 등급(UBCI ≥ 95) 건은 HITL 수동 검수를 건너뛰고 Fast Track 셀(`A-01-01`)로 자동 직행하며, 판독 모호건은 관리자가 HITL 수동 심의 및 등급 조정을 수행합니다.
+                신품 도서는 AI 검수를 거치지 않는 Fast Track으로 무검수 즉시 입고됩니다. 중고 도서는 등급과 무관하게 Multi-Agent 검증 경로를 전부 통과하며, MINT 등급(UBCI ≥ 95) 건은 통과 후 자동 승인되고, 판독 모호건은 관리자가 HITL 수동 심의 및 등급 조정을 수행합니다.
               </p>
             </div>
           </section>
